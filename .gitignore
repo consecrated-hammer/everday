@@ -147,6 +147,10 @@ out/
 .nuxt/
 .cache/
 
+# Allow frontend source lib directory
+!frontend/src/lib/
+!frontend/src/lib/**
+
 # Logs
 logs/
 *.log
