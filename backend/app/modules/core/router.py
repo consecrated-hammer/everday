@@ -22,9 +22,9 @@ async def api_health() -> dict:
 async def api_health_db() -> dict:
     try:
         import pyodbc
-    except ImportError as exc:
-        logger.error("db check failed: pyodbc unavailable: %s", exc)
-        return {"status": "error", "detail": f"pyodbc unavailable: {exc}"}
+    except ImportError:
+        logger.exception("db check failed: pyodbc unavailable")
+        return {"status": "error", "detail": "database unavailable"}
 
     driver = os.getenv("SQLSERVER_DRIVER", "ODBC Driver 18 for SQL Server")
     host = os.getenv("SQLSERVER_HOST", "")
@@ -36,7 +36,7 @@ async def api_health_db() -> dict:
 
     if not all([host, port, database, user, password]):
         logger.error("db check failed: missing database configuration")
-        return {"status": "error", "detail": "missing database configuration"}
+        return {"status": "error", "detail": "database unavailable"}
 
     connection_string = (
         "DRIVER={%s};SERVER=%s,%s;DATABASE=%s;UID=%s;PWD=%s;"
