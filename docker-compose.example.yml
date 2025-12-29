@@ -1,0 +1,44 @@
+services:
+  everday-api:
+    build: ./backend
+    container_name: everday-api
+    env_file: .env.dev
+    environment:
+      APP_ENV: "${APP_ENV}"
+      SQLSERVER_HOST: "${SQLSERVER_HOST}"
+      SQLSERVER_PORT: "${SQLSERVER_PORT}"
+      SQLSERVER_DB: "${SQLSERVER_DB}"
+      SQLSERVER_USER: "${SQLSERVER_USER}"
+      SQLSERVER_PASSWORD: "${SQLSERVER_PASSWORD}"
+    ports:
+      - "${EVERDAY_API_PORT}:8000"
+    volumes:
+      - ./backend/logs:/app/logs
+    networks:
+      - shared_default
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  everday-web:
+    build: ./frontend
+    container_name: everday-web
+    env_file: .env.dev
+    environment:
+      VITE_API_BASE_URL: "${VITE_API_BASE_URL}"
+    ports:
+      - "${EVERDAY_WEB_PORT}:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - everday-api
+    networks:
+      - shared_default
+
+networks:
+  shared_default:
+    external: true
+    name: shared_default
