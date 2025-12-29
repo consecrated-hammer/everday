@@ -52,8 +52,8 @@ async def api_health_db() -> dict:
         logger.debug("db check ok")
         return {"status": "ok"}
     except Exception as exc:  # noqa: BLE001
-        logger.error("db check failed: %s", exc)
-        return {"status": "error", "detail": str(exc)}
+        logger.exception("db check failed")
+        return {"status": "error", "detail": "database unavailable"}
 
 
 class FrontendLogPayload(BaseModel):
