@@ -10,6 +10,7 @@
 .env.test
 *.env
 *.env.*
+!.env.example
 
 # Secrets and credentials
 tokens.json
@@ -241,3 +242,4 @@ _temp/
 
 # Scripts (local/dev helpers)
 scripts/
+docker-compose.uat.yml
