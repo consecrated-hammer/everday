@@ -67,6 +67,16 @@ def setup_logging() -> None:
     frontend_logger.addHandler(console_handler)
     frontend_logger.addHandler(frontend_file_handler)
 
+    for logger_name in (
+        "app.request",
+        "app.startup",
+        "app.bootstrap",
+        "app.migrations",
+        "app.auth",
+        "app.auth.email",
+    ):
+        logging.getLogger(logger_name).setLevel(log_level)
+
     logging.getLogger("uvicorn.access").handlers.clear()
 
 

@@ -1,0 +1,181 @@
+import { useEffect, useState } from "react";
+
+import { GetUiSettings } from "../lib/uiSettings.js";
+
+const IconMap = {
+  dashboard: {
+    phosphor: "ph:squares-four",
+    material: "material-symbols:dashboard",
+    lucide: "lucide:layout-dashboard"
+  },
+  budget: {
+    phosphor: "ph:wallet",
+    material: "material-symbols:account-balance-wallet",
+    lucide: "lucide:wallet"
+  },
+  health: {
+    phosphor: "ph:heart-straight",
+    material: "material-symbols:monitor-heart",
+    lucide: "lucide:heart-pulse"
+  },
+  agenda: {
+    phosphor: "ph:calendar-check",
+    material: "material-symbols:event",
+    lucide: "lucide:calendar-check"
+  },
+  inbox: {
+    phosphor: "ph:inbox",
+    material: "material-symbols:inbox",
+    lucide: "lucide:inbox"
+  },
+  settings: {
+    phosphor: "ph:gear",
+    material: "material-symbols:settings",
+    lucide: "lucide:settings"
+  },
+  search: {
+    phosphor: "ph:magnifying-glass",
+    material: "material-symbols:search",
+    lucide: "lucide:search"
+  },
+  filter: {
+    phosphor: "ph:funnel-simple",
+    material: "material-symbols:filter-list",
+    lucide: "lucide:filter"
+  },
+  columns: {
+    phosphor: "ph:columns",
+    material: "material-symbols:view-column",
+    lucide: "lucide:columns-2"
+  },
+  more: {
+    phosphor: "ph:dots-three-vertical",
+    material: "material-symbols:more-vert",
+    lucide: "lucide:more-vertical"
+  },
+  edit: {
+    phosphor: "ph:pencil-simple",
+    material: "material-symbols:edit",
+    lucide: "lucide:pencil"
+  },
+  trash: {
+    phosphor: "ph:trash",
+    material: "material-symbols:delete",
+    lucide: "lucide:trash-2"
+  },
+  plus: {
+    phosphor: "ph:plus",
+    material: "material-symbols:add",
+    lucide: "lucide:plus"
+  },
+  close: {
+    phosphor: "ph:x",
+    material: "material-symbols:close",
+    lucide: "lucide:x"
+  },
+  chevronLeft: {
+    phosphor: "ph:caret-left",
+    material: "material-symbols:chevron-left",
+    lucide: "lucide:chevron-left"
+  },
+  chevronRight: {
+    phosphor: "ph:caret-right",
+    material: "material-symbols:chevron-right",
+    lucide: "lucide:chevron-right"
+  },
+  chevronsLeft: {
+    phosphor: "ph:caret-double-left",
+    material: "material-symbols:keyboard-double-arrow-left",
+    lucide: "lucide:chevrons-left"
+  },
+  chevronsRight: {
+    phosphor: "ph:caret-double-right",
+    material: "material-symbols:keyboard-double-arrow-right",
+    lucide: "lucide:chevrons-right"
+  },
+  navCollapse: {
+    phosphor: "ph:arrow-line-left",
+    material: "material-symbols:menu-open",
+    lucide: "lucide:arrow-left-from-line"
+  },
+  navExpand: {
+    phosphor: "ph:arrow-line-right",
+    material: "material-symbols:arrow-menu-close",
+    lucide: "lucide:arrow-right-from-line"
+  },
+  chevronDown: {
+    phosphor: "ph:caret-down",
+    material: "material-symbols:expand-more",
+    lucide: "lucide:chevron-down"
+  },
+  user: {
+    phosphor: "ph:user-circle",
+    material: "material-symbols:account-circle",
+    lucide: "lucide:user-circle-2"
+  },
+  logout: {
+    phosphor: "ph:sign-out",
+    material: "material-symbols:logout",
+    lucide: "lucide:log-out"
+  },
+  reset: {
+    phosphor: "ph:arrow-counter-clockwise",
+    material: "material-symbols:restart-alt",
+    lucide: "lucide:rotate-ccw"
+  },
+  save: {
+    phosphor: "ph:check",
+    material: "material-symbols:check",
+    lucide: "lucide:check"
+  },
+  lock: {
+    phosphor: "ph:lock",
+    material: "material-symbols:lock",
+    lucide: "lucide:lock"
+  },
+  team: {
+    phosphor: "ph:users",
+    material: "material-symbols:groups",
+    lucide: "lucide:users"
+  },
+  sort: {
+    phosphor: "ph:arrows-down-up",
+    material: "material-symbols:swap-vert",
+    lucide: "lucide:arrow-up-down"
+  },
+  sortUp: {
+    phosphor: "ph:arrow-up",
+    material: "material-symbols:arrow-upward",
+    lucide: "lucide:arrow-up"
+  },
+  sortDown: {
+    phosphor: "ph:arrow-down",
+    material: "material-symbols:arrow-downward",
+    lucide: "lucide:arrow-down"
+  },
+  info: {
+    phosphor: "ph:info",
+    material: "material-symbols:info",
+    lucide: "lucide:info"
+  }
+};
+
+const Icon = ({ name, className = "", ...props }) => {
+  const [iconSet, setIconSet] = useState(() => GetUiSettings().IconSet);
+
+  useEffect(() => {
+    const handler = (event) => {
+      setIconSet(event.detail?.IconSet || GetUiSettings().IconSet);
+    };
+    window.addEventListener("ui-settings-changed", handler);
+    return () => window.removeEventListener("ui-settings-changed", handler);
+  }, []);
+
+  const value = IconMap[name]?.[iconSet] || IconMap[name]?.phosphor;
+  if (!value) {
+    return null;
+  }
+  return <iconify-icon icon={value} className={className} {...props} />;
+};
+
+export default Icon;
