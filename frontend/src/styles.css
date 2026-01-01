@@ -78,6 +78,11 @@ p {
   transition: grid-template-columns 0.2s ease;
 }
 
+.app-layout--no-scroll {
+  height: 100vh;
+  overflow: hidden;
+}
+
 .app-layout.nav-open {
   grid-template-columns: 200px minmax(0, 1fr);
 }
@@ -288,6 +293,10 @@ iconify-icon {
 
 .app-main--compact {
   padding-top: 20px;
+}
+
+.app-main--no-scroll {
+  overflow: hidden;
 }
 
 .app-main--compact .app-topbar {

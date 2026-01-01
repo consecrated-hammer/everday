@@ -36,9 +36,17 @@ const AppShell = () => {
 
   const isDashboard = useMemo(() => location.pathname === "/", [location.pathname]);
   const isBudget = useMemo(() => location.pathname.startsWith("/budget"), [location.pathname]);
+  const isBudgetExpenses = useMemo(
+    () => location.pathname === "/budget/expenses",
+    [location.pathname]
+  );
 
   return (
-    <div className={`app-layout${navOpen ? " nav-open" : " nav-closed"}`}>
+    <div
+      className={`app-layout${navOpen ? " nav-open" : " nav-closed"}${
+        isBudgetExpenses ? " app-layout--no-scroll" : ""
+      }`}
+    >
       <aside className="nav-rail">
         <div className="nav-brand">
           <span className="nav-logo">E</span>
@@ -82,7 +90,11 @@ const AppShell = () => {
           </button>
         </div>
       </aside>
-      <main className={`app-main${isBudget ? " app-main--compact" : ""}`}>
+      <main
+        className={`app-main${isBudget ? " app-main--compact" : ""}${
+          isBudgetExpenses ? " app-main--no-scroll" : ""
+        }`}
+      >
         <div className="app-topbar">
           <div />
           <AccountMenu />

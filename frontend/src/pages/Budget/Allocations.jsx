@@ -17,6 +17,33 @@ const ToNumber = (value) => {
   return Number.isNaN(parsed) ? 0 : parsed;
 };
 
+const RatioEpsilon = 0.00005;
+const NormalizeRatio = (value) => Math.round(value * 1000000) / 1000000;
+const NormalizeTotal = (value) => {
+  const normalized = NormalizeRatio(value);
+  return Math.abs(normalized - 1) <= RatioEpsilon ? 1 : normalized;
+};
+const ClampNearZero = (value) => (Math.abs(value) <= RatioEpsilon ? 0 : value);
+const RoundPercentValue = (value) => Math.round(value * 100) / 100;
+
+const BuildPercentShares = (totalRatio, targetIds) => {
+  const shares = {};
+  if (!targetIds.length) {
+    return shares;
+  }
+  const totalBasisPoints = Math.max(0, Math.round(totalRatio * 10000));
+  if (totalBasisPoints === 0) {
+    return shares;
+  }
+  const base = Math.floor(totalBasisPoints / targetIds.length);
+  const remainder = totalBasisPoints % targetIds.length;
+  targetIds.forEach((id, index) => {
+    const basisPoints = base + (index < remainder ? 1 : 0);
+    shares[id] = basisPoints / 100;
+  });
+  return shares;
+};
+
 const emptyAccountForm = {
   Name: "",
   Percent: 0,
@@ -272,9 +299,9 @@ const BudgetAllocations = () => {
       (sum, entry) => sum + ToNumber(entry.Percent) / 100,
       0
     );
-    const totalAllocated = targetExpenseAllocation + manualTotal;
-    const leftover = Math.max(0, 1 - totalAllocated);
-    const overage = Math.max(0, totalAllocated - 1);
+    const totalAllocated = NormalizeTotal(targetExpenseAllocation + manualTotal);
+    const leftover = ClampNearZero(Math.max(0, 1 - totalAllocated));
+    const overage = ClampNearZero(Math.max(0, totalAllocated - 1));
     return {
       TargetExpenseAllocation: targetExpenseAllocation,
       TotalAllocated: totalAllocated,
@@ -282,6 +309,15 @@ const BudgetAllocations = () => {
       Overage: overage
     };
   }, [manualAllocations, totals]);
+
+  const splitPreview = useMemo(
+    () => BuildPercentShares(baseAllocationSummary.Leftover, splitTargets),
+    [baseAllocationSummary.Leftover, splitTargets]
+  );
+  const overagePreview = useMemo(
+    () => BuildPercentShares(baseAllocationSummary.Overage, overageTargets),
+    [baseAllocationSummary.Overage, overageTargets]
+  );
 
   const allocationSummary = useMemo(() => {
     const activeAllocations = activeManualAllocations;
@@ -293,9 +329,9 @@ const BudgetAllocations = () => {
       (sum, entry) => sum + ToNumber(entry.Percent) / 100,
       0
     );
-    const totalAllocated = targetExpenseAllocation + manualTotal;
-    const leftover = Math.max(0, 1 - totalAllocated);
-    const overage = Math.max(0, totalAllocated - 1);
+    const totalAllocated = NormalizeTotal(targetExpenseAllocation + manualTotal);
+    const leftover = ClampNearZero(Math.max(0, 1 - totalAllocated));
+    const overage = ClampNearZero(Math.max(0, totalAllocated - 1));
 
     const buildRow = (name, percent, id = null) => {
       const perDay = totals.Income.PerDay * percent;
@@ -345,7 +381,7 @@ const BudgetAllocations = () => {
 
   const FormatPercent = (value) => `${(value * 100).toFixed(2)}%`;
   const manualKeys = manualAllocations.map((entry) => ({ Id: entry.Id, Name: entry.Key }));
-  const overAllocated = allocationSummary.TotalAllocated > 1;
+  const overAllocated = allocationSummary.TotalAllocated > 1 + RatioEpsilon;
 
   const ApplySplitDraft = async () => {
     if (!splitDraft || splitDraft.length === 0) {
@@ -393,10 +429,13 @@ const BudgetAllocations = () => {
       setSplitDraft(null);
       return;
     }
-    const extraShare = (baseAllocationSummary.Leftover * 100) / nextTargets.length;
+    const shareMap = BuildPercentShares(baseAllocationSummary.Leftover, nextTargets);
     const nextDraft = manualAllocations.map((entry) =>
       nextTargets.includes(entry.Id)
-        ? { ...entry, Percent: Number(entry.Percent) + extraShare }
+        ? {
+            ...entry,
+            Percent: RoundPercentValue(ToNumber(entry.Percent) + (shareMap[entry.Id] || 0))
+          }
         : entry
     );
     setSplitDraft(nextDraft);
@@ -408,10 +447,15 @@ const BudgetAllocations = () => {
       setOverageDraft(null);
       return;
     }
-    const overageShare = (baseAllocationSummary.Overage * 100) / nextTargets.length;
+    const shareMap = BuildPercentShares(baseAllocationSummary.Overage, nextTargets);
     const nextDraft = manualAllocations.map((entry) =>
       nextTargets.includes(entry.Id)
-        ? { ...entry, Percent: Math.max(0, Number(entry.Percent) - overageShare) }
+        ? {
+            ...entry,
+            Percent: RoundPercentValue(
+              Math.max(0, ToNumber(entry.Percent) - (shareMap[entry.Id] || 0))
+            )
+          }
         : entry
     );
     setOverageDraft(nextDraft);
@@ -740,8 +784,22 @@ const BudgetAllocations = () => {
           </div>
           {splitDraft && splitTargets.length ? (
             <p className="allocation-meta">
-              Each selected account receives an extra{" "}
-              {FormatPercent(baseAllocationSummary.Leftover / splitTargets.length)}.
+              {(() => {
+                const shares = Object.values(splitPreview);
+                if (shares.length === 0) {
+                  return "Each selected account receives an extra 0.00%.";
+                }
+                const minShare = Math.min(...shares);
+                const maxShare = Math.max(...shares);
+                if (minShare === maxShare) {
+                  return `Each selected account receives an extra ${FormatPercent(
+                    minShare / 100
+                  )}.`;
+                }
+                return `Each selected account receives between ${FormatPercent(
+                  minShare / 100
+                )} and ${FormatPercent(maxShare / 100)}.`;
+              })()}
             </p>
           ) : null}
           <div className="allocation-split-actions form-actions form-actions--icons">
@@ -794,8 +852,20 @@ const BudgetAllocations = () => {
           </div>
           {overageDraft && overageTargets.length ? (
             <p className="allocation-meta">
-              Each selected account drops by{" "}
-              {FormatPercent(baseAllocationSummary.Overage / overageTargets.length)}.
+              {(() => {
+                const shares = Object.values(overagePreview);
+                if (shares.length === 0) {
+                  return "Each selected account drops by 0.00%.";
+                }
+                const minShare = Math.min(...shares);
+                const maxShare = Math.max(...shares);
+                if (minShare === maxShare) {
+                  return `Each selected account drops by ${FormatPercent(minShare / 100)}.`;
+                }
+                return `Each selected account drops by ${FormatPercent(
+                  minShare / 100
+                )} to ${FormatPercent(maxShare / 100)}.`;
+              })()}
             </p>
           ) : null}
           <div className="allocation-split-actions form-actions form-actions--icons">
