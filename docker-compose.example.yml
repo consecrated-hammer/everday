@@ -8,8 +8,11 @@ services:
       SQLSERVER_HOST: "${SQLSERVER_HOST}"
       SQLSERVER_PORT: "${SQLSERVER_PORT}"
       SQLSERVER_DB: "${SQLSERVER_DB}"
-      SQLSERVER_USER: "${SQLSERVER_USER}"
-      SQLSERVER_PASSWORD: "${SQLSERVER_PASSWORD}"
+      SQLSERVER_DRIVER: "${SQLSERVER_DRIVER}"
+      SQLSERVER_USER_LOGIN: "${SQLSERVER_USER_LOGIN}"
+      SQLSERVER_USER_PASSWORD: "${SQLSERVER_USER_PASSWORD}"
+      SQLSERVER_ADMIN_LOGIN: "${SQLSERVER_ADMIN_LOGIN}"
+      SQLSERVER_ADMIN_PASSWORD: "${SQLSERVER_ADMIN_PASSWORD}"
     ports:
       - "${EVERDAY_API_PORT}:8000"
     volumes:
@@ -17,7 +20,7 @@ services:
     networks:
       - shared_default
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
       interval: 10s
       timeout: 3s
       retries: 5

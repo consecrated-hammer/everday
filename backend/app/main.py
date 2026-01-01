@@ -2,22 +2,36 @@ import logging
 import os
 import time
 import uuid
+import warnings
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.exc import SAWarning
 
+from app.core.bootstrap import EnsureDatabaseSetup
 from app.core.logging import setup_logging
+from app.core.migrations import RunMigrations
+from app.modules.auth.router import router as auth_router
 from app.modules.core.router import router as core_router
+from app.modules.budget.router import router as budget_router
+from app.modules.settings.router import router as settings_router
 
 setup_logging()
+warnings.filterwarnings(
+    "ignore",
+    message="Unrecognized server version info",
+    category=SAWarning,
+)
 
 app = FastAPI(title="Everday API")
 logger = logging.getLogger("app.request")
 startup_logger = logging.getLogger("app.startup")
-startup_logger.info("startup complete")
 
-allowed_origins = os.getenv("ALLOWED_ORIGINS", "")
+allowed_origins = os.getenv("ALLOWED_ORIGINS", "").strip()
+if not allowed_origins:
+    raise RuntimeError("Missing required env var: ALLOWED_ORIGINS")
 origin_list = [origin.strip() for origin in allowed_origins.split(",") if origin.strip()]
+
 if origin_list:
     app.add_middleware(
         CORSMiddleware,
@@ -65,7 +79,26 @@ async def request_logger(request: Request, call_next):
         logger.info(log_msg)
     
     response.headers["X-Request-Id"] = request_id
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "no-referrer")
+    response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
     return response
 
 
 app.include_router(core_router)
+app.include_router(auth_router)
+app.include_router(budget_router)
+app.include_router(settings_router)
+
+
+@app.on_event("startup")
+async def startup_tasks() -> None:
+    try:
+        setup_logging()
+        EnsureDatabaseSetup()
+        RunMigrations()
+        startup_logger.info("startup complete")
+    except Exception:
+        startup_logger.exception("startup failed")
+        raise

@@ -110,6 +110,7 @@ If tests are slow, prioritise Tier 1 during implementation, then Tier 2 at the e
 - Apply least privilege defaults.
 
 ## UI/UX Implementation Rules
+- Follow the style guide in `docs/STYLE_GUIDE.md` for all UI work.
 - Desktop-first with mobile-friendly critical flows (quick add, review).
 - Accessibility as default (labels, focus states, contrast).
 - No em dashes in UI copy.

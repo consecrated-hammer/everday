@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 
 from app.core.logging import format_frontend_message
 
-router = APIRouter(tags=["health"])
+router = APIRouter(prefix="/api", tags=["health"])
 logger = logging.getLogger("core.health")
 frontend_logger = logging.getLogger("frontend")
 
@@ -26,15 +26,22 @@ async def api_health_db() -> dict:
         logger.exception("db check failed: pyodbc unavailable")
         return {"status": "error", "detail": "database unavailable"}
 
-    driver = os.getenv("SQLSERVER_DRIVER", "ODBC Driver 18 for SQL Server")
+    driver = os.getenv("SQLSERVER_DRIVER", "")
     host = os.getenv("SQLSERVER_HOST", "")
     port = os.getenv("SQLSERVER_PORT", "")
     database = os.getenv("SQLSERVER_DB", "")
-    # Use login name for authentication, not database user name
-    user = os.getenv("SQLSERVER_LOGIN_NAME", os.getenv("SQLSERVER_USER", ""))
-    password = os.getenv("SQLSERVER_PASSWORD", "")
+    user = os.getenv("SQLSERVER_USER_LOGIN", "")
+    password = os.getenv("SQLSERVER_USER_PASSWORD", "")
 
-    if not all([host, port, database, user, password]):
+    missing = [key for key, value in {
+        "SQLSERVER_HOST": host,
+        "SQLSERVER_PORT": port,
+        "SQLSERVER_DB": database,
+        "SQLSERVER_USER_LOGIN": user,
+        "SQLSERVER_USER_PASSWORD": password,
+        "SQLSERVER_DRIVER": driver,
+    }.items() if not value]
+    if missing:
         logger.error("db check failed: missing database configuration")
         return {"status": "error", "detail": "database unavailable"}
 

@@ -1,3 +1,8 @@
 fastapi==0.110.0
 uvicorn==0.27.1
 pyodbc==5.2.0
+SQLAlchemy==2.0.32
+alembic==1.13.3
+passlib[argon2]==1.7.4
+PyJWT==2.9.0
+httpx==0.27.0

@@ -1,9 +1,16 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 
+import { GetDisplayName } from "../../lib/authStorage.js";
 import { Logger } from "../../lib/logger.js";
 
 const modules = [
-  { title: "Budget", subtitle: "Household" },
+  {
+    title: "Budget",
+    subtitle: "Income, expenses, and allocations",
+    cta: "Open Budget",
+    href: "/budget/income"
+  },
   { title: "Health", subtitle: "Portion Note" },
   { title: "Agenda", subtitle: "Recurrence and reminders" },
   { title: "Inbox", subtitle: "Uploads and triage" },
@@ -16,6 +23,7 @@ const Home = () => {
   const [apiStatus, setApiStatus] = useState("checking");
   const [dbStatus, setDbStatus] = useState("checking");
   const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:8100";
+  const displayName = GetDisplayName();
 
   useEffect(() => {
     const checkStatus = async () => {
@@ -48,39 +56,52 @@ const Home = () => {
   }, [apiBaseUrl]);
 
   return (
-    <div className="app-shell">
-      <header className="hero">
-        <div>
+    <div className="app-shell app-shell--wide dashboard">
+      <header className="dashboard-hero">
+        <div className="dashboard-hero-copy">
           <p className="eyebrow">Everday</p>
-          <h1>Life admin, one calm workspace.</h1>
+          {displayName ? <p className="welcome-banner">Welcome {displayName}!</p> : null}
+          <h1>Household control center.</h1>
           <p className="lede">
-            This is the Phase 1 baseline. Modules are wired for navigation and
-            the API is online.
+            Stay on top of money, schedules, and life admin with clear, shared workflows.
           </p>
-        </div>
-        <div className="status-card">
-          <p className="status-title">System status</p>
-          <div className="status-row">
-            <span className={`status-dot status-${apiStatus}`} aria-hidden="true" />
-            <span>API {apiStatus === "ok" ? "ready" : apiStatus}</span>
-          </div>
-          <div className="status-row">
-            <span className={`status-dot status-${dbStatus}`} aria-hidden="true" />
-            <span>Database {dbStatus === "ok" ? "connected" : dbStatus}</span>
+          <div className="dashboard-status dashboard-status--muted">
+            <div className={`status-pill status-${apiStatus}`}>
+              <span className="status-dot" aria-hidden="true" />
+              <span>API {apiStatus === "ok" ? "ready" : apiStatus}</span>
+            </div>
+            <div className={`status-pill status-${dbStatus}`}>
+              <span className="status-dot" aria-hidden="true" />
+              <span>Database {dbStatus === "ok" ? "connected" : dbStatus}</span>
+            </div>
           </div>
         </div>
       </header>
 
-      <section className="module-grid">
-        {modules.map((module) => (
-          <article key={module.title} className="module-card">
-            <div className="module-title">{module.title}</div>
-            <div className="module-subtitle">{module.subtitle}</div>
-            <button className="module-button" type="button" disabled>
-              Coming next
-            </button>
-          </article>
-        ))}
+      <section className="dashboard-section">
+        <div className="section-header">
+          <div>
+            <h2>Modules</h2>
+            <p>Jump straight into the areas that matter today.</p>
+          </div>
+        </div>
+        <div className="module-grid">
+          {modules.map((module) => (
+            <article key={module.title} className="module-card">
+              <div className="module-title">{module.title}</div>
+              <div className="module-subtitle">{module.subtitle}</div>
+              {module.href ? (
+                <Link className="module-button module-button--active" to={module.href}>
+                  {module.cta || "Open"}
+                </Link>
+              ) : (
+                <button className="module-button" type="button" disabled>
+                  Coming soon
+                </button>
+              )}
+            </article>
+          ))}
+        </div>
       </section>
     </div>
   );
