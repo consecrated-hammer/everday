@@ -42,7 +42,7 @@ async def api_health_db() -> dict:
         "SQLSERVER_DRIVER": driver,
     }.items() if not value]
     if missing:
-        logger.error("db check failed: missing database configuration: %s", ", ".join(missing))
+        logger.error("db check failed: missing database configuration")
         return {"status": "error", "detail": "database unavailable"}
 
     connection_string = (
