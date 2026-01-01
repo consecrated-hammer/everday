@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" role="img" aria-label="Everday">
+  <rect x="1" y="1" width="22" height="22" rx="5" fill="#2b6ef6" />
+  <path d="M15 21v-8a1 1 0 0 0-1-1H10a1 1 0 0 0-1 1v8" fill="none" stroke="#ffffff" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
+  <path d="M3 10 12 3l9 7" fill="none" stroke="#ffffff" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
+  <path d="M5 10v11a1 1 0 0 0 1 1h3" fill="none" stroke="#ffffff" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
+  <path d="M19 10v11a1 1 0 0 1-1 1h-3" fill="none" stroke="#ffffff" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
+</svg>
