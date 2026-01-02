@@ -15,6 +15,7 @@ from app.modules.auth.router import router as auth_router
 from app.modules.core.router import router as core_router
 from app.modules.budget.router import router as budget_router
 from app.modules.settings.router import router as settings_router
+from app.modules.health.router import router as health_router
 
 setup_logging()
 warnings.filterwarnings(
@@ -90,6 +91,7 @@ app.include_router(core_router)
 app.include_router(auth_router)
 app.include_router(budget_router)
 app.include_router(settings_router)
+app.include_router(health_router)
 
 
 @app.on_event("startup")

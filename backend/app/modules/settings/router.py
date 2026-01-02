@@ -55,7 +55,7 @@ def UpdateUserRole(
     db: Session = Depends(GetDb),
     user: UserContext = Depends(RequireModuleRole("settings", write=True)),
 ) -> UserOut:
-    if payload.Role not in {"Admin", "Edit", "ReadOnly"}:
+    if payload.Role not in {"Admin", "Edit", "Editor", "User", "ReadOnly"}:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid role")
 
     target = db.query(User).filter(User.Id == user_id).first()

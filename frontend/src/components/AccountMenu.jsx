@@ -4,8 +4,9 @@ import { useNavigate } from "react-router-dom";
 import { Logout } from "../lib/authApi.js";
 import { ClearTokens, GetTokens } from "../lib/authStorage.js";
 import { GetGravatarUrl } from "../lib/gravatar.js";
+import Icon from "./Icon.jsx";
 
-const AccountMenu = () => {
+const AccountMenu = ({ compact = false }) => {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const menuRef = useRef(null);
@@ -48,23 +49,24 @@ const AccountMenu = () => {
   };
 
   return (
-    <div className="account-menu" ref={menuRef}>
+    <div className={`account-menu${compact ? " is-compact" : ""}`} ref={menuRef}>
       <button type="button" className="account-trigger" onClick={() => setOpen((prev) => !prev)}>
-        {gravatar ? (
+        {compact ? (
+          <Icon name="user" className="icon" />
+        ) : gravatar ? (
           <img src={gravatar} alt={displayName} className="account-avatar" />
         ) : (
           <span className="account-avatar-fallback">{displayName.slice(0, 1).toUpperCase()}</span>
         )}
-        <span className="account-name">{displayName}</span>
-        <span className={`account-caret${open ? " is-open" : ""}`} aria-hidden="true">
-          ▾
-        </span>
+        {!compact ? <span className="account-name">{displayName}</span> : null}
+        {!compact ? (
+          <span className={`account-caret${open ? " is-open" : ""}`} aria-hidden="true">
+            ▾
+          </span>
+        ) : null}
       </button>
       {open ? (
         <div className="dropdown dropdown-right">
-          <button type="button" className="dropdown-item" onClick={() => navigate("/settings")}>
-            Settings
-          </button>
           <button type="button" className="dropdown-item" onClick={onLogout}>
             Log out
           </button>

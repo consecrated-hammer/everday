@@ -11,6 +11,13 @@ import BudgetSettings from "./pages/Budget/Settings.jsx";
 import Login from "./pages/Login/Login.jsx";
 import ResetPassword from "./pages/Login/ResetPassword.jsx";
 import Settings from "./pages/Settings/Settings.jsx";
+import HealthLayout from "./pages/Health/HealthLayout.jsx";
+import HealthToday from "./pages/Health/Today.jsx";
+import HealthLog from "./pages/Health/Log.jsx";
+import HealthFoods from "./pages/Health/Foods.jsx";
+import HealthHistory from "./pages/Health/History.jsx";
+import HealthInsights from "./pages/Health/Insights.jsx";
+import HealthSettings from "./pages/Health/Settings.jsx";
 
 const App = () => (
   <BrowserRouter>
@@ -31,6 +38,15 @@ const App = () => (
           <Route path="expenses" element={<BudgetExpenses />} />
           <Route path="allocations" element={<BudgetAllocations />} />
           <Route path="settings" element={<BudgetSettings />} />
+        </Route>
+        <Route path="/health" element={<HealthLayout />}>
+          <Route index element={<Navigate to="/health/today" replace />} />
+          <Route path="today" element={<HealthToday />} />
+          <Route path="log" element={<HealthLog />} />
+          <Route path="foods" element={<HealthFoods />} />
+          <Route path="history" element={<HealthHistory />} />
+          <Route path="insights" element={<HealthInsights />} />
+          <Route path="settings" element={<HealthSettings />} />
         </Route>
         <Route path="/settings" element={<Settings />} />
       </Route>
