@@ -2653,6 +2653,28 @@ th {
   padding: 6px 10px;
   background: var(--surface-strong);
   font: inherit;
+  box-sizing: border-box;
+  min-width: 0;
+}
+
+.health-date input[type="date"] {
+  -webkit-appearance: none;
+  appearance: none;
+  position: relative;
+  padding-right: 32px;
+}
+
+.health-date input[type="date"]::-webkit-calendar-picker-indicator {
+  position: absolute;
+  right: 10px;
+  cursor: pointer;
+  opacity: 0.6;
+  width: 16px;
+  height: 16px;
+}
+
+.health-date input[type="date"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
 }
 
 .health-log-form {
@@ -3258,11 +3280,15 @@ th {
   .module-shell--health .module-panel-header {
     flex-direction: column;
     align-items: flex-start;
+    width: 100%;
   }
 
   .module-shell--health .health-date {
     width: 100%;
     min-width: 0;
+    max-width: 100%;
+    align-self: stretch;
+    flex: 1 1 auto;
   }
 
   .module-shell--health .health-date input {
@@ -3270,6 +3296,13 @@ th {
     max-width: 100%;
     min-width: 0;
     display: block;
+    inline-size: 100%;
+    box-sizing: border-box;
+    overflow: hidden;
+  }
+
+  .module-shell--health .health-date input[type="date"]::-webkit-date-and-time-value {
+    text-align: left;
   }
 
   .module-shell--health .module-content {
