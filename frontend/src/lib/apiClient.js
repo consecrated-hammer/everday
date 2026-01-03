@@ -10,6 +10,9 @@ const ApiBaseUrl = NormalizeBaseUrl(
   import.meta.env.VITE_API_BASE_URL || "http://localhost:8100"
 );
 
+let refreshPromise = null;
+let refreshTokenInFlight = null;
+
 const BuildHeaders = () => {
   const headers = { "Content-Type": "application/json" };
   const tokens = GetTokens();
@@ -27,14 +30,37 @@ const HandleJson = async (response) => {
   return response.json();
 };
 
-const TryRefresh = async () => {
-  const tokens = GetTokens();
-  if (!tokens?.RefreshToken) {
-    return null;
-  }
-  const nextTokens = await Refresh({ RefreshToken: tokens.RefreshToken });
+const RefreshWithToken = async (refreshToken) => {
+  const nextTokens = await Refresh({ RefreshToken: refreshToken });
   SetTokens(nextTokens);
   return nextTokens;
+};
+
+const TryRefresh = async () => {
+  const tokens = GetTokens();
+  const refreshToken = tokens?.RefreshToken;
+  if (!refreshToken) {
+    return null;
+  }
+
+  if (!refreshPromise || refreshTokenInFlight !== refreshToken) {
+    refreshTokenInFlight = refreshToken;
+    refreshPromise = RefreshWithToken(refreshToken).finally(() => {
+      refreshPromise = null;
+    });
+  }
+
+  try {
+    return await refreshPromise;
+  } catch (error) {
+    const latest = GetTokens();
+    const latestRefresh = latest?.RefreshToken;
+    if (latestRefresh && latestRefresh !== refreshToken) {
+      refreshTokenInFlight = latestRefresh;
+      return RefreshWithToken(latestRefresh);
+    }
+    throw error;
+  }
 };
 
 export const RequestWithAuth = async (path, options = {}) => {

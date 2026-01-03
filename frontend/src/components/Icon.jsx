@@ -63,6 +63,11 @@ const IconMap = {
     material: "material-symbols:delete",
     lucide: "lucide:trash-2"
   },
+  save: {
+    phosphor: "ph:floppy-disk",
+    material: "material-symbols:save",
+    lucide: "lucide:save"
+  },
   plus: {
     phosphor: "ph:plus",
     material: "material-symbols:add",
@@ -123,7 +128,7 @@ const IconMap = {
     material: "material-symbols:restart-alt",
     lucide: "lucide:rotate-ccw"
   },
-  save: {
+  check: {
     phosphor: "ph:check",
     material: "material-symbols:check",
     lucide: "lucide:check"

@@ -1,5 +1,12 @@
 const StorageKey = "everday.auth";
 
+const NotifyAuthChange = () => {
+  if (typeof window === "undefined") {
+    return;
+  }
+  window.dispatchEvent(new Event("auth:changed"));
+};
+
 export const GetTokens = () => {
   const raw = localStorage.getItem(StorageKey);
   if (!raw) {
@@ -36,6 +43,7 @@ export const SetTokens = (tokens) => {
   const existing = GetTokens() || {};
   const merged = { ...existing, ...tokens };
   localStorage.setItem(StorageKey, JSON.stringify(merged));
+  NotifyAuthChange();
 };
 
 export const GetUsername = () => {
@@ -66,4 +74,5 @@ export const GetUserId = () => {
 
 export const ClearTokens = () => {
   localStorage.removeItem(StorageKey);
+  NotifyAuthChange();
 };

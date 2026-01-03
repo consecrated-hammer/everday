@@ -11,7 +11,12 @@ const modules = [
     cta: "Open Budget",
     href: "/budget/income"
   },
-  { title: "Health", subtitle: "Portion Note" },
+  {
+    title: "Health",
+    subtitle: "Meals, steps, and nutrition",
+    cta: "Open Health",
+    href: "/health/today"
+  },
   { title: "Agenda", subtitle: "Recurrence and reminders" },
   { title: "Inbox", subtitle: "Uploads and triage" },
   { title: "AI Intake", subtitle: "Draft suggestions" },

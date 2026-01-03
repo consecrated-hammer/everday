@@ -42,7 +42,7 @@ jobs:
         run: |
           if [ -d tests ]; then
             pip install pytest pytest-cov
-            pytest -o addopts= tests/ -v --cov=app --cov-report=term-missing
+            PYTHONPATH=$PWD pytest -o addopts= tests/ -v --cov=app --cov-report=term-missing
           else
             echo "No backend tests directory; skipping."
           fi

@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 
 import AccountMenu from "./AccountMenu.jsx";
+import MobileAppBar from "./MobileAppBar.jsx";
 import PasswordChangePrompt from "./PasswordChangePrompt.jsx";
 import Icon from "./Icon.jsx";
 const navSections = [
@@ -40,12 +41,12 @@ const AppShell = () => {
     () => location.pathname === "/budget/expenses",
     [location.pathname]
   );
-
+  const isHealth = useMemo(() => location.pathname.startsWith("/health"), [location.pathname]);
   return (
     <div
       className={`app-layout${navOpen ? " nav-open" : " nav-closed"}${
         isBudgetExpenses ? " app-layout--no-scroll" : ""
-      }`}
+      }${isDashboard ? " app-layout--home" : ""}${isHealth ? " app-layout--health" : ""}`}
     >
       <aside className="nav-rail">
         <div className="nav-brand">
@@ -79,6 +80,16 @@ const AppShell = () => {
         ))}
         <div className="nav-spacer" />
         <div className="nav-bottom">
+          <NavLink
+            to="/settings"
+            className={({ isActive }) => `nav-item nav-item--utility${isActive ? " is-active" : ""}`}
+          >
+            <span className="nav-icon" aria-hidden="true">
+              <Icon name="settings" className="icon" />
+            </span>
+            <span className="nav-label">Settings</span>
+          </NavLink>
+          <AccountMenu compact={!navOpen} />
           <button
             className="nav-toggle"
             type="button"
@@ -95,9 +106,9 @@ const AppShell = () => {
           isBudgetExpenses ? " app-main--no-scroll" : ""
         }`}
       >
+        <MobileAppBar />
         <div className="app-topbar">
           <div />
-          <AccountMenu />
         </div>
         <Outlet />
       </main>

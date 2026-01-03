@@ -5,6 +5,8 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 Base = declarative_base()
+engine = None
+SessionLocal = None
 
 
 def _build_connection_url(login_env: str, password_env: str, database_override: str | None = None) -> str:
@@ -40,12 +42,16 @@ def BuildUserConnectionUrl() -> str:
 def BuildAdminConnectionUrl(database_override: str | None = None) -> str:
     return _build_connection_url("SQLSERVER_ADMIN_LOGIN", "SQLSERVER_ADMIN_PASSWORD", database_override)
 
-
-engine = create_engine(BuildUserConnectionUrl(), pool_pre_ping=True)
-SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
+def _ensure_engine():
+    global engine, SessionLocal
+    if engine is None:
+        engine = create_engine(BuildUserConnectionUrl(), pool_pre_ping=True)
+        SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 
 
 def GetDb():
+    if SessionLocal is None:
+        _ensure_engine()
     db = SessionLocal()
     try:
         yield db

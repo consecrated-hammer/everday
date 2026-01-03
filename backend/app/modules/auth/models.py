@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String
+from sqlalchemy import Boolean, Column, Date, DateTime, ForeignKey, Integer, Numeric, String
 from sqlalchemy.orm import relationship
 
 from app.db import Base
@@ -17,6 +17,10 @@ class User(Base):
     LastName = Column(String(120))
     Email = Column(String(254))
     DiscordHandle = Column(String(120))
+    BirthDate = Column(Date)
+    HeightCm = Column(Integer)
+    WeightKg = Column(Numeric(6, 2))
+    ActivityLevel = Column(String(40))
     RequirePasswordChange = Column(Boolean, default=False, nullable=False)
     FailedLoginCount = Column(Integer, default=0, nullable=False)
     LockedUntil = Column(DateTime(timezone=True))
