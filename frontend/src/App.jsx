@@ -16,6 +16,7 @@ import HealthToday from "./pages/Health/Today.jsx";
 import HealthLog from "./pages/Health/Log.jsx";
 import HealthFoods from "./pages/Health/Foods.jsx";
 import HealthHistory from "./pages/Health/History.jsx";
+import HealthHistoryDay from "./pages/Health/HistoryDay.jsx";
 import HealthInsights from "./pages/Health/Insights.jsx";
 import HealthSettings from "./pages/Health/Settings.jsx";
 
@@ -45,6 +46,7 @@ const App = () => (
           <Route path="log" element={<HealthLog />} />
           <Route path="foods" element={<HealthFoods />} />
           <Route path="history" element={<HealthHistory />} />
+          <Route path="history/:date" element={<HealthHistoryDay />} />
           <Route path="insights" element={<HealthInsights />} />
           <Route path="settings" element={<HealthSettings />} />
         </Route>

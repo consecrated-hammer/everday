@@ -200,6 +200,7 @@ const Log = () => {
   const [searchParams] = useSearchParams();
   const initialDate = searchParams.get("date") || FormatDate(new Date());
   const initialAddMode = searchParams.get("add") === "1";
+  const initialEditId = searchParams.get("edit");
 
   const [logDate, setLogDate] = useState(initialDate);
   const [dailyLog, setDailyLog] = useState(null);
@@ -213,12 +214,13 @@ const Log = () => {
   const quantityInputRef = useRef(null);
   const [status, setStatus] = useState("idle");
   const [error, setError] = useState("");
-  const [showForm, setShowForm] = useState(initialAddMode);
+  const [showForm, setShowForm] = useState(initialAddMode || !!initialEditId);
   const [toast, setToast] = useState(null);
   const [editingEntryId, setEditingEntryId] = useState(null);
   const [mealTypeTouched, setMealTypeTouched] = useState(false);
   const [editContext, setEditContext] = useState(null);
   const pendingDeletesRef = useRef(new Map());
+  const handledEditRef = useRef(null);
 
   const [form, setForm] = useState({
     MealType: GetDefaultMealType(),
@@ -263,8 +265,12 @@ const Log = () => {
   }, [logDate]);
 
   useEffect(() => {
-    setShowForm(searchParams.get("add") === "1");
-  }, [searchParams]);
+    const nextDate = searchParams.get("date");
+    if (nextDate && nextDate !== logDate) {
+      setLogDate(nextDate);
+    }
+    setShowForm(searchParams.get("add") === "1" || !!searchParams.get("edit"));
+  }, [searchParams, logDate]);
 
   useEffect(() => {
     return () => {
@@ -635,6 +641,23 @@ const Log = () => {
     setDetailsOpen(false);
   };
 
+  useEffect(() => {
+    const editEntryId = searchParams.get("edit");
+    if (!editEntryId) {
+      handledEditRef.current = null;
+      return;
+    }
+    if (handledEditRef.current === editEntryId) {
+      return;
+    }
+    const entry = entries.find((item) => item.MealEntryId === editEntryId);
+    if (!entry) {
+      return;
+    }
+    onEditEntry(entry);
+    handledEditRef.current = editEntryId;
+  }, [entries, searchParams]);
+
   const ensureDailyLog = async () => {
     if (dailyLog) {
       return dailyLog;
@@ -703,6 +726,7 @@ const Log = () => {
           EntryNotes: form.EntryNotes || null
         };
         await UpdateMealEntry(editingEntryId, payload);
+        setShowForm(false);
       } else {
         const payload = {
           DailyLogId: log.DailyLogId,
@@ -1029,10 +1053,10 @@ const Log = () => {
               />
             </label>
             <div className="form-actions">
-              <button type="submit">{editingEntryId ? "Update entry" : "Add entry"}</button>
+              <button type="submit">{editingEntryId ? "Update" : "Add entry"}</button>
               {editingEntryId ? (
                 <button type="button" className="button-secondary" onClick={onCancelEdit}>
-                  Cancel edit
+                  Cancel
                 </button>
               ) : (
                 <button type="button" className="button-secondary" onClick={() => setShowForm(false)}>
@@ -1050,84 +1074,88 @@ const Log = () => {
         )}
       </section>
 
-      <section className="module-panel module-panel--stretch">
-        <header className="module-panel-header">
-          <div>
-            <h3>Entries</h3>
-            <p>{entries.length} logged items</p>
-          </div>
-        </header>
-        <div className="health-meal-list">
-          {Object.entries(groupedEntries).length === 0 ? (
-            <p className="health-empty">No entries yet.</p>
-          ) : (
-            Object.entries(groupedEntries).map(([mealType, items]) => (
-              <div key={mealType} className="health-meal-group">
-                <div className="health-meal-header">
-                  <h4>{mealType}</h4>
-                  <span>{items.length} items</span>
-                </div>
-                <ul>
-                  {items.map((entry) => (
-                    <li key={entry.MealEntryId}>
-                      <SwipeableEntryRow
-                        onEdit={() => onEditEntry(entry)}
-                        onDelete={() => scheduleDelete(entry)}
-                      >
-                        <div className="health-entry-row">
-                          <div>
-                            <p>{entry.FoodName}</p>
-                            <div className="health-entry-meta">
-                              <span className="health-detail">
-                                {FormatAmount(entry.DisplayQuantity ?? entry.Quantity)}{" "}
-                                {entry.PortionLabel || entry.ServingDescription || "serving"}
-                              </span>
-                              <span className="health-entry-calories">
-                                {Math.round(entry.CaloriesPerServing * entry.Quantity)} kcal
-                              </span>
-                            </div>
-                          </div>
-                          <div className="health-entry-actions-inline">
-                            <button
-                              type="button"
-                              className="icon-button is-secondary"
-                              aria-label="Edit entry"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                onEditEntry(entry);
-                              }}
-                            >
-                              <Icon name="edit" className="icon" />
-                            </button>
-                            <button
-                              type="button"
-                              className="icon-button is-danger"
-                              aria-label="Delete entry"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                scheduleDelete(entry);
-                              }}
-                            >
-                              <Icon name="trash" className="icon" />
-                            </button>
-                          </div>
-                        </div>
-                      </SwipeableEntryRow>
-                    </li>
-                  ))}
-                </ul>
+      {!showForm ? (
+        <>
+          <section className="module-panel module-panel--stretch">
+            <header className="module-panel-header">
+              <div>
+                <h3>Entries</h3>
+                <p>{entries.length} logged items</p>
               </div>
-            ))
-          )}
-        </div>
-      </section>
-      {toast ? (
-        <div className="health-toast" role="status" aria-live="polite">
-          <span>{toast.message}</span>
-          <button type="button" onClick={undoDelete}>
-            Undo
-          </button>
-        </div>
+            </header>
+            <div className="health-meal-list">
+              {Object.entries(groupedEntries).length === 0 ? (
+                <p className="health-empty">No entries yet.</p>
+              ) : (
+                Object.entries(groupedEntries).map(([mealType, items]) => (
+                  <div key={mealType} className="health-meal-group">
+                    <div className="health-meal-header">
+                      <h4>{mealType}</h4>
+                      <span>{items.length} items</span>
+                    </div>
+                    <ul>
+                      {items.map((entry) => (
+                        <li key={entry.MealEntryId}>
+                          <SwipeableEntryRow
+                            onEdit={() => onEditEntry(entry)}
+                            onDelete={() => scheduleDelete(entry)}
+                          >
+                            <div className="health-entry-row">
+                              <div>
+                                <p>{entry.FoodName}</p>
+                                <div className="health-entry-meta">
+                                  <span className="health-detail">
+                                    {FormatAmount(entry.DisplayQuantity ?? entry.Quantity)}{" "}
+                                    {entry.PortionLabel || entry.ServingDescription || "serving"}
+                                  </span>
+                                  <span className="health-entry-calories">
+                                    {Math.round(entry.CaloriesPerServing * entry.Quantity)} kcal
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="health-entry-actions-inline">
+                                <button
+                                  type="button"
+                                  className="icon-button is-secondary"
+                                  aria-label="Edit entry"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    onEditEntry(entry);
+                                  }}
+                                >
+                                  <Icon name="edit" className="icon" />
+                                </button>
+                                <button
+                                  type="button"
+                                  className="icon-button is-danger"
+                                  aria-label="Delete entry"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    scheduleDelete(entry);
+                                  }}
+                                >
+                                  <Icon name="trash" className="icon" />
+                                </button>
+                              </div>
+                            </div>
+                          </SwipeableEntryRow>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))
+              )}
+            </div>
+          </section>
+          {toast ? (
+            <div className="health-toast" role="status" aria-live="polite">
+              <span>{toast.message}</span>
+              <button type="button" onClick={undoDelete}>
+                Undo
+              </button>
+            </div>
+          ) : null}
+        </>
       ) : null}
     </div>
   );

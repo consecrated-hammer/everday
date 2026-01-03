@@ -64,6 +64,10 @@ const SwipeableEntryRow = ({ children, onEdit, onDelete }) => {
       return;
     }
     setIsSwiping(false);
+    if (Math.abs(offset) < startThreshold) {
+      setOffset(0);
+      return;
+    }
     if (offset > commitOffset) {
       setOffset(0);
       onEdit?.();
@@ -72,10 +76,6 @@ const SwipeableEntryRow = ({ children, onEdit, onDelete }) => {
     if (offset < -commitOffset) {
       setOffset(0);
       onDelete?.();
-      return;
-    }
-    if (Math.abs(offset) < startThreshold) {
-      setOffset(0);
       return;
     }
     setOffset(offset > 0 ? maxOffset : -maxOffset);

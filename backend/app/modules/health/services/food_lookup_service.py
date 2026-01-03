@@ -193,7 +193,7 @@ def LookupFoodByTextOptions(Query: str) -> list[FoodLookupResult]:
 
     SystemPrompt = (
         "You are a nutrition database assistant. When given a food name, return multiple size options in JSON format.\n\n"
-        "Return ONLY a JSON array of 1 to 3 objects with these exact fields:\n"
+        "Return ONLY a JSON array of 1 to 10 objects with these exact fields:\n"
         "[\n"
         "  {\n"
         '    "FoodName": "standardized food name including size if needed",\n'
@@ -245,11 +245,13 @@ def LookupFoodByTextOptions(Query: str) -> list[FoodLookupResult]:
         )
         FoodData = ParseLookupJson(RetryContent)
 
+    if isinstance(FoodData, dict):
+        FoodData = [FoodData]
     if not isinstance(FoodData, list) or not FoodData:
         raise ValueError("Invalid AI response format.")
 
     Results: list[FoodLookupResult] = []
-    for Item in FoodData[:3]:
+    for Item in FoodData[:10]:
         if not isinstance(Item, dict):
             continue
         Results.append(NormalizeFoodLookupResult(Item, Query))
