@@ -1,5 +1,5 @@
 fastapi==0.128.0
-uvicorn==0.27.1
+uvicorn==0.40.0
 pyodbc==5.2.0
 SQLAlchemy==2.0.32
 alembic==1.13.3
