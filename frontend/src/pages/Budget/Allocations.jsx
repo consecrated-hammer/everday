@@ -51,6 +51,7 @@ const emptyAccountForm = {
 };
 
 const AllocationTableStorageKey = "budget-allocations-table";
+const SummaryTableStorageKey = "budget-allocations-summary-table";
 const DefaultAllocationColumns = [
   { Key: "Account", Label: "Account", Locked: true, Width: 200 },
   { Key: "Percent", Label: "% Allocation", Align: "right", Width: 120 },
@@ -62,11 +63,45 @@ const DefaultAllocationColumns = [
   { Key: "RoundedFortnight", Label: "Rounded per fortnight", Align: "right", Width: 160 },
   { Key: "PercentTo100", Label: "% to 100%", Align: "right", Width: 120 }
 ];
+const DefaultSummaryColumns = [
+  { Key: "Type", Label: "Type", Locked: true, Width: 160 },
+  { Key: "PerDay", Label: "Per day", Align: "right", Width: 110 },
+  { Key: "PerWeek", Label: "Per week", Align: "right", Width: 110 },
+  { Key: "PerFortnight", Label: "Per fortnight", Align: "right", Width: 130 },
+  { Key: "PerMonth", Label: "Per month", Align: "right", Width: 120 },
+  { Key: "PerYear", Label: "Per year", Align: "right", Width: 120 }
+];
 
 const BuildAllocationDefaultColumns = () => DefaultAllocationColumns.map((column) => ({ ...column }));
+const BuildSummaryDefaultColumns = () => DefaultSummaryColumns.map((column) => ({ ...column }));
 
 const MergeAllocationColumns = (storedColumns) => {
   const defaults = BuildAllocationDefaultColumns();
+  if (!Array.isArray(storedColumns)) {
+    return defaults;
+  }
+  const defaultMap = Object.fromEntries(defaults.map((column) => [column.Key, column]));
+  const next = [];
+  storedColumns.forEach((column) => {
+    const base = defaultMap[column.Key];
+    if (!base) {
+      return;
+    }
+    next.push({
+      ...base,
+      ...column,
+      Locked: base.Locked,
+      Width: column.Width ?? base.Width,
+      Visible: column.Visible ?? base.Visible
+    });
+    delete defaultMap[column.Key];
+  });
+  Object.values(defaultMap).forEach((column) => next.push(column));
+  return next;
+};
+
+const MergeSummaryColumns = (storedColumns) => {
+  const defaults = BuildSummaryDefaultColumns();
   if (!Array.isArray(storedColumns)) {
     return defaults;
   }
@@ -119,8 +154,24 @@ const BudgetAllocations = () => {
       return { Columns: BuildAllocationDefaultColumns() };
     }
   });
+  const [summaryTableState, setSummaryTableState] = useState(() => {
+    const stored = localStorage.getItem(SummaryTableStorageKey);
+    if (!stored) {
+      return { Columns: BuildSummaryDefaultColumns() };
+    }
+    try {
+      const data = JSON.parse(stored);
+      return { Columns: MergeSummaryColumns(data.Columns) };
+    } catch (err) {
+      return { Columns: BuildSummaryDefaultColumns() };
+    }
+  });
   const [allocationColumnsOpen, setAllocationColumnsOpen] = useState(false);
   const [allocationMenuOpen, setAllocationMenuOpen] = useState(false);
+  const [summaryColumnsOpen, setSummaryColumnsOpen] = useState(false);
+  const [summaryMenuOpen, setSummaryMenuOpen] = useState(false);
+  const summaryTableRef = useRef(null);
+  const summaryResizeRef = useRef(null);
   const allocationTableRef = useRef(null);
   const allocationResizeRef = useRef(null);
 
@@ -181,6 +232,13 @@ const BudgetAllocations = () => {
   }, [allocationTableState.Columns]);
 
   useEffect(() => {
+    localStorage.setItem(
+      SummaryTableStorageKey,
+      JSON.stringify({ Columns: summaryTableState.Columns })
+    );
+  }, [summaryTableState.Columns]);
+
+  useEffect(() => {
     const onMouseMove = (event) => {
       if (!allocationResizeRef.current) {
         return;
@@ -207,22 +265,47 @@ const BudgetAllocations = () => {
   }, []);
 
   useEffect(() => {
-    const onClick = (event) => {
-      if (!allocationTableRef.current || !allocationTableRef.current.contains(event.target)) {
-        setAllocationColumnsOpen(false);
-        setAllocationMenuOpen(false);
+    const onMouseMove = (event) => {
+      if (!summaryResizeRef.current) {
         return;
       }
+      const { key, startX, startWidth } = summaryResizeRef.current;
+      const delta = event.clientX - startX;
+      const nextWidth = Math.max(80, startWidth + delta);
+      setSummaryTableState((current) => ({
+        ...current,
+        Columns: current.Columns.map((column) =>
+          column.Key === key ? { ...column, Width: nextWidth } : column
+        )
+      }));
+    };
+    const onMouseUp = () => {
+      summaryResizeRef.current = null;
+    };
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+    };
+  }, []);
+
+  useEffect(() => {
+    const onClick = (event) => {
       if (event.target.closest(".dropdown") || event.target.closest(".toolbar-button")) {
         return;
       }
       setAllocationColumnsOpen(false);
       setAllocationMenuOpen(false);
+      setSummaryColumnsOpen(false);
+      setSummaryMenuOpen(false);
     };
     const onKey = (event) => {
       if (event.key === "Escape") {
         setAllocationColumnsOpen(false);
         setAllocationMenuOpen(false);
+        setSummaryColumnsOpen(false);
+        setSummaryMenuOpen(false);
       }
     };
     document.addEventListener("mousedown", onClick);
@@ -289,6 +372,39 @@ const BudgetAllocations = () => {
       }
     };
   }, [incomeStreams, expenses]);
+
+  const summaryRows = useMemo(
+    () => [
+      {
+        Name: "Income",
+        PerDay: totals.Income.PerDay,
+        PerWeek: totals.Income.PerWeek,
+        PerFortnight: totals.Income.PerFortnight,
+        PerMonth: totals.Income.PerMonth,
+        PerYear: totals.Income.PerYear,
+        Muted: false
+      },
+      {
+        Name: "Expenses",
+        PerDay: totals.Expenses.PerDay,
+        PerWeek: totals.Expenses.PerWeek,
+        PerFortnight: totals.Expenses.PerFortnight,
+        PerMonth: totals.Expenses.PerMonth,
+        PerYear: totals.Expenses.PerYear,
+        Muted: false
+      },
+      {
+        Name: "Difference",
+        PerDay: totals.Difference.PerDay,
+        PerWeek: totals.Difference.PerWeek,
+        PerFortnight: totals.Difference.PerFortnight,
+        PerMonth: totals.Difference.PerMonth,
+        PerYear: totals.Difference.PerYear,
+        Muted: true
+      }
+    ],
+    [totals]
+  );
 
   const baseAllocationSummary = useMemo(() => {
     const incomePerFortnight = totals.Income.PerFortnight || 0;
@@ -382,6 +498,9 @@ const BudgetAllocations = () => {
   const FormatPercent = (value) => `${(value * 100).toFixed(2)}%`;
   const manualKeys = manualAllocations.map((entry) => ({ Id: entry.Id, Name: entry.Key }));
   const overAllocated = allocationSummary.TotalAllocated > 1 + RatioEpsilon;
+  const targetExpenseAmount = totals.Expenses.PerFortnight;
+  const totalAllocatedAmount = totals.Income.PerFortnight * allocationSummary.TotalAllocated;
+  const leftoverAmount = totals.Income.PerFortnight * allocationSummary.Leftover;
 
   const ApplySplitDraft = async () => {
     if (!splitDraft || splitDraft.length === 0) {
@@ -636,10 +755,64 @@ const BudgetAllocations = () => {
     return target >= 0 && target < columns.length;
   };
 
+  const ToggleSummaryColumnVisibility = (key) => {
+    const column = summaryTableState.Columns.find((item) => item.Key === key);
+    if (column?.Locked) {
+      return;
+    }
+    setSummaryTableState((current) => ({
+      ...current,
+      Columns: current.Columns.map((item) =>
+        item.Key === key ? { ...item, Visible: item.Visible === false } : item
+      )
+    }));
+  };
+
+  const ResetSummaryTableState = () => {
+    setSummaryTableState({ Columns: BuildSummaryDefaultColumns() });
+  };
+
+  const MoveSummaryColumn = (key, direction) => {
+    setSummaryTableState((current) => {
+      const columns = [...current.Columns];
+      const index = columns.findIndex((column) => column.Key === key);
+      if (index === -1 || columns[index].Locked) {
+        return current;
+      }
+      const step = direction === "up" ? -1 : 1;
+      let target = index + step;
+      while (target >= 0 && target < columns.length && columns[target].Locked) {
+        target += step;
+      }
+      if (target < 0 || target >= columns.length) {
+        return current;
+      }
+      const nextColumns = [...columns];
+      const [moved] = nextColumns.splice(index, 1);
+      nextColumns.splice(target, 0, moved);
+      return { ...current, Columns: nextColumns };
+    });
+  };
+
+  const CanMoveSummaryColumn = (index, direction) => {
+    const columns = summaryTableState.Columns;
+    if (!columns[index] || columns[index].Locked) {
+      return false;
+    }
+    const step = direction === "up" ? -1 : 1;
+    let target = index + step;
+    while (target >= 0 && target < columns.length && columns[target].Locked) {
+      target += step;
+    }
+    return target >= 0 && target < columns.length;
+  };
+
   const accountColumns = [
     { key: "Name", label: "Account", sortable: true, width: 200 },
     { key: "Enabled", label: "Enabled", sortable: true, width: 120, render: (row) => (row.Enabled ? "Yes" : "No") }
   ];
+  const summaryColumns = summaryTableState.Columns;
+  const visibleSummaryColumns = summaryColumns.filter((column) => column.Visible !== false);
   const allocationColumns = allocationTableState.Columns;
   const visibleAllocationColumns = allocationColumns.filter((column) => column.Visible !== false);
   const readOnlyRowNames = ["Leftover", "Daily Expenses"];
@@ -660,45 +833,140 @@ const BudgetAllocations = () => {
       {error ? <p className="form-error">{error}</p> : null}
       {status === "loading" ? <p className="form-note">Loading allocations...</p> : null}
 
-      <div className="allocation-table">
-        <table>
-          <thead>
-            <tr>
-              <th>Type</th>
-              <th className="allocation-number">Per day</th>
-              <th className="allocation-number">Per week</th>
-              <th className="allocation-number">Per fortnight</th>
-              <th className="allocation-number">Per month</th>
-              <th className="allocation-number">Per year</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td className="allocation-strong">Income</td>
-              <td className="allocation-number">{FormatCurrency(totals.Income.PerDay)}</td>
-              <td className="allocation-number">{FormatCurrency(totals.Income.PerWeek)}</td>
-              <td className="allocation-number">{FormatCurrency(totals.Income.PerFortnight)}</td>
-              <td className="allocation-number">{FormatCurrency(totals.Income.PerMonth)}</td>
-              <td className="allocation-number">{FormatCurrency(totals.Income.PerYear)}</td>
-            </tr>
-            <tr>
-              <td className="allocation-strong">Expenses</td>
-              <td className="allocation-number">{FormatCurrency(totals.Expenses.PerDay)}</td>
-              <td className="allocation-number">{FormatCurrency(totals.Expenses.PerWeek)}</td>
-              <td className="allocation-number">{FormatCurrency(totals.Expenses.PerFortnight)}</td>
-              <td className="allocation-number">{FormatCurrency(totals.Expenses.PerMonth)}</td>
-              <td className="allocation-number">{FormatCurrency(totals.Expenses.PerYear)}</td>
-            </tr>
-            <tr className="allocation-row-muted">
-              <td className="allocation-strong">Difference</td>
-              <td className="allocation-number">{FormatCurrency(totals.Difference.PerDay)}</td>
-              <td className="allocation-number">{FormatCurrency(totals.Difference.PerWeek)}</td>
-              <td className="allocation-number">{FormatCurrency(totals.Difference.PerFortnight)}</td>
-              <td className="allocation-number">{FormatCurrency(totals.Difference.PerMonth)}</td>
-              <td className="allocation-number">{FormatCurrency(totals.Difference.PerYear)}</td>
-            </tr>
-          </tbody>
-        </table>
+      <div className="allocation-table" ref={summaryTableRef}>
+        <div className="table-toolbar">
+          <div className="toolbar-left" />
+          <div className="toolbar-right">
+            <div className="toolbar-flyout">
+              <button
+                type="button"
+                className="toolbar-button"
+                onClick={() => {
+                  setSummaryColumnsOpen((prev) => !prev);
+                  setSummaryMenuOpen(false);
+                  setAllocationColumnsOpen(false);
+                  setAllocationMenuOpen(false);
+                }}
+              >
+                <Icon name="columns" className="icon" />
+                Columns
+              </button>
+              {summaryColumnsOpen ? (
+                <div className="dropdown columns-dropdown">
+                  {summaryColumns.map((column, index) => (
+                    <div key={column.Key} className="columns-row">
+                      <label className="columns-label">
+                        <input
+                          type="checkbox"
+                          checked={column.Visible !== false}
+                          onChange={() => ToggleSummaryColumnVisibility(column.Key)}
+                          disabled={column.Locked}
+                        />
+                        <span>{column.Label}</span>
+                      </label>
+                      <div className="columns-actions">
+                        <button
+                          type="button"
+                          className="icon-button"
+                          onClick={() => MoveSummaryColumn(column.Key, "up")}
+                          disabled={!CanMoveSummaryColumn(index, "up")}
+                          aria-label="Move column up"
+                        >
+                          <Icon name="sortUp" className="icon" />
+                        </button>
+                        <button
+                          type="button"
+                          className="icon-button"
+                          onClick={() => MoveSummaryColumn(column.Key, "down")}
+                          disabled={!CanMoveSummaryColumn(index, "down")}
+                          aria-label="Move column down"
+                        >
+                          <Icon name="sortDown" className="icon" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+            <div className="toolbar-flyout">
+              <button
+                type="button"
+                className="toolbar-button icon-only"
+                aria-label="Table options"
+                onClick={() => {
+                  setSummaryMenuOpen((prev) => !prev);
+                  setSummaryColumnsOpen(false);
+                  setAllocationColumnsOpen(false);
+                  setAllocationMenuOpen(false);
+                }}
+              >
+                <Icon name="more" className="icon" />
+              </button>
+              {summaryMenuOpen ? (
+                <div className="dropdown dropdown-right">
+                  <button
+                    type="button"
+                    className="dropdown-item"
+                    onClick={() => {
+                      ResetSummaryTableState();
+                      setSummaryMenuOpen(false);
+                    }}
+                  >
+                    Reset to default
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </div>
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                {visibleSummaryColumns.map((column) => (
+                  <th
+                    key={column.Key}
+                    className={column.Align === "right" ? "allocation-number" : ""}
+                    style={{ width: column.Width }}
+                  >
+                    <span>{column.Label}</span>
+                    <span
+                      className="col-resizer"
+                      onMouseDown={(event) => {
+                        summaryResizeRef.current = {
+                          key: column.Key,
+                          startX: event.clientX,
+                          startWidth: column.Width || 120
+                        };
+                      }}
+                    />
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {summaryRows.map((row) => (
+                <tr key={row.Name} className={row.Muted ? "allocation-row-muted" : ""}>
+                  {visibleSummaryColumns.map((column) => {
+                    if (column.Key === "Type") {
+                      return (
+                        <td key={`${row.Name}-type`} className="allocation-strong">
+                          {row.Name}
+                        </td>
+                      );
+                    }
+                    return (
+                      <td key={`${row.Name}-${column.Key}`} className="allocation-number">
+                        {FormatCurrency(row[column.Key])}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <div className="allocation-summary">
@@ -706,16 +974,19 @@ const BudgetAllocations = () => {
           <div>
             <p className="allocation-label">Target expense allocation</p>
             <p className="allocation-value">{FormatPercent(allocationSummary.TargetExpenseAllocation)}</p>
+            <p className="allocation-meta">{FormatCurrency(targetExpenseAmount)} per fortnight</p>
           </div>
           <div>
             <p className="allocation-label">Total allocated</p>
             <p className={`allocation-value${overAllocated ? " is-warning" : ""}`}>
               {FormatPercent(allocationSummary.TotalAllocated)}
             </p>
+            <p className="allocation-meta">{FormatCurrency(totalAllocatedAmount)} per fortnight</p>
           </div>
           <div>
             <p className="allocation-label">Leftover</p>
             <p className="allocation-value">{FormatPercent(allocationSummary.Leftover)}</p>
+            <p className="allocation-meta">{FormatCurrency(leftoverAmount)} per fortnight</p>
           </div>
         </div>
         <div className="allocation-actions">
@@ -901,6 +1172,8 @@ const BudgetAllocations = () => {
                 onClick={() => {
                   setAllocationColumnsOpen((prev) => !prev);
                   setAllocationMenuOpen(false);
+                  setSummaryColumnsOpen(false);
+                  setSummaryMenuOpen(false);
                 }}
               >
                 <Icon name="columns" className="icon" />
@@ -949,7 +1222,12 @@ const BudgetAllocations = () => {
                 type="button"
                 className="toolbar-button icon-only"
                 aria-label="Table options"
-                onClick={() => setAllocationMenuOpen((prev) => !prev)}
+                onClick={() => {
+                  setAllocationMenuOpen((prev) => !prev);
+                  setAllocationColumnsOpen(false);
+                  setSummaryColumnsOpen(false);
+                  setSummaryMenuOpen(false);
+                }}
               >
                 <Icon name="more" className="icon" />
               </button>

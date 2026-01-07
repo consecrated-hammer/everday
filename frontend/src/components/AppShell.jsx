@@ -4,13 +4,14 @@ import { NavLink, Outlet, useLocation } from "react-router-dom";
 import AccountMenu from "./AccountMenu.jsx";
 import MobileAppBar from "./MobileAppBar.jsx";
 import PasswordChangePrompt from "./PasswordChangePrompt.jsx";
+import HealthProfilePrompt from "./HealthProfilePrompt.jsx";
 import Icon from "./Icon.jsx";
 const navSections = [
   {
     label: "Modules",
     items: [
       { label: "Dashboard", path: "/", icon: "dashboard", tone: "sunrise" },
-      { label: "Budget", path: "/budget/income", icon: "budget", tone: "mint" },
+      { label: "Budget", path: "/budget/allocations", icon: "budget", tone: "mint" },
       { label: "Health", path: "/health", icon: "health", tone: "rose" },
       { label: "Agenda", path: "/agenda", icon: "agenda", tone: "sky" },
       { label: "Inbox", path: "/inbox", icon: "inbox", tone: "amber" }
@@ -113,6 +114,7 @@ const AppShell = () => {
         <Outlet />
       </main>
       <PasswordChangePrompt />
+      <HealthProfilePrompt />
     </div>
   );
 };

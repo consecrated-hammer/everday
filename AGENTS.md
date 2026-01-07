@@ -9,15 +9,13 @@ You are a coding agent operating in a VS Code + remote Linux host workflow. Deli
 - Keep changes scoped, avoid sprawling refactors unless explicitly requested.
 - Preserve existing conventions unless they are actively harmful.
 - Environment naming for this repo:
-  - DEV = local realtime scripts (`scripts/dev-backend.sh`, `scripts/dev-frontend.sh`) using `.env.dev`
-  - UAT = `scripts/uat.sh` with `docker-compose.uat.yml` using `.env.uat`
+  - DEV = `scripts/dev.sh` with `docker-compose.traefik.dev.yml` using `.env.dev`
   - PROD = main stack compose at `/mnt/docker/config/dockerconfigs/docker-compose.yml`
 - Shared SQL lives in the main stack at `/mnt/docker/config/dockerconfigs/docker-compose.yml`:
   - DEV uses `batserver-sql-dev` (port `14333` on host, `1433` in-network)
-  - UAT uses `batserver-sql-uat` (port `14334` on host, `1433` in-network)
   - PROD uses `batserver-sql-prod` (port `14335` on host, `1433` in-network)
   - Data paths are bind-mounted under `/mnt/docker/config/dockerconfigs/batserver-sql-<env>`
-  - Bootstrap schema/login with `scripts/sql/bootstrap-everday.sh <dev|uat|prod>`
+  - Bootstrap schema/login with `scripts/sql/bootstrap-everday.sh <dev|prod>`
 
 ## Communication
 When implementing a task, respond with:

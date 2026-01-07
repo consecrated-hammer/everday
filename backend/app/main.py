@@ -3,9 +3,12 @@ import os
 import time
 import uuid
 import warnings
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from sqlalchemy.exc import SAWarning
 
 from app.core.bootstrap import EnsureDatabaseSetup
@@ -92,6 +95,27 @@ app.include_router(auth_router)
 app.include_router(budget_router)
 app.include_router(settings_router)
 app.include_router(health_router)
+
+class SpaStaticFiles(StaticFiles):
+    async def get_response(self, path: str, scope):
+        response = None
+        try:
+            response = await super().get_response(path, scope)
+        except StarletteHTTPException as exc:
+            if exc.status_code != 404:
+                raise
+        if response is not None and response.status_code != 404:
+            return response
+        if scope.get("method") not in {"GET", "HEAD"}:
+            raise StarletteHTTPException(status_code=404)
+        if path.startswith("api/") or Path(path).suffix:
+            raise StarletteHTTPException(status_code=404)
+        return await super().get_response("index.html", scope)
+
+
+static_dir = Path(__file__).resolve().parent / "static"
+if static_dir.exists():
+    app.mount("/", SpaStaticFiles(directory=static_dir, html=True), name="static")
 
 
 @app.on_event("startup")
