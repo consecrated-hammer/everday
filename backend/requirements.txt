@@ -4,6 +4,6 @@ pyodbc==5.2.0
 SQLAlchemy==2.0.45
 alembic==1.17.2
 passlib[argon2]==1.7.4
-PyJWT==2.9.0
+PyJWT==2.10.1
 httpx==0.28.1
 pytest==9.0.2
