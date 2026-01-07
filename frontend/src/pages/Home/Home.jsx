@@ -9,7 +9,7 @@ const modules = [
     title: "Budget",
     subtitle: "Income, expenses, and allocations",
     cta: "Open Budget",
-    href: "/budget/income"
+    href: "/budget/allocations"
   },
   {
     title: "Health",

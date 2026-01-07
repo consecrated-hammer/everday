@@ -1006,7 +1006,7 @@ iconify-icon {
   border-radius: 16px;
   border: 1px solid var(--border);
   padding: 12px;
-  overflow-x: auto;
+  overflow: visible;
 }
 
 .allocation-table table {

@@ -13,7 +13,7 @@ export const NavItems = [
   },
   {
     Label: "Budget",
-    Path: "/budget/income",
+    Path: "/budget/allocations",
     Icon: "budget",
     MatchPrefixes: ["/budget"]
   },

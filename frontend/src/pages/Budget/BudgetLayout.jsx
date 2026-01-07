@@ -1,9 +1,9 @@
 import { NavLink, Outlet } from "react-router-dom";
 
 const navItems = [
-  { label: "Income", path: "/budget/income" },
-  { label: "Expenses", path: "/budget/expenses" },
   { label: "Allocations", path: "/budget/allocations" },
+  { label: "Expenses", path: "/budget/expenses" },
+  { label: "Income", path: "/budget/income" },
   { label: "Settings", path: "/budget/settings", disabled: true }
 ];
 
