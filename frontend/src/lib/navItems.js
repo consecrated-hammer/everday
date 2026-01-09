@@ -18,16 +18,10 @@ export const NavItems = [
     MatchPrefixes: ["/budget"]
   },
   {
-    Label: "Agenda",
-    Path: "/agenda",
-    Icon: "agenda",
-    MatchPrefixes: ["/agenda"]
-  },
-  {
-    Label: "Inbox",
-    Path: "/inbox",
-    Icon: "inbox",
-    MatchPrefixes: ["/inbox"]
+    Label: "Kids",
+    Path: "/kids-admin",
+    Icon: "team",
+    MatchPrefixes: ["/kids-admin"]
   },
   {
     Label: "Settings",

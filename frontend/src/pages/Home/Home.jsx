@@ -17,11 +17,12 @@ const modules = [
     cta: "Open Health",
     href: "/health/today"
   },
-  { title: "Agenda", subtitle: "Recurrence and reminders" },
-  { title: "Inbox", subtitle: "Uploads and triage" },
-  { title: "AI Intake", subtitle: "Draft suggestions" },
-  { title: "Notifications", subtitle: "Discord and email" },
-  { title: "Calendar Sync", subtitle: "ICS feeds" }
+  {
+    title: "Kids",
+    subtitle: "Balances, chores, and pocket money",
+    cta: "Open Kids",
+    href: "/kids-admin"
+  }
 ];
 
 const Home = () => {

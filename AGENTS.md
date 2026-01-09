@@ -131,6 +131,7 @@ A task is “done” when:
 - FastChecks pass
 - Any new public behaviour is documented (README or inline docs)
 - Deferred items are captured as TODOs with clear next steps
+- `scripts/dev.sh` has been run after completing the task (unless the user requests skipping it)
 
 
 # Household App Addendum (Project-Specific)
@@ -143,8 +144,8 @@ A task is “done” when:
 
 ## Stack Expectations
 - Backend: FastAPI + SQLAlchemy + Alembic
-- DB: PostgreSQL (primary)
-- Frontend: React + Vite + Tailwind
+- DB: SQL Server (MSSQL)
+- Frontend: React + Vite + CSS (no Tailwind)
 - Deploy: Docker Compose (dev and prod)
 
 ## Authentication and Authorisation

@@ -20,7 +20,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=traefik_proxy"
-      - "traefik.http.routers.everday-dev.rule=Host(`${EVERDAY_DEV_HOST}`) || Host(`www.${EVERDAY_DEV_HOST}`)"
+      - "traefik.http.routers.everday-dev.rule=Host(`${EVERDAY_DEV_HOST:-everday-dev.batserver.au}`) || Host(`www.${EVERDAY_DEV_HOST:-everday-dev.batserver.au}`)"
       - "traefik.http.routers.everday-dev.entrypoints=websecure"
       - "traefik.http.routers.everday-dev.tls.certresolver=letsencrypt"
       - "traefik.http.services.everday-dev.loadbalancer.server.port=8000"
@@ -29,8 +29,8 @@ services:
       - "traefik.http.routers.everday-dev.middlewares=everday-dev-sec"
       - "homepage.enable=true"
       - "homepage.name=Everday Dev"
-      - "homepage.href=https://${EVERDAY_DEV_HOST}"
-      - "homepage.icon=https://${EVERDAY_DEV_HOST}/favicon.svg"
+      - "homepage.href=https://${EVERDAY_DEV_HOST:-everday-dev.batserver.au}"
+      - "homepage.icon=https://${EVERDAY_DEV_HOST:-everday-dev.batserver.au}/favicon.svg"
       - "homepage.group=Projects"
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]

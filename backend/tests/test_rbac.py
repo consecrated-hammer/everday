@@ -28,3 +28,9 @@ def test_rbac_denies_missing_role():
     user = UserContext(Id=1, Username="user", Roles={})
     with pytest.raises(HTTPException):
         checker(user)
+
+
+def test_rbac_allows_kid_read():
+    checker = RequireModuleRole("kids", write=False)
+    user = UserContext(Id=1, Username="kid", Roles={"kids": "Kid"})
+    assert checker(user) == user

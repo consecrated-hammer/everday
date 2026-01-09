@@ -4,6 +4,13 @@ export const FetchUsers = async () => {
   return RequestJson("/settings/users");
 };
 
+export const CreateUser = async (payload) => {
+  return RequestJson("/settings/users", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+};
+
 export const UpdateUserRole = async (userId, payload) => {
   return RequestJson(`/settings/users/${userId}/roles`, {
     method: "PUT",

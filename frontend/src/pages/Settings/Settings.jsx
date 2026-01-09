@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import {
+  CreateUser,
   FetchUsers,
   UpdateUserPassword,
   UpdateUserProfile,
@@ -12,12 +13,11 @@ import {
   UpdateHealthProfile,
   UpdateHealthSettings
 } from "../../lib/healthApi.js";
-import Icon from "../../components/Icon.jsx";
 import { GetTokens, GetUserId, SetTokens } from "../../lib/authStorage.js";
 import { GetUiSettings, SetUiSettings } from "../../lib/uiSettings.js";
 
-const RoleOptions = ["Admin", "Edit", "Editor", "User", "ReadOnly"];
-const ModuleOptions = ["budget", "health", "settings"];
+const RoleOptions = ["Admin", "Edit", "Editor", "User", "ReadOnly", "Kid"];
+const ModuleOptions = ["budget", "health", "kids", "settings"];
 const ThemeOptions = [
   { value: "auto", label: "Auto" },
   { value: "light", label: "Light" },
@@ -85,6 +85,16 @@ const Settings = () => {
   const [healthStatus, setHealthStatus] = useState("idle");
   const [healthError, setHealthError] = useState("");
   const [uiSettings, setUiSettings] = useState(() => GetUiSettings());
+  const [showAddUser, setShowAddUser] = useState(false);
+  const [newUserForm, setNewUserForm] = useState({
+    Username: "",
+    Password: "",
+    FirstName: "",
+    LastName: "",
+    Email: "",
+    DiscordHandle: "",
+    RequirePasswordChange: false
+  });
 
   const loadUsers = async () => {
     try {
@@ -117,6 +127,51 @@ const Settings = () => {
   useEffect(() => {
     loadUsers();
   }, []);
+
+  const onNewUserChange = (event) => {
+    const { name, value, type, checked } = event.target;
+    setNewUserForm((prev) => ({
+      ...prev,
+      [name]: type === "checkbox" ? checked : value
+    }));
+  };
+
+  const onCreateUser = async (event) => {
+    event.preventDefault();
+    if (!newUserForm.Username || !newUserForm.Password) {
+      setError("Username and password are required.");
+      return;
+    }
+    try {
+      setStatus("saving");
+      setError("");
+      await CreateUser({
+        Username: newUserForm.Username,
+        Password: newUserForm.Password,
+        FirstName: newUserForm.FirstName || null,
+        LastName: newUserForm.LastName || null,
+        Email: newUserForm.Email || null,
+        DiscordHandle: newUserForm.DiscordHandle || null,
+        RequirePasswordChange: newUserForm.RequirePasswordChange
+      });
+      setNewUserForm({
+        Username: "",
+        Password: "",
+        FirstName: "",
+        LastName: "",
+        Email: "",
+        DiscordHandle: "",
+        RequirePasswordChange: false
+      });
+      setShowAddUser(false);
+      await loadUsers();
+    } catch (err) {
+      setStatus("error");
+      setError(err?.message || "Failed to create user");
+    } finally {
+      setStatus("ready");
+    }
+  };
 
   const loadHealthSettings = async () => {
     try {
@@ -698,83 +753,192 @@ const Settings = () => {
           {activeSection === "access" ? (
             <div className="settings-section">
               <div className="settings-section-header">
-                <h3>User profiles</h3>
-                <p>Assign roles, update profiles, and reset passwords.</p>
+                <div className="settings-section-header-row">
+                  <div>
+                    <h3>User profiles</h3>
+                    <p>Manage logins, roles, profiles, and password resets.</p>
+                  </div>
+                  <button
+                    type="button"
+                    className="primary-button"
+                    onClick={() => setShowAddUser((prev) => !prev)}
+                  >
+                    {showAddUser ? "Close add user" : "Add new user"}
+                  </button>
+                </div>
               </div>
               {error ? <p className="form-error">{error}</p> : null}
               {status === "loading" ? (
                 <p>Loading users...</p>
               ) : (
-                <div className="table-wrap">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>User</th>
-                        <th>First name</th>
-                        <th>Last name</th>
-                        <th>Email</th>
-                        <th>Discord</th>
-                        {ModuleOptions.map((module) => (
-                          <th key={module}>{module}</th>
-                        ))}
-                        <th>Profile</th>
-                        <th>Password</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {users.map((user) => (
-                        <tr key={user.Id}>
-                          <td>{user.Username}</td>
-                          <td>{user.FirstName || "-"}</td>
-                          <td>{user.LastName || "-"}</td>
-                          <td>{user.Email || "-"}</td>
-                          <td>{user.DiscordHandle || "-"}</td>
-                          {ModuleOptions.map((module) => {
-                            const current = user.Roles.find((role) => role.ModuleName === module);
-                            return (
-                              <td key={`${user.Id}-${module}`}>
-                                <select
-                                  value={current?.Role || "ReadOnly"}
-                                  onChange={(event) =>
-                                    onRoleChange(user.Id, module, event.target.value)
-                                  }
-                                  disabled={status === "saving"}
+                <div className="settings-access">
+                  {showAddUser ? (
+                    <div className="settings-subsection">
+                      <div className="settings-subsection-header">
+                        <h4>Add user</h4>
+                        <p>Create a login, then assign module roles below.</p>
+                      </div>
+                      <form className="form-grid" onSubmit={onCreateUser}>
+                        <label>
+                          Username
+                          <input
+                            name="Username"
+                            value={newUserForm.Username}
+                            onChange={onNewUserChange}
+                            required
+                          />
+                        </label>
+                        <label>
+                          Password
+                          <input
+                            name="Password"
+                            type="password"
+                            value={newUserForm.Password}
+                            onChange={onNewUserChange}
+                            required
+                          />
+                        </label>
+                        <label>
+                          First name
+                          <input
+                            name="FirstName"
+                            value={newUserForm.FirstName}
+                            onChange={onNewUserChange}
+                          />
+                        </label>
+                        <label>
+                          Last name
+                          <input
+                            name="LastName"
+                            value={newUserForm.LastName}
+                            onChange={onNewUserChange}
+                          />
+                        </label>
+                        <label>
+                          Email
+                          <input
+                            name="Email"
+                            type="email"
+                            value={newUserForm.Email}
+                            onChange={onNewUserChange}
+                          />
+                        </label>
+                        <label>
+                          Discord
+                          <input
+                            name="DiscordHandle"
+                            value={newUserForm.DiscordHandle}
+                            onChange={onNewUserChange}
+                          />
+                        </label>
+                        <div className="form-switch-row">
+                          <span className="form-switch-label">
+                            Require password change on first login
+                          </span>
+                          <input
+                            type="checkbox"
+                            name="RequirePasswordChange"
+                            checked={newUserForm.RequirePasswordChange}
+                            onChange={onNewUserChange}
+                          />
+                        </div>
+                        <div className="form-actions">
+                          <button type="submit" disabled={status === "saving"}>
+                            {status === "saving" ? "Saving..." : "Create user"}
+                          </button>
+                          <button
+                            type="button"
+                            className="button-secondary"
+                            onClick={() => setShowAddUser(false)}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+                  ) : null}
+                  <div className="settings-subsection">
+                    <div className="settings-subsection-header">
+                      <h4>Users</h4>
+                      <p>Review roles, profiles, and password resets.</p>
+                    </div>
+                    <div className="settings-users">
+                      {users.map((user) => {
+                        const displayName = [user.FirstName, user.LastName].filter(Boolean).join(" ");
+                        return (
+                          <div key={user.Id} className="settings-user-card">
+                            <div className="settings-user-header">
+                              <div>
+                                <h4>{user.Username}</h4>
+                                <p className="settings-user-subtitle">
+                                  Id {user.Id}
+                                  {displayName ? ` · ${displayName}` : ""}
+                                </p>
+                              </div>
+                              <div className="settings-user-actions">
+                                <button
+                                  type="button"
+                                  className="button-secondary"
+                                  onClick={() => onOpenProfileModal(user)}
                                 >
-                                  {RoleOptions.map((role) => (
-                                    <option key={role} value={role}>
-                                      {role}
-                                    </option>
-                                  ))}
-                                </select>
-                              </td>
-                            );
-                          })}
-                          <td>
-                            <div className="table-actions">
-                              <button
-                                type="button"
-                                className="icon-button"
-                                onClick={() => onOpenProfileModal(user)}
-                                aria-label="Edit profile"
-                              >
-                                <Icon name="edit" className="icon" />
-                              </button>
+                                  Edit profile
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => onOpenPasswordModal(user)}
+                                >
+                                  Reset password
+                                </button>
+                                {user.RequirePasswordChange ? (
+                                  <span className="badge">Reset required</span>
+                                ) : null}
+                              </div>
                             </div>
-                          </td>
-                          <td>
-                            <div className="table-actions">
-                              <button type="button" onClick={() => onOpenPasswordModal(user)}>
-                                Reset password
-                              </button>
-                              {user.RequirePasswordChange ? (
-                                <span className="badge">Reset required</span>
-                              ) : null}
+                            <div className="settings-user-meta">
+                              <span>{user.Email || "No email"}</span>
+                              <span>{user.DiscordHandle || "No Discord"}</span>
                             </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                            <div className="settings-role-pills">
+                              {ModuleOptions.map((module) => {
+                                const current = user.Roles.find((role) => role.ModuleName === module);
+                                return (
+                                  <span key={`${user.Id}-${module}`} className="settings-role-pill">
+                                    {module}: {current?.Role || "ReadOnly"}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                            <details className="settings-role-details">
+                              <summary>Manage roles</summary>
+                              <div className="settings-role-grid">
+                                {ModuleOptions.map((module) => {
+                                  const current = user.Roles.find((role) => role.ModuleName === module);
+                                  return (
+                                    <label key={`${user.Id}-${module}`}>
+                                      <span>{module}</span>
+                                      <select
+                                        value={current?.Role || "ReadOnly"}
+                                        onChange={(event) =>
+                                          onRoleChange(user.Id, module, event.target.value)
+                                        }
+                                        disabled={status === "saving"}
+                                      >
+                                        {RoleOptions.map((role) => (
+                                          <option key={role} value={role}>
+                                            {role}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    </label>
+                                  );
+                                })}
+                              </div>
+                            </details>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
