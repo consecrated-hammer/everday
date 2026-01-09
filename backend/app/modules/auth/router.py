@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.db import GetDb
 from app.modules.auth.deps import NowUtc, RequireAuthenticated, UserContext, _require_env
 from app.modules.auth.email import SendPasswordResetEmail
-from app.modules.auth.models import PasswordResetToken, RefreshToken, User
+from app.modules.auth.models import PasswordResetToken, RefreshToken, User, UserModuleRole
 from app.modules.auth.schemas import (
     ChangePasswordRequest,
     ForgotPasswordRequest,
@@ -17,6 +17,7 @@ from app.modules.auth.schemas import (
     RefreshRequest,
     ResetPasswordRequest,
     TokenResponse,
+    UserRoleOut,
 )
 from app.modules.auth.service import (
     CreateAccessToken,
@@ -56,6 +57,10 @@ def Login(payload: LoginRequest, db: Session = Depends(GetDb)) -> TokenResponse:
     user.LockedUntil = None
 
     access_token, expires_in = CreateAccessToken(user.Id, user.Username)
+    roles = [
+        UserRoleOut(ModuleName=entry.ModuleName, Role=entry.Role)
+        for entry in db.query(UserModuleRole).filter(UserModuleRole.UserId == user.Id).all()
+    ]
     refresh_token = CreateRefreshToken()
     refresh_hash = HashRefreshToken(refresh_token)
     refresh_ttl_days = int(_require_env("JWT_REFRESH_TTL_DAYS"))
@@ -79,6 +84,7 @@ def Login(payload: LoginRequest, db: Session = Depends(GetDb)) -> TokenResponse:
         LastName=user.LastName,
         Email=user.Email,
         DiscordHandle=user.DiscordHandle,
+        Roles=roles,
     )
 
 
@@ -105,6 +111,10 @@ def Refresh(payload: RefreshRequest, db: Session = Depends(GetDb)) -> TokenRespo
 
     matched.RevokedAt = now
     access_token, expires_in = CreateAccessToken(user.Id, user.Username)
+    roles = [
+        UserRoleOut(ModuleName=entry.ModuleName, Role=entry.Role)
+        for entry in db.query(UserModuleRole).filter(UserModuleRole.UserId == user.Id).all()
+    ]
     refresh_token = CreateRefreshToken()
     refresh_hash = HashRefreshToken(refresh_token)
     refresh_ttl_days = int(_require_env("JWT_REFRESH_TTL_DAYS"))
@@ -129,6 +139,7 @@ def Refresh(payload: RefreshRequest, db: Session = Depends(GetDb)) -> TokenRespo
         LastName=user.LastName,
         Email=user.Email,
         DiscordHandle=user.DiscordHandle,
+        Roles=roles,
     )
 
 

@@ -27,6 +27,9 @@ const HandleJson = async (response) => {
     const detail = await response.text();
     throw new Error(detail || "Request failed");
   }
+  if (response.status === 204) {
+    return null;
+  }
   return response.json();
 };
 

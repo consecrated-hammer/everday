@@ -15,6 +15,7 @@ from app.db import Base, BuildAdminConnectionUrl
 from app.modules.budget import models as budget_models  # noqa: F401
 from app.modules.auth import models as auth_models  # noqa: F401
 from app.modules.health import models as health_models  # noqa: F401
+from app.modules.kids import models as kids_models  # noqa: F401
 
 config = context.config
 

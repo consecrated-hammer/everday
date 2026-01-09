@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.db import GetDb
 from app.modules.auth.models import User, UserModuleRole
 
-ALLOWED_ROLES = {"Admin", "Edit", "Editor", "User", "ReadOnly"}
+ALLOWED_ROLES = {"Admin", "Edit", "Editor", "User", "ReadOnly", "Kid"}
 
 
 def _require_env(name: str) -> str:

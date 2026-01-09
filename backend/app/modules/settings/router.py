@@ -4,7 +4,9 @@ from sqlalchemy.orm import Session
 from app.db import GetDb
 from app.modules.auth.deps import RequireModuleRole, UserContext, NowUtc, _require_env
 from app.modules.auth.models import RefreshToken, User, UserModuleRole
+from app.modules.kids.models import KidLink
 from app.modules.auth.schemas import (
+    CreateUserRequest,
     UpdateUserPasswordRequest,
     UpdateUserProfileRequest,
     UpdateUserRoleRequest,
@@ -48,6 +50,51 @@ def ListUsers(
     return results
 
 
+@router.post("/users", response_model=UserOut, status_code=status.HTTP_201_CREATED)
+def CreateUser(
+    payload: CreateUserRequest,
+    db: Session = Depends(GetDb),
+    user: UserContext = Depends(RequireModuleRole("settings", write=True)),
+) -> UserOut:
+    username = payload.Username.strip()
+    if not username:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Username required")
+    existing = db.query(User).filter(User.Username == username).first()
+    if existing:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Username already exists")
+
+    min_length = int(_require_env("AUTH_PASSWORD_MIN_LENGTH"))
+    if len(payload.Password) < min_length:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Password must be at least {min_length} characters",
+        )
+
+    record = User(
+        Username=username,
+        PasswordHash=HashPassword(payload.Password),
+        FirstName=payload.FirstName.strip() if payload.FirstName else None,
+        LastName=payload.LastName.strip() if payload.LastName else None,
+        Email=payload.Email.strip().lower() if payload.Email else None,
+        DiscordHandle=payload.DiscordHandle.strip() if payload.DiscordHandle else None,
+        RequirePasswordChange=payload.RequirePasswordChange,
+    )
+    db.add(record)
+    db.commit()
+    db.refresh(record)
+    return UserOut(
+        Id=record.Id,
+        Username=record.Username,
+        FirstName=record.FirstName,
+        LastName=record.LastName,
+        Email=record.Email,
+        DiscordHandle=record.DiscordHandle,
+        Roles=[],
+        CreatedAt=record.CreatedAt,
+        RequirePasswordChange=record.RequirePasswordChange,
+    )
+
+
 @router.put("/users/{user_id}/roles", response_model=UserOut)
 def UpdateUserRole(
     user_id: int,
@@ -55,7 +102,7 @@ def UpdateUserRole(
     db: Session = Depends(GetDb),
     user: UserContext = Depends(RequireModuleRole("settings", write=True)),
 ) -> UserOut:
-    if payload.Role not in {"Admin", "Edit", "Editor", "User", "ReadOnly"}:
+    if payload.Role not in {"Admin", "Edit", "Editor", "User", "ReadOnly", "Kid"}:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid role")
 
     target = db.query(User).filter(User.Id == user_id).first()
@@ -80,6 +127,15 @@ def UpdateUserRole(
             UpdatedAt=now,
         )
         db.add(role)
+
+    if payload.ModuleName == "kids" and payload.Role == "Kid":
+        existing_link = (
+            db.query(KidLink)
+            .filter(KidLink.ParentUserId == user.Id, KidLink.KidUserId == target.Id)
+            .first()
+        )
+        if not existing_link:
+            db.add(KidLink(ParentUserId=user.Id, KidUserId=target.Id))
     db.commit()
 
     roles = [

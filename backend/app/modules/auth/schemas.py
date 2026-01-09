@@ -3,6 +3,11 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 
 
+class UserRoleOut(BaseModel):
+    ModuleName: str
+    Role: str
+
+
 class TokenResponse(BaseModel):
     AccessToken: str
     RefreshToken: str
@@ -14,6 +19,7 @@ class TokenResponse(BaseModel):
     LastName: str | None = None
     Email: str | None = None
     DiscordHandle: str | None = None
+    Roles: list[UserRoleOut] | None = None
 
 
 class LoginRequest(BaseModel):
@@ -23,11 +29,6 @@ class LoginRequest(BaseModel):
 
 class RefreshRequest(BaseModel):
     RefreshToken: str = Field(..., max_length=400)
-
-
-class UserRoleOut(BaseModel):
-    ModuleName: str
-    Role: str
 
 
 class UserOut(BaseModel):
@@ -40,6 +41,16 @@ class UserOut(BaseModel):
     Roles: list[UserRoleOut]
     CreatedAt: datetime
     RequirePasswordChange: bool
+
+
+class CreateUserRequest(BaseModel):
+    Username: str = Field(..., max_length=120)
+    Password: str = Field(..., max_length=200)
+    FirstName: str | None = Field(default=None, max_length=120)
+    LastName: str | None = Field(default=None, max_length=120)
+    Email: str | None = Field(default=None, max_length=254)
+    DiscordHandle: str | None = Field(default=None, max_length=120)
+    RequirePasswordChange: bool = False
 
 
 class UpdateUserRoleRequest(BaseModel):

@@ -19,6 +19,7 @@ from app.modules.core.router import router as core_router
 from app.modules.budget.router import router as budget_router
 from app.modules.settings.router import router as settings_router
 from app.modules.health.router import router as health_router
+from app.modules.kids.router import router as kids_router
 
 setup_logging()
 warnings.filterwarnings(
@@ -95,6 +96,7 @@ app.include_router(auth_router)
 app.include_router(budget_router)
 app.include_router(settings_router)
 app.include_router(health_router)
+app.include_router(kids_router)
 
 class SpaStaticFiles(StaticFiles):
     async def get_response(self, path: str, scope):

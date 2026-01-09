@@ -26,7 +26,10 @@ const Login = () => {
     try {
       const tokens = await LoginRequest(form);
       SetTokens({ ...tokens, Username: tokens.Username || form.Username });
-      navigate("/", { replace: true });
+      const isKid = (tokens.Roles || []).some(
+        (role) => role.ModuleName === "kids" && role.Role === "Kid"
+      );
+      navigate(isKid ? "/kids" : "/", { replace: true });
     } catch (err) {
       setError(err?.message || "Login failed");
     } finally {

@@ -63,6 +63,16 @@ export const GetDisplayName = () => {
   return GetUsername();
 };
 
+export const GetRoles = () => {
+  const tokens = GetTokens();
+  return tokens?.Roles || [];
+};
+
+export const HasModuleRole = (moduleName, role) => {
+  const roles = GetRoles();
+  return roles.some((entry) => entry.ModuleName === moduleName && entry.Role === role);
+};
+
 export const GetUserId = () => {
   const data = DecodeAccessToken();
   if (!data?.sub) {

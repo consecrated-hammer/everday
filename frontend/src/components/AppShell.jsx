@@ -13,8 +13,7 @@ const navSections = [
       { label: "Dashboard", path: "/", icon: "dashboard", tone: "sunrise" },
       { label: "Budget", path: "/budget/allocations", icon: "budget", tone: "mint" },
       { label: "Health", path: "/health", icon: "health", tone: "rose" },
-      { label: "Agenda", path: "/agenda", icon: "agenda", tone: "sky" },
-      { label: "Inbox", path: "/inbox", icon: "inbox", tone: "amber" }
+      { label: "Kids", path: "/kids-admin", icon: "team", tone: "amber" }
     ]
   }
 ];

@@ -41,6 +41,31 @@ export const FormatDate = (value) => {
   return parsed.toLocaleDateString("en-AU");
 };
 
+export const FormatTime = (value) => {
+  if (!value) {
+    return "-";
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return String(value);
+  }
+  return parsed.toLocaleTimeString("en-AU", { hour: "2-digit", minute: "2-digit" });
+};
+
+export const FormatDateTime = (value) => {
+  if (!value) {
+    return "-";
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return String(value);
+  }
+  return `${parsed.toLocaleDateString("en-AU")} ${parsed.toLocaleTimeString("en-AU", {
+    hour: "2-digit",
+    minute: "2-digit"
+  })}`;
+};
+
 export const ToNumber = (value) => {
   const number = Number(value);
   return Number.isNaN(number) ? 0 : number;
