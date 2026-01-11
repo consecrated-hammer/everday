@@ -833,7 +833,7 @@ const KidsAdmin = () => {
             </aside>
 
             <div className="kids-admin-main">
-              <section className="kids-admin-history">
+              <section className="kids-admin-card kids-admin-history">
                 <div className="kids-admin-card-header">
                   <div>
                     <h2>Full history</h2>
