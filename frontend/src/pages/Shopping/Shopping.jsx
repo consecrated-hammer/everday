@@ -240,7 +240,7 @@ const Shopping = () => {
             </label>
             <button
               type="button"
-              className="button-secondary"
+              className="toolbar-button is-danger"
               onClick={onRemoveSelected}
               disabled={!hasSelected || status === "saving"}
             >

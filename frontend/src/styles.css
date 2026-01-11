@@ -1515,6 +1515,18 @@ iconify-icon {
   color: var(--text);
 }
 
+.toolbar-button.is-danger {
+  color: #b23b2e;
+  border-color: rgba(178, 59, 46, 0.35);
+  background: rgba(178, 59, 46, 0.08);
+}
+
+.toolbar-button.is-danger:hover {
+  color: #d04c3f;
+  border-color: rgba(208, 76, 63, 0.45);
+  background: rgba(208, 76, 63, 0.12);
+}
+
 .dropdown {
   position: absolute;
   top: 40px;
