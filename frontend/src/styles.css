@@ -1515,6 +1515,11 @@ iconify-icon {
   color: var(--text);
 }
 
+.toolbar-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .toolbar-button.is-danger {
   color: #b23b2e;
   border-color: rgba(178, 59, 46, 0.35);
