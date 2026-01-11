@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import DataTable from "../../components/DataTable.jsx";
 import Icon from "../../components/Icon.jsx";
@@ -26,11 +26,18 @@ const HouseholdId = ResolveHouseholdId();
 
 const Shopping = () => {
   const [items, setItems] = useState([]);
+  const [selectedIds, setSelectedIds] = useState([]);
   const [form, setForm] = useState(EmptyForm);
   const [editingId, setEditingId] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [status, setStatus] = useState("idle");
   const [error, setError] = useState("");
+  const selectAllRef = useRef(null);
+
+  const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
+  const allSelected = items.length > 0 && items.every((item) => selectedSet.has(item.Id));
+  const hasSelected = selectedIds.length > 0;
+  const hasItems = items.length > 0;
 
   const loadItems = async () => {
     const data = await FetchShoppingItems(HouseholdId);
@@ -52,6 +59,18 @@ const Shopping = () => {
     };
     load();
   }, []);
+
+  useEffect(() => {
+    if (!selectAllRef.current) {
+      return;
+    }
+    selectAllRef.current.indeterminate = hasSelected && !allSelected;
+  }, [hasSelected, allSelected]);
+
+  useEffect(() => {
+    const available = new Set(items.map((item) => item.Id));
+    setSelectedIds((prev) => prev.filter((id) => available.has(id)));
+  }, [items]);
 
   const onChange = (event) => {
     const { name, value } = event.target;
@@ -111,24 +130,77 @@ const Shopping = () => {
     }
   };
 
-  const columns = [
-    { key: "Item", label: "Item", sortable: true, width: 280 },
-    {
-      key: "AddedByName",
-      label: "Added by",
-      sortable: true,
-      filterable: true,
-      width: 180,
-      render: (row) => row.AddedByName || "-"
-    },
-    {
-      key: "CreatedAt",
-      label: "Added",
-      sortable: true,
-      width: 180,
-      render: (row) => FormatDateTime(row.CreatedAt)
+  const onToggleSelectAll = (event) => {
+    const checked = event.target.checked;
+    if (!checked) {
+      setSelectedIds([]);
+      return;
     }
-  ];
+    setSelectedIds(items.map((item) => item.Id));
+  };
+
+  const onToggleSelected = (itemId) => {
+    setSelectedIds((prev) =>
+      prev.includes(itemId) ? prev.filter((id) => id !== itemId) : [...prev, itemId]
+    );
+  };
+
+  const onRemoveSelected = async () => {
+    if (!hasSelected) {
+      return;
+    }
+    const count = selectedIds.length;
+    if (!window.confirm(`Remove ${count} item${count === 1 ? "" : "s"} from the list?`)) {
+      return;
+    }
+    try {
+      setStatus("saving");
+      setError("");
+      await Promise.all(selectedIds.map((itemId) => DeleteShoppingItem(itemId, HouseholdId)));
+      setSelectedIds([]);
+      await loadItems();
+      setStatus("ready");
+    } catch (err) {
+      setStatus("error");
+      setError(err?.message || "Failed to remove selected items");
+    }
+  };
+
+  const columns = useMemo(
+    () => [
+      {
+        key: "Selected",
+        label: "",
+        sortable: false,
+        width: 60,
+        render: (row) => (
+          <input
+            type="checkbox"
+            checked={selectedSet.has(row.Id)}
+            onChange={() => onToggleSelected(row.Id)}
+            aria-label={`Select ${row.Item}`}
+          />
+        )
+      },
+      { key: "Item", label: "Item", sortable: true, width: 280 },
+      {
+        key: "AddedByName",
+        label: "Added by",
+        sortable: true,
+        filterable: true,
+        width: 180,
+        render: (row) => row.AddedByName || "-"
+      },
+      {
+        key: "CreatedAt",
+        label: "Added",
+        sortable: true,
+        width: 180,
+        render: (row) => FormatDateTime(row.CreatedAt)
+      }
+    ],
+    [selectedSet]
+  );
 
   return (
     <div className="module-panel">
@@ -141,10 +213,32 @@ const Shopping = () => {
             "Alexa, ask zebra helper to clear the list".
           </p>
         </div>
-        <button type="button" className="primary-button" onClick={onOpenAdd} disabled={status === "saving"}>
-          Add item
-        </button>
+        <div className="module-panel-actions">
+          <button type="button" className="primary-button" onClick={onOpenAdd} disabled={status === "saving"}>
+            Add item
+          </button>
+        </div>
       </header>
+      <div className="module-panel-actions">
+        <label>
+          <input
+            ref={selectAllRef}
+            type="checkbox"
+            checked={allSelected}
+            onChange={onToggleSelectAll}
+            disabled={!hasItems || status === "saving"}
+          />
+          <span>Select all</span>
+        </label>
+        <button
+          type="button"
+          className="button-secondary"
+          onClick={onRemoveSelected}
+          disabled={!hasSelected || status === "saving"}
+        >
+          Remove selected items
+        </button>
+      </div>
       {error ? <p className="form-error">{error}</p> : null}
       <DataTable
         tableKey="shopping-items"

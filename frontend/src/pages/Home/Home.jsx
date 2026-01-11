@@ -22,6 +22,12 @@ const modules = [
     subtitle: "Balances, chores, and pocket money",
     cta: "Open Kids",
     href: "/kids-admin"
+  },
+  {
+    title: "Shopping",
+    subtitle: "Shared list for household items",
+    cta: "Open Shopping",
+    href: "/shopping"
   }
 ];
 
