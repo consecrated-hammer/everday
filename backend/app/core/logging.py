@@ -29,6 +29,9 @@ def setup_logging() -> None:
     root_logger = logging.getLogger()
     root_logger.setLevel(log_level)
     root_logger.handlers.clear()
+    
+    # Force enable logging (uvicorn may disable it)
+    logging.disable(logging.NOTSET)
 
     formatter = LocalTimeFormatter(
         "%(asctime)s %(levelname)s %(name)s %(message)s",
@@ -60,6 +63,13 @@ def setup_logging() -> None:
     root_logger.addHandler(console_handler)
     root_logger.addHandler(backend_file_handler)
 
+    request_logger = logging.getLogger("app.request")
+    request_logger.handlers.clear()
+    request_logger.propagate = False
+    request_logger.setLevel(log_level)
+    request_logger.addHandler(console_handler)
+    request_logger.addHandler(backend_file_handler)
+
     frontend_logger = logging.getLogger("frontend")
     frontend_logger.handlers.clear()
     frontend_logger.propagate = False
@@ -74,10 +84,17 @@ def setup_logging() -> None:
         "app.migrations",
         "app.auth",
         "app.auth.email",
+        "integrations.alexa",
+        "integrations.alexa.skill",
     ):
         logging.getLogger(logger_name).setLevel(log_level)
 
-    logging.getLogger("uvicorn.access").handlers.clear()
+    uvicorn_access = logging.getLogger("uvicorn.access")
+    uvicorn_access.handlers.clear()
+    uvicorn_access.propagate = False
+    uvicorn_access.setLevel(log_level)
+    uvicorn_access.addHandler(console_handler)
+    uvicorn_access.addHandler(backend_file_handler)
 
 
 def format_frontend_message(message: str, context: dict | None = None) -> str:

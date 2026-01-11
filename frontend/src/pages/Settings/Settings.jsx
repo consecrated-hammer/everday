@@ -17,7 +17,7 @@ import { GetTokens, GetUserId, SetTokens } from "../../lib/authStorage.js";
 import { GetUiSettings, SetUiSettings } from "../../lib/uiSettings.js";
 
 const RoleOptions = ["Admin", "Edit", "Editor", "User", "ReadOnly", "Kid"];
-const ModuleOptions = ["budget", "health", "kids", "settings"];
+const ModuleOptions = ["budget", "health", "kids", "shopping", "settings"];
 const ThemeOptions = [
   { value: "auto", label: "Auto" },
   { value: "light", label: "Light" },
@@ -756,7 +756,10 @@ const Settings = () => {
                 <div className="settings-section-header-row">
                   <div>
                     <h3>User profiles</h3>
-                    <p>Manage logins, roles, profiles, and password resets.</p>
+                    <p>
+                      Manage logins, roles, profiles, and password resets. Use the user Id to set
+                      ALEXA_SERVICE_USER_ID for Alexa.
+                    </p>
                   </div>
                   <button
                     type="button"
@@ -897,6 +900,7 @@ const Settings = () => {
                             <div className="settings-user-meta">
                               <span>{user.Email || "No email"}</span>
                               <span>{user.DiscordHandle || "No Discord"}</span>
+                              <span>Alexa service user Id {user.Id}</span>
                             </div>
                             <div className="settings-role-pills">
                               {ModuleOptions.map((module) => {

@@ -3,6 +3,7 @@ import os
 import time
 import uuid
 import warnings
+from datetime import datetime
 from pathlib import Path
 
 from fastapi import FastAPI, Request
@@ -20,6 +21,8 @@ from app.modules.budget.router import router as budget_router
 from app.modules.settings.router import router as settings_router
 from app.modules.health.router import router as health_router
 from app.modules.kids.router import router as kids_router
+from app.modules.shopping.router import router as shopping_router
+from app.modules.integrations.alexa.router import router as alexa_router
 
 setup_logging()
 warnings.filterwarnings(
@@ -47,42 +50,95 @@ if origin_list:
     )
 
 
+def _append_fallback_request_log(message: str) -> None:
+    if logger.handlers or logger.propagate:
+        return
+    log_path = os.getenv("LOG_FILE_PATH", "/app/logs/backend.log")
+    if not os.path.isabs(log_path):
+        log_path = os.path.abspath(log_path)
+    log_dir = os.path.dirname(log_path)
+    if log_dir:
+        os.makedirs(log_dir, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    with open(log_path, "a", encoding="utf-8") as handle:
+        handle.write(f"{timestamp} INFO app.request {message}\n")
+
+
+def _resolve_client_ip(request: Request) -> str:
+    forwarded_for = request.headers.get("x-forwarded-for")
+    if forwarded_for:
+        first_ip = forwarded_for.split(",")[0].strip()
+        if first_ip:
+            return first_ip
+    real_ip = request.headers.get("x-real-ip")
+    if real_ip:
+        return real_ip.strip()
+    return request.client.host if request.client else "unknown"
+
+
 @app.middleware("http")
 async def request_logger(request: Request, call_next):
+    # Force re-enable all logging (uvicorn disables specific loggers)
+    logging.disable(logging.NOTSET)
+    logger.disabled = False
+    
     request_id = request.headers.get("X-Request-Id") or str(uuid.uuid4())
+    is_health_check = request.url.path in {"/api/health", "/api/health/db"}
     start = time.perf_counter()
-    response = await call_next(request)
+    try:
+        response = await call_next(request)
+    except Exception:
+        duration_ms = int((time.perf_counter() - start) * 1000)
+        parts = [f"{request.method} {request.url.path}"]
+        parts.append(f"ip={_resolve_client_ip(request)}")
+        if request.url.query:
+            parts.append(f"query={request.url.query}")
+        parts.append("ERROR: unhandled exception")
+        parts.append("status=500")
+        parts.append(f"{duration_ms}ms")
+        log_msg = " | ".join(parts)
+        logger.exception(log_msg)
+        _append_fallback_request_log(log_msg)
+        raise
+
     duration_ms = int((time.perf_counter() - start) * 1000)
-    
+
     # Build diagnostic context
+    client_ip = _resolve_client_ip(request)
     parts = [f"{request.method} {request.url.path}"]
-    
+    parts.append(f"ip={client_ip}")
+
     # Add query params if present
     if request.url.query:
         parts.append(f"query={request.url.query}")
-    
+
     # Add status with context
     status = response.status_code
     if status >= 400:
         if status == 404:
-            parts.append(f"ERROR: endpoint not found")
+            parts.append("ERROR: endpoint not found")
         elif status >= 500:
-            parts.append(f"ERROR: server error")
+            parts.append("ERROR: server error")
         else:
-            parts.append(f"ERROR: client error")
-    
+            parts.append("ERROR: client error")
+
     parts.append(f"status={status}")
     parts.append(f"{duration_ms}ms")
-    
+
     # Log with appropriate level
     log_msg = " | ".join(parts)
-    if status >= 500:
-        logger.error(log_msg)
-    elif status >= 400:
-        logger.warning(log_msg)
-    else:
-        logger.info(log_msg)
-    
+
+    if not (is_health_check and status == 200):
+        if status >= 500:
+            logger.error(log_msg)
+        elif status >= 400:
+            logger.warning(log_msg)
+        else:
+            logger.info(log_msg)
+        _append_fallback_request_log(log_msg)
+        
+        _append_fallback_request_log(log_msg)
+
     response.headers["X-Request-Id"] = request_id
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
     response.headers.setdefault("X-Frame-Options", "DENY")
@@ -97,6 +153,8 @@ app.include_router(budget_router)
 app.include_router(settings_router)
 app.include_router(health_router)
 app.include_router(kids_router)
+app.include_router(shopping_router)
+app.include_router(alexa_router)
 
 class SpaStaticFiles(StaticFiles):
     async def get_response(self, path: str, scope):
@@ -123,7 +181,6 @@ if static_dir.exists():
 @app.on_event("startup")
 async def startup_tasks() -> None:
     try:
-        setup_logging()
         EnsureDatabaseSetup()
         RunMigrations()
         startup_logger.info("startup complete")
