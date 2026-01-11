@@ -229,8 +229,13 @@ const Shopping = () => {
           <h2>Shopping list</h2>
           <p>Track shared groceries and household items.</p>
           <p className="form-note">
-            Zebra helper examples: "Alexa, ask zebra helper to add milk", "Alexa, ask zebra helper to remove milk",
-            "Alexa, ask zebra helper to clear the list".
+            Zebra helper examples:
+            <br />
+            "Alexa, ask zebra helper to add milk"
+            <br />
+            "Alexa, ask zebra helper to remove milk"
+            <br />
+            "Alexa, ask zebra helper to clear the list"
           </p>
         </div>
         <div className="module-panel-actions">
