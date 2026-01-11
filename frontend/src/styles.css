@@ -1602,6 +1602,28 @@ th {
   color: var(--text-soft);
 }
 
+.table-header-addon th {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 0.85rem;
+  color: var(--text);
+}
+
+.table-header-addon-content {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.table-header-addon-content label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
 .cell-number {
   text-align: right;
 }

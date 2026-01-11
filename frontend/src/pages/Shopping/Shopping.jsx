@@ -219,26 +219,6 @@ const Shopping = () => {
           </button>
         </div>
       </header>
-      <div className="module-panel-actions">
-        <label>
-          <input
-            ref={selectAllRef}
-            type="checkbox"
-            checked={allSelected}
-            onChange={onToggleSelectAll}
-            disabled={!hasItems || status === "saving"}
-          />
-          <span>Select all</span>
-        </label>
-        <button
-          type="button"
-          className="button-secondary"
-          onClick={onRemoveSelected}
-          disabled={!hasSelected || status === "saving"}
-        >
-          Remove selected items
-        </button>
-      </div>
       {error ? <p className="form-error">{error}</p> : null}
       <DataTable
         tableKey="shopping-items"
@@ -246,6 +226,28 @@ const Shopping = () => {
         rows={items}
         onEdit={onEdit}
         onDelete={onDelete}
+        headerAddon={
+          <>
+            <label>
+              <input
+                ref={selectAllRef}
+                type="checkbox"
+                checked={allSelected}
+                onChange={onToggleSelectAll}
+                disabled={!hasItems || status === "saving"}
+              />
+              <span>Select all</span>
+            </label>
+            <button
+              type="button"
+              className="button-secondary"
+              onClick={onRemoveSelected}
+              disabled={!hasSelected || status === "saving"}
+            >
+              Remove selected items
+            </button>
+          </>
+        }
       />
 
       {modalOpen ? (
