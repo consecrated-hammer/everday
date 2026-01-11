@@ -12,6 +12,7 @@ import BudgetAllocations from "./pages/Budget/Allocations.jsx";
 import BudgetSettings from "./pages/Budget/Settings.jsx";
 import Login from "./pages/Login/Login.jsx";
 import ResetPassword from "./pages/Login/ResetPassword.jsx";
+import Shopping from "./pages/Shopping/Shopping.jsx";
 import Settings from "./pages/Settings/Settings.jsx";
 import HealthLayout from "./pages/Health/HealthLayout.jsx";
 import HealthToday from "./pages/Health/Today.jsx";
@@ -58,6 +59,7 @@ const App = () => (
           <Route path="insights" element={<HealthInsights />} />
           <Route path="settings" element={<HealthSettings />} />
         </Route>
+        <Route path="/shopping" element={<Shopping />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/kids-admin" element={<KidsAdmin />} />
       </Route>

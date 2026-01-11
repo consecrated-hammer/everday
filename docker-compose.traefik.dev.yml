@@ -11,6 +11,8 @@ services:
         - VITE_BUILD_ENV=development
         - VITE_COMMIT_SHA=${VITE_COMMIT_SHA}
     container_name: everday-dev
+    environment:
+      TZ: Australia/Adelaide
     restart: unless-stopped
     env_file: .env.dev
     volumes:

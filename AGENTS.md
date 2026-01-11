@@ -16,6 +16,12 @@ You are a coding agent operating in a VS Code + remote Linux host workflow. Deli
   - PROD uses `batserver-sql-prod` (port `14335` on host, `1433` in-network)
   - Data paths are bind-mounted under `/mnt/docker/config/dockerconfigs/batserver-sql-<env>`
   - Bootstrap schema/login with `scripts/sql/bootstrap-everday.sh <dev|prod>`
+## Prod Deployment Steps (Everday)
+- Update `/mnt/docker/config/dockerconfigs/.env` for prod variables.
+- Update `/mnt/docker/config/dockerconfigs/docker-compose.yml` if new env passthrough or ports are required.
+- Deploy: `docker compose -f /mnt/docker/config/dockerconfigs/docker-compose.yml up -d everday`
+- Run migrations after deploy: `docker exec -it everday alembic upgrade head`
+- Verify: `https://everday.batserver.au/api/health` and spot-check the feature area.
 
 ## Communication
 When implementing a task, respond with:

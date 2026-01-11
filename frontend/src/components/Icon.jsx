@@ -13,6 +13,11 @@ const IconMap = {
     material: "material-symbols:account-balance-wallet",
     lucide: "lucide:wallet"
   },
+  shopping: {
+    phosphor: "ph:shopping-cart",
+    material: "material-symbols:shopping-cart",
+    lucide: "lucide:shopping-cart"
+  },
   health: {
     phosphor: "ph:heart-straight",
     material: "material-symbols:monitor-heart",
