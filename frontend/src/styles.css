@@ -5226,7 +5226,9 @@ body.kids-theme {
 }
 
 .kids-admin-history .table-shell {
-  padding: 10px;
+  padding: 0;
+  border: none;
+  background: transparent;
 }
 
 .kids-admin-history table {
@@ -5240,6 +5242,8 @@ body.kids-theme {
 
 .kids-admin-history .table-toolbar {
   margin-bottom: 6px;
+  align-items: center;
+  flex-wrap: wrap;
 }
 
 .kids-admin-history .table-wrap {
@@ -5259,7 +5263,16 @@ body.kids-theme {
 }
 
 .kids-admin-history .toolbar-search {
+  flex: 1;
   min-width: 240px;
+}
+
+.kids-admin-history .toolbar-search input {
+  width: 100%;
+}
+
+.kids-admin-history .toolbar-right {
+  justify-content: flex-end;
 }
 
 .kids-admin-history .history-filter-dropdown {
@@ -5563,6 +5576,19 @@ body.kids-theme {
 
   .kids-admin-history .table-wrap {
     display: none;
+  }
+
+  .kids-admin-history .table-toolbar {
+    align-items: stretch;
+  }
+
+  .kids-admin-history .toolbar-left,
+  .kids-admin-history .toolbar-right {
+    width: 100%;
+  }
+
+  .kids-admin-history .toolbar-right {
+    justify-content: flex-start;
   }
 
   .kids-admin-history-mobile {
