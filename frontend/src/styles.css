@@ -1515,6 +1515,23 @@ iconify-icon {
   color: var(--text);
 }
 
+.toolbar-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.toolbar-button.is-danger {
+  color: #b23b2e;
+  border-color: rgba(178, 59, 46, 0.35);
+  background: rgba(178, 59, 46, 0.08);
+}
+
+.toolbar-button.is-danger:hover {
+  color: #d04c3f;
+  border-color: rgba(208, 76, 63, 0.45);
+  background: rgba(208, 76, 63, 0.12);
+}
+
 .dropdown {
   position: absolute;
   top: 40px;
@@ -1600,6 +1617,28 @@ th {
   letter-spacing: 0.06em;
   font-size: 0.68rem;
   color: var(--text-soft);
+}
+
+.table-header-addon th {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 0.85rem;
+  color: var(--text);
+}
+
+.table-header-addon-content {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.table-header-addon-content label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+  font-weight: 600;
 }
 
 .cell-number {

@@ -12,7 +12,7 @@ const GetUniqueValues = (rows, key) => {
   return Array.from(new Set(values)).map((value) => String(value)).sort();
 };
 
-const DataTable = ({ columns, rows, tableKey, onEdit, onDelete }) => {
+const DataTable = ({ columns, rows, tableKey, onEdit, onDelete, headerAddon }) => {
   const tableRef = useRef(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [sort, setSort] = useState(DefaultSort);
@@ -263,6 +263,13 @@ const DataTable = ({ columns, rows, tableKey, onEdit, onDelete }) => {
       <div className="table-wrap">
         <table>
           <thead>
+            {headerAddon ? (
+              <tr className="table-header-addon">
+                <th colSpan={visibleDefs.length + 1}>
+                  <div className="table-header-addon-content">{headerAddon}</div>
+                </th>
+              </tr>
+            ) : null}
             <tr>
               {visibleDefs.map((column) => (
                 <th
