@@ -9,6 +9,8 @@ import {
   YAxis
 } from "recharts";
 
+import Icon from "../../../components/Icon.jsx";
+import HealthLog from "../../Health/Log.jsx";
 import { FetchDailyLog, FetchHealthSettings, FetchWeeklySummary } from "../../../lib/healthApi.js";
 
 const FormatDate = (value) => {
@@ -71,6 +73,7 @@ const HealthWidget = ({ IsExpanded }) => {
   const [log, setLog] = useState(null);
   const [totals, setTotals] = useState(null);
   const [weeklySummary, setWeeklySummary] = useState(null);
+  const [logModalOpen, setLogModalOpen] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -94,6 +97,31 @@ const HealthWidget = ({ IsExpanded }) => {
     };
     load();
   }, [startDate, today]);
+
+  useEffect(() => {
+    const handler = (event) => {
+      if (event.detail?.widgetId !== "health" || event.detail?.actionId !== "log-meal") {
+        return;
+      }
+      setLogModalOpen(true);
+    };
+    window.addEventListener("dashboard-widget-action", handler);
+    return () => window.removeEventListener("dashboard-widget-action", handler);
+  }, []);
+
+  useEffect(() => {
+    if (!logModalOpen) {
+      return;
+    }
+    const handleKeyDown = (event) => {
+      if (event.key !== "Escape") {
+        return;
+      }
+      setLogModalOpen(false);
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [logModalOpen]);
 
   const weeklySeries = useMemo(
     () => BuildWeeklySeries(startDate, weeklySummary, targets?.DailyCalorieTarget ?? 0),
@@ -133,7 +161,7 @@ const HealthWidget = ({ IsExpanded }) => {
       {status === "error" ? <p className="form-error">{error}</p> : null}
       {status === "ready" ? (
         <>
-          <div className="dashboard-health-chart">
+          <div className="dashboard-health-chart dashboard-panel">
             <ResponsiveContainer width="100%" height={chartHeight}>
               <LineChart data={weeklySeries} margin={{ top: 10, right: 16, left: 16, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(43, 110, 246, 0.18)" />
@@ -166,7 +194,7 @@ const HealthWidget = ({ IsExpanded }) => {
 
           <div className="health-summary-grid">
             {summaryItems.map((item) => (
-              <div key={item.Key} className="health-summary-item">
+              <div key={item.Key} className="health-summary-item dashboard-panel">
                 <span className="metric-label">{item.Label}</span>
                 <span className="health-summary-value">
                   {FormatNumber(item.Value)}
@@ -176,6 +204,35 @@ const HealthWidget = ({ IsExpanded }) => {
             ))}
           </div>
         </>
+      ) : null}
+
+      {logModalOpen ? (
+        <div
+          className="modal-backdrop"
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setLogModalOpen(false)}
+        >
+          <div className="modal modal--dashboard-log" onClick={(event) => event.stopPropagation()}>
+            <div className="modal-header">
+              <div>
+                <h3>Log meal</h3>
+                <p>{today}</p>
+              </div>
+              <div className="modal-header-actions">
+                <button
+                  type="button"
+                  className="icon-button"
+                  onClick={() => setLogModalOpen(false)}
+                  aria-label="Close modal"
+                >
+                  <Icon name="close" className="icon" />
+                </button>
+              </div>
+            </div>
+            <HealthLog InitialDate={today} InitialAddMode />
+          </div>
+        </div>
       ) : null}
     </div>
   );

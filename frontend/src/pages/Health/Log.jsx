@@ -196,11 +196,12 @@ const GroupEntriesByMeal = (entries) => {
   return grouped;
 };
 
-const Log = () => {
+const Log = ({ InitialDate, InitialAddMode, InitialEditId }) => {
   const [searchParams] = useSearchParams();
-  const initialDate = searchParams.get("date") || FormatDate(new Date());
-  const initialAddMode = searchParams.get("add") === "1";
-  const initialEditId = searchParams.get("edit");
+  const fallbackDate = searchParams.get("date") || FormatDate(new Date());
+  const initialDate = InitialDate || fallbackDate;
+  const initialAddMode = InitialAddMode ?? searchParams.get("add") === "1";
+  const initialEditId = InitialEditId ?? searchParams.get("edit");
 
   const [logDate, setLogDate] = useState(initialDate);
   const [dailyLog, setDailyLog] = useState(null);

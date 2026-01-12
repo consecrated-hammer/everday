@@ -11,7 +11,20 @@ import {
   BuildManualAllocations,
   FormatPercent
 } from "../../../lib/budgetSummary.js";
-import { FormatCurrency } from "../../../lib/formatters.js";
+
+const BudgetCurrencyFormatter = new Intl.NumberFormat("en-AU", {
+  style: "currency",
+  currency: "AUD",
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 0
+});
+
+const FormatBudgetCurrency = (value) => {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) {
+    return "-";
+  }
+  return BudgetCurrencyFormatter.format(Number(value));
+};
 
 const BudgetWidget = () => {
   const [incomeStreams, setIncomeStreams] = useState([]);
@@ -57,6 +70,7 @@ const BudgetWidget = () => {
 
   const incomePerFortnight = totals.Income.PerFortnight || 0;
   const expensePerFortnight = totals.Expenses.PerFortnight || 0;
+  const allocatedPerFortnight = incomePerFortnight * allocationSummary.TotalAllocated;
   const leftoverAmount = incomePerFortnight * allocationSummary.Leftover;
   const leftoverPercent = allocationSummary.Leftover;
 
@@ -66,22 +80,24 @@ const BudgetWidget = () => {
       {status === "error" ? <p className="form-error">{error}</p> : null}
       {status === "ready" ? (
         <>
-          <div className="budget-snapshot">
+          <div className="budget-snapshot dashboard-panel">
+            <p className="budget-helper">Per fortnight snapshot</p>
             <div className="budget-row">
               <span className="metric-label">Income</span>
-              <span className="metric-value">{FormatCurrency(incomePerFortnight)}</span>
+              <span className="metric-value">{FormatBudgetCurrency(incomePerFortnight)}</span>
             </div>
             <div className="budget-row">
               <span className="metric-label">Expenses</span>
-              <span className="metric-value">{FormatCurrency(expensePerFortnight)}</span>
+              <span className="metric-value">{FormatBudgetCurrency(expensePerFortnight)}</span>
+            </div>
+            <div className="budget-row">
+              <span className="metric-label">Total allocated</span>
+              <span className="metric-value">{FormatBudgetCurrency(allocatedPerFortnight)}</span>
             </div>
             <div className="budget-row budget-row-strong">
-              <span className="metric-label">Leftover</span>
-              <span className="metric-value">{FormatCurrency(leftoverAmount)}</span>
+              <span className="metric-label">Leftover ({FormatPercent(leftoverPercent)})</span>
+              <span className="metric-value">{FormatBudgetCurrency(leftoverAmount)}</span>
             </div>
-            <p className="budget-meta">
-              Per fortnight · {FormatPercent(leftoverPercent)} of income
-            </p>
           </div>
         </>
       ) : null}

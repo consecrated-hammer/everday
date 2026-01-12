@@ -139,12 +139,8 @@ router = APIRouter(
 )
 
 
-def _EnsureParentKidAccess(db: Session, parent_id: int, kid_id: int) -> None:
-    link = (
-        db.query(KidLink)
-        .filter(KidLink.ParentUserId == parent_id, KidLink.KidUserId == kid_id)
-        .first()
-    )
+def _EnsureParentKidAccess(db: Session, _parent_id: int, kid_id: int) -> None:
+    link = db.query(KidLink).filter(KidLink.KidUserId == kid_id).first()
     if not link:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Kid not linked")
 
@@ -575,17 +571,22 @@ def ListKids(
     user: UserContext = Depends(RequireKidsManager()),
 ) -> list[KidLinkOut]:
     try:
-        links = db.query(KidLink).filter(KidLink.ParentUserId == user.Id).all()
-        kid_ids = [link.KidUserId for link in links]
+        kid_ids = [
+            entry[0]
+            for entry in db.query(KidLink.KidUserId)
+            .order_by(KidLink.KidUserId.asc())
+            .distinct()
+            .all()
+        ]
         kids = {kid.Id: kid for kid in db.query(User).filter(User.Id.in_(kid_ids)).all()}
         return [
             KidLinkOut(
-                KidUserId=link.KidUserId,
-                Username=kids.get(link.KidUserId).Username if kids.get(link.KidUserId) else "",
-                FirstName=kids.get(link.KidUserId).FirstName if kids.get(link.KidUserId) else None,
-                LastName=kids.get(link.KidUserId).LastName if kids.get(link.KidUserId) else None,
+                KidUserId=kid_id,
+                Username=kids.get(kid_id).Username if kids.get(kid_id) else "",
+                FirstName=kids.get(kid_id).FirstName if kids.get(kid_id) else None,
+                LastName=kids.get(kid_id).LastName if kids.get(kid_id) else None,
             )
-            for link in links
+            for kid_id in kid_ids
         ]
     except ProgrammingError as exc:
         _handle_db_error(exc)
@@ -1034,7 +1035,7 @@ def AssignChore(
 
         links = (
             db.query(KidLink)
-            .filter(KidLink.ParentUserId == user.Id, KidLink.KidUserId.in_(kid_ids))
+            .filter(KidLink.KidUserId.in_(kid_ids))
             .all()
         )
         linked_ids = {link.KidUserId for link in links}
@@ -1080,7 +1081,7 @@ def SetChoreAssignments(
         if kid_ids:
             links = (
                 db.query(KidLink)
-                .filter(KidLink.ParentUserId == user.Id, KidLink.KidUserId.in_(kid_ids))
+                .filter(KidLink.KidUserId.in_(kid_ids))
                 .all()
             )
             linked_ids = {link.KidUserId for link in links}

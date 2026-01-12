@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import Icon from "../../../components/Icon.jsx";
 import {
@@ -23,6 +23,7 @@ const ShoppingWidget = () => {
   const [showAdd, setShowAdd] = useState(false);
   const [status, setStatus] = useState("idle");
   const [error, setError] = useState("");
+  const addFormRef = useRef(null);
 
   const loadItems = async () => {
     const data = await FetchShoppingItems(HouseholdId);
@@ -44,6 +45,43 @@ const ShoppingWidget = () => {
     };
     load();
   }, []);
+
+  useEffect(() => {
+    const handler = (event) => {
+      if (event.detail?.widgetId !== "shopping" || event.detail?.actionId !== "add-item") {
+        return;
+      }
+      setShowAdd(true);
+    };
+    window.addEventListener("dashboard-widget-action", handler);
+    return () => window.removeEventListener("dashboard-widget-action", handler);
+  }, []);
+
+  useEffect(() => {
+    if (!showAdd) {
+      return;
+    }
+    const handleKeyDown = (event) => {
+      if (event.key !== "Escape") {
+        return;
+      }
+      setShowAdd(false);
+      setForm({ Item: "" });
+    };
+    const handlePointerDown = (event) => {
+      if (!addFormRef.current || addFormRef.current.contains(event.target)) {
+        return;
+      }
+      setShowAdd(false);
+      setForm({ Item: "" });
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      document.removeEventListener("pointerdown", handlePointerDown);
+    };
+  }, [showAdd]);
 
   const previewItems = useMemo(() => {
     if (items.length <= 5) {
@@ -109,7 +147,7 @@ const ShoppingWidget = () => {
           )}
           <ul className="shopping-list">
             {previewItems.map((item) => (
-              <li key={item.Id} className="shopping-item">
+              <li key={item.Id} className="shopping-item dashboard-panel">
                 <span>{item.Item}</span>
                 <button
                   type="button"
@@ -122,11 +160,11 @@ const ShoppingWidget = () => {
               </li>
             ))}
             {extraCount > 0 ? (
-              <li className="shopping-item shopping-item-muted">+{extraCount} more</li>
+              <li className="shopping-item shopping-item-muted dashboard-panel">+{extraCount} more</li>
             ) : null}
           </ul>
           {showAdd ? (
-            <form className="shopping-add" onSubmit={onSubmit}>
+            <form className="shopping-add" onSubmit={onSubmit} ref={addFormRef}>
               <input
                 type="text"
                 name="Item"
@@ -152,15 +190,7 @@ const ShoppingWidget = () => {
                 </button>
               </div>
             </form>
-          ) : (
-            <button
-              type="button"
-              className="text-button shopping-add-toggle"
-              onClick={() => setShowAdd(true)}
-            >
-              Add item
-            </button>
-          )}
+          ) : null}
         </>
       ) : null}
     </div>
