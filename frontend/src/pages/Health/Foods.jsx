@@ -1205,6 +1205,11 @@ const Foods = () => {
                           </span>
                         </div>
                         <span className="health-detail">Source: {food.DataSource || "manual"}</span>
+                        <span className="health-detail">
+                          Added by{" "}
+                          {food.CreatedByName ||
+                            (food.OwnerUserId ? `User ${food.OwnerUserId}` : "Unknown")}
+                        </span>
                       </div>
                       <div className="health-entry-actions-inline">
                         <button

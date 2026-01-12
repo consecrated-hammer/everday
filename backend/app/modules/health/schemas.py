@@ -21,6 +21,7 @@ MealTypeValue = MealType
 class Food(BaseModel):
     FoodId: str
     OwnerUserId: int | None = None
+    CreatedByName: str | None = None
     FoodName: str
     ServingDescription: str
     ServingQuantity: float = 1.0
