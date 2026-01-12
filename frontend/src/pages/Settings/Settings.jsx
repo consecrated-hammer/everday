@@ -14,6 +14,7 @@ import {
   UpdateHealthSettings
 } from "../../lib/healthApi.js";
 import { GetTokens, GetUserId, SetTokens } from "../../lib/authStorage.js";
+import { ResetDashboardLayout } from "../../lib/dashboardLayout.js";
 import { GetUiSettings, SetUiSettings } from "../../lib/uiSettings.js";
 
 const RoleOptions = ["Admin", "Edit", "Editor", "User", "ReadOnly", "Kid"];
@@ -85,6 +86,10 @@ const Settings = () => {
   const [healthStatus, setHealthStatus] = useState("idle");
   const [healthError, setHealthError] = useState("");
   const [uiSettings, setUiSettings] = useState(() => GetUiSettings());
+  const [apiStatus, setApiStatus] = useState("checking");
+  const [dbStatus, setDbStatus] = useState("checking");
+  const [systemStatus, setSystemStatus] = useState("idle");
+  const [dashboardNotice, setDashboardNotice] = useState("");
   const [showAddUser, setShowAddUser] = useState(false);
   const [newUserForm, setNewUserForm] = useState({
     Username: "",
@@ -95,6 +100,7 @@ const Settings = () => {
     DiscordHandle: "",
     RequirePasswordChange: false
   });
+  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:8100";
 
   const loadUsers = async () => {
     try {
@@ -124,9 +130,40 @@ const Settings = () => {
     }
   };
 
+  const loadSystemStatus = async () => {
+    try {
+      setSystemStatus("loading");
+      setApiStatus("checking");
+      setDbStatus("checking");
+      const response = await fetch(`${apiBaseUrl}/health`);
+      const nextStatus = response.ok ? "ok" : "error";
+      setApiStatus(nextStatus);
+    } catch (error) {
+      setApiStatus("error");
+    }
+
+    try {
+      const response = await fetch(`${apiBaseUrl}/health/db`);
+      const body = await response.json();
+      const nextStatus = response.ok && body.status === "ok" ? "ok" : "error";
+      setDbStatus(nextStatus);
+    } catch (error) {
+      setDbStatus("error");
+    } finally {
+      setSystemStatus("ready");
+    }
+  };
+
   useEffect(() => {
     loadUsers();
   }, []);
+
+  useEffect(() => {
+    if (activeSection !== "system") {
+      return;
+    }
+    loadSystemStatus();
+  }, [activeSection, apiBaseUrl]);
 
   const onNewUserChange = (event) => {
     const { name, value, type, checked } = event.target;
@@ -134,6 +171,14 @@ const Settings = () => {
       ...prev,
       [name]: type === "checkbox" ? checked : value
     }));
+  };
+
+  const onResetDashboardLayout = () => {
+    if (!window.confirm("Reset your dashboard layout to the default arrangement?")) {
+      return;
+    }
+    ResetDashboardLayout(GetUserId());
+    setDashboardNotice("Dashboard layout reset. Return to the dashboard to see it.");
   };
 
   const onCreateUser = async (event) => {
@@ -413,12 +458,26 @@ const Settings = () => {
           </button>
           <button
             type="button"
+            className={`settings-nav-item${activeSection === "dashboard" ? " is-active" : ""}`}
+            onClick={() => setActiveSection("dashboard")}
+          >
+            Dashboard
+          </button>
+          <button
+            type="button"
             className={`settings-nav-item${activeSection === "health" ? " is-active" : ""}`}
             onClick={() => setActiveSection("health")}
           >
             Health
           </button>
           <p className="settings-nav-title">Workspace</p>
+          <button
+            type="button"
+            className={`settings-nav-item${activeSection === "system" ? " is-active" : ""}`}
+            onClick={() => setActiveSection("system")}
+          >
+            System status
+          </button>
           <button
             type="button"
             className={`settings-nav-item${activeSection === "access" ? " is-active" : ""}`}
@@ -480,6 +539,58 @@ const Settings = () => {
                       <span className="switch-thumb" />
                     </span>
                   </label>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          {activeSection === "dashboard" ? (
+            <div className="settings-section">
+              <div className="settings-section-header">
+                <h3>Dashboard</h3>
+                <p>Reset your widget layout back to the default order.</p>
+              </div>
+              {dashboardNotice ? <p className="form-note">{dashboardNotice}</p> : null}
+              <div className="settings-list">
+                <div className="settings-item">
+                  <div>
+                    <h4>Reset layout</h4>
+                    <p>Restore the default widget arrangement for your account.</p>
+                  </div>
+                  <button type="button" className="button-secondary" onClick={onResetDashboardLayout}>
+                    Reset layout
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          {activeSection === "system" ? (
+            <div className="settings-section">
+              <div className="settings-section-header">
+                <div className="settings-section-header-row">
+                  <div>
+                    <h3>System status</h3>
+                    <p>Check API and database connectivity.</p>
+                  </div>
+                  <button
+                    type="button"
+                    className="button-secondary"
+                    onClick={loadSystemStatus}
+                    disabled={systemStatus === "loading"}
+                  >
+                    Refresh
+                  </button>
+                </div>
+              </div>
+              <div className="settings-status-grid">
+                <div className={`status-pill status-${apiStatus}`}>
+                  <span className="status-dot" aria-hidden="true" />
+                  <span>API {apiStatus === "ok" ? "ready" : apiStatus}</span>
+                </div>
+                <div className={`status-pill status-${dbStatus}`}>
+                  <span className="status-dot" aria-hidden="true" />
+                  <span>Database {dbStatus === "ok" ? "connected" : dbStatus}</span>
                 </div>
               </div>
             </div>

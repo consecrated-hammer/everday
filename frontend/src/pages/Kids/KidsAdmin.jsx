@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 
 import {
   CreateKidDeposit,
@@ -43,6 +44,7 @@ const EmptyRule = () => ({
 });
 
 const KidsAdmin = () => {
+  const [searchParams] = useSearchParams();
   const [kids, setKids] = useState([]);
   const [kidLedgers, setKidLedgers] = useState({});
   const [kidRules, setKidRules] = useState({});
@@ -63,6 +65,14 @@ const KidsAdmin = () => {
   const [historyFilterOpen, setHistoryFilterOpen] = useState(false);
   const [historySort, setHistorySort] = useState({ Key: "When", Direction: "desc" });
   const historyFilterRef = useRef(null);
+  const requestedKidId = useMemo(() => {
+    const raw = searchParams.get("kid");
+    if (!raw) {
+      return null;
+    }
+    const parsed = Number(raw);
+    return Number.isNaN(parsed) ? null : parsed;
+  }, [searchParams]);
 
   const loadData = async () => {
     setStatus("loading");
@@ -119,6 +129,15 @@ const KidsAdmin = () => {
   useEffect(() => {
     loadData();
   }, []);
+
+  useEffect(() => {
+    if (!requestedKidId || kids.length === 0) {
+      return;
+    }
+    if (kids.some((kid) => kid.KidUserId === requestedKidId)) {
+      setActiveKidId(requestedKidId);
+    }
+  }, [kids, requestedKidId]);
 
   useEffect(() => {
     if (kids.length === 0) {
@@ -833,7 +852,7 @@ const KidsAdmin = () => {
             </aside>
 
             <div className="kids-admin-main">
-              <section className="kids-admin-card kids-admin-history">
+              <section className="kids-admin-card kids-admin-history" id="kids-history">
                 <div className="kids-admin-card-header">
                   <div>
                     <h2>Full history</h2>

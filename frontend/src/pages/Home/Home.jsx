@@ -1,119 +1,294 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
-import { GetDisplayName } from "../../lib/authStorage.js";
-import { Logger } from "../../lib/logger.js";
+import Icon from "../../components/Icon.jsx";
+import { GetUserId } from "../../lib/authStorage.js";
+import { LoadDashboardLayout, SaveDashboardLayout } from "../../lib/dashboardLayout.js";
+import BudgetWidget from "./widgets/BudgetWidget.jsx";
+import HealthWidget from "./widgets/HealthWidget.jsx";
+import KidsWidget from "./widgets/KidsWidget.jsx";
+import ShoppingWidget from "./widgets/ShoppingWidget.jsx";
 
-const modules = [
+const SizeOptions = {
+  compact: { ColumnSpan: 3, Label: "Compact" },
+  wide: { ColumnSpan: 6, Label: "Wide" }
+};
+
+const BuildWidgetCatalog = () => [
   {
-    title: "Budget",
-    subtitle: "Income, expenses, and allocations",
-    cta: "Open Budget",
-    href: "/budget/allocations"
+    Id: "budget",
+    Title: "Budget snapshot",
+    Component: BudgetWidget,
+    DefaultSize: "compact",
+    Sizes: ["compact", "wide"],
+    NavTo: "/budget/allocations",
+    NavLabel: "Budget →"
   },
   {
-    title: "Health",
-    subtitle: "Meals, steps, and nutrition",
-    cta: "Open Health",
-    href: "/health/today"
+    Id: "shopping",
+    Title: "Shopping list",
+    Component: ShoppingWidget,
+    DefaultSize: "compact",
+    Sizes: ["compact", "wide"],
+    NavTo: "/shopping",
+    NavLabel: "Shopping →"
   },
   {
-    title: "Kids",
-    subtitle: "Balances, chores, and pocket money",
-    cta: "Open Kids",
-    href: "/kids-admin"
+    Id: "health",
+    Title: "Health trends",
+    Component: HealthWidget,
+    DefaultSize: "compact",
+    Sizes: ["compact", "wide"],
+    NavTo: "/health/today",
+    NavLabel: "Health →"
   },
   {
-    title: "Shopping",
-    subtitle: "Shared list for household items",
-    cta: "Open Shopping",
-    href: "/shopping"
+    Id: "kids",
+    Title: "Kids balances",
+    Component: KidsWidget,
+    DefaultSize: "compact",
+    Sizes: ["compact", "wide"],
+    NavTo: "/kids",
+    NavLabel: "Kids →"
   }
 ];
 
+const BuildDefaultLayout = (widgets) =>
+  widgets.map((widget) => ({
+    Id: widget.Id,
+    Size: widget.DefaultSize || "compact"
+  }));
+
+const MergeDashboardLayout = (storedLayout, defaultLayout, widgetMap) => {
+  const next = [];
+  const defaultMap = new Map(defaultLayout.map((item) => [item.Id, item]));
+
+  if (Array.isArray(storedLayout)) {
+    storedLayout.forEach((item) => {
+      const base = defaultMap.get(item.Id);
+      if (!base) {
+        return;
+      }
+      const widget = widgetMap.get(item.Id);
+      const sizes = widget?.Sizes || [];
+      const size = sizes.includes(item.Size) ? item.Size : base.Size;
+      next.push({ ...base, Size: size });
+      defaultMap.delete(item.Id);
+    });
+  }
+
+  defaultMap.forEach((item) => next.push(item));
+  return next;
+};
+
+const SwapLayoutItems = (layout, sourceId, targetId) => {
+  const sourceIndex = layout.findIndex((item) => item.Id === sourceId);
+  const targetIndex = layout.findIndex((item) => item.Id === targetId);
+  if (sourceIndex === -1 || targetIndex === -1 || sourceIndex === targetIndex) {
+    return layout;
+  }
+  const next = [...layout];
+  const temp = next[sourceIndex];
+  next[sourceIndex] = next[targetIndex];
+  next[targetIndex] = temp;
+  return next;
+};
+
+const MoveLayoutItem = (layout, widgetId, direction) => {
+  const index = layout.findIndex((item) => item.Id === widgetId);
+  const target = index + direction;
+  if (index < 0 || target < 0 || target >= layout.length) {
+    return layout;
+  }
+  const next = [...layout];
+  const temp = next[index];
+  next[index] = next[target];
+  next[target] = temp;
+  return next;
+};
+
+const NextSize = (currentSize, sizes) => {
+  if (!sizes || sizes.length <= 1) {
+    return currentSize;
+  }
+  const index = sizes.indexOf(currentSize);
+  const nextIndex = index === -1 ? 0 : (index + 1) % sizes.length;
+  return sizes[nextIndex];
+};
+
 const Home = () => {
-  const [apiStatus, setApiStatus] = useState("checking");
-  const [dbStatus, setDbStatus] = useState("checking");
-  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:8100";
-  const displayName = GetDisplayName();
+  const userId = GetUserId();
+  const [layout, setLayout] = useState([]);
+  const [layoutReady, setLayoutReady] = useState(false);
+  const [draggingId, setDraggingId] = useState(null);
+  const [dropTargetId, setDropTargetId] = useState(null);
+
+  const widgets = useMemo(() => BuildWidgetCatalog(), []);
+  const widgetMap = useMemo(() => new Map(widgets.map((widget) => [widget.Id, widget])), [widgets]);
 
   useEffect(() => {
-    const checkStatus = async () => {
-      try {
-        const response = await fetch(`${apiBaseUrl}/health`);
-        const nextStatus = response.ok ? "ok" : "error";
-        setApiStatus(nextStatus);
-        Logger.Debug("api health check", { status: nextStatus });
-      } catch (error) {
-        setApiStatus("error");
-        Logger.Error("api health check failed", { error: error?.message });
-      }
+    if (layoutReady) {
+      return;
+    }
+    const storedLayout = LoadDashboardLayout(userId);
+    const defaultLayout = BuildDefaultLayout(widgets);
+    setLayout(MergeDashboardLayout(storedLayout, defaultLayout, widgetMap));
+    setLayoutReady(true);
+  }, [layoutReady, userId, widgetMap, widgets]);
 
-      try {
-        const response = await fetch(`${apiBaseUrl}/health/db`);
-        const body = await response.json();
-        const nextStatus = response.ok && body.status === "ok" ? "ok" : "error";
-        setDbStatus(nextStatus);
-        Logger.Debug("db health check", {
-          status: nextStatus,
-          detail: body?.detail || null
-        });
-      } catch (error) {
-        setDbStatus("error");
-        Logger.Error("db health check failed", { error: error?.message });
-      }
-    };
+  useEffect(() => {
+    if (!layoutReady) {
+      return;
+    }
+    const defaultLayout = BuildDefaultLayout(widgets);
+    setLayout((prev) => MergeDashboardLayout(prev, defaultLayout, widgetMap));
+  }, [layoutReady, widgetMap, widgets]);
 
-    checkStatus();
-  }, [apiBaseUrl]);
+  useEffect(() => {
+    if (!layoutReady) {
+      return;
+    }
+    SaveDashboardLayout(userId, layout);
+  }, [layout, layoutReady, userId]);
+
+  const onDragStart = (widgetId) => (event) => {
+    event.dataTransfer.setData("text/plain", widgetId);
+    event.dataTransfer.effectAllowed = "move";
+    setDraggingId(widgetId);
+  };
+
+  const onDragOver = (widgetId) => (event) => {
+    event.preventDefault();
+    if (widgetId !== draggingId) {
+      setDropTargetId(widgetId);
+    }
+  };
+
+  const onDrop = (widgetId) => (event) => {
+    event.preventDefault();
+    const sourceId = draggingId || event.dataTransfer.getData("text/plain");
+    if (!sourceId || sourceId === widgetId) {
+      return;
+    }
+    setLayout((prev) => SwapLayoutItems(prev, sourceId, widgetId));
+    setDraggingId(null);
+    setDropTargetId(null);
+  };
+
+  const onDragEnd = () => {
+    setDraggingId(null);
+    setDropTargetId(null);
+  };
+
+  const onResize = (widgetId) => {
+    setLayout((prev) =>
+      prev.map((item) => {
+        if (item.Id !== widgetId) {
+          return item;
+        }
+        const sizes = widgetMap.get(widgetId)?.Sizes || [];
+        return { ...item, Size: NextSize(item.Size, sizes) };
+      })
+    );
+  };
+
+  const onMove = (widgetId, direction) => {
+    setLayout((prev) => MoveLayoutItem(prev, widgetId, direction));
+  };
+
+  if (!layoutReady) {
+    return (
+      <div className="app-shell app-shell--wide dashboard">
+        <p className="form-note">Loading dashboard...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="app-shell app-shell--wide dashboard">
-      <header className="dashboard-hero">
-        <div className="dashboard-hero-copy">
-          <p className="eyebrow">Everday</p>
-          {displayName ? <p className="welcome-banner">Welcome {displayName}!</p> : null}
-          <h1>Household control center.</h1>
-          <p className="lede">
-            Stay on top of money, schedules, and life admin with clear, shared workflows.
-          </p>
-          <div className="dashboard-status dashboard-status--muted">
-            <div className={`status-pill status-${apiStatus}`}>
-              <span className="status-dot" aria-hidden="true" />
-              <span>API {apiStatus === "ok" ? "ready" : apiStatus}</span>
-            </div>
-            <div className={`status-pill status-${dbStatus}`}>
-              <span className="status-dot" aria-hidden="true" />
-              <span>Database {dbStatus === "ok" ? "connected" : dbStatus}</span>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      <section className="dashboard-section">
-        <div className="section-header">
-          <div>
-            <h2>Modules</h2>
-            <p>Jump straight into the areas that matter today.</p>
-          </div>
-        </div>
-        <div className="module-grid">
-          {modules.map((module) => (
-            <article key={module.title} className="module-card">
-              <div className="module-title">{module.title}</div>
-              <div className="module-subtitle">{module.subtitle}</div>
-              {module.href ? (
-                <Link className="module-button module-button--active" to={module.href}>
-                  {module.cta || "Open"}
-                </Link>
-              ) : (
-                <button className="module-button" type="button" disabled>
-                  Coming soon
-                </button>
-              )}
+      <section className="dashboard-grid" aria-label="Dashboard widgets">
+        {layout.map((item, index) => {
+          const widget = widgetMap.get(item.Id);
+          if (!widget) {
+            return null;
+          }
+          const WidgetComponent = widget.Component;
+          const isDragging = draggingId === item.Id;
+          const isDropTarget = dropTargetId === item.Id;
+          const size = SizeOptions[item.Size] || SizeOptions.compact;
+          const nextSize = NextSize(item.Size, widget.Sizes || []);
+          const resizeLabel = nextSize === "wide" ? "Expand" : "Compact";
+          return (
+            <article
+              key={item.Id}
+              className={`dashboard-widget dashboard-widget--${item.Id}${
+                isDragging ? " is-dragging" : ""
+              }${isDropTarget ? " is-drop-target" : ""}`}
+              style={{ "--widget-span": size.ColumnSpan }}
+              data-size={item.Size}
+              onDragOver={onDragOver(item.Id)}
+              onDrop={onDrop(item.Id)}
+            >
+              <header className="widget-header">
+                <div>
+                  <h2 className="widget-title">{widget.Title}</h2>
+                </div>
+                <div className="widget-actions">
+                  {widget.NavTo ? (
+                    <Link className="widget-nav-link" to={widget.NavTo}>
+                      {widget.NavLabel || "Open →"}
+                    </Link>
+                  ) : null}
+                  <button
+                    type="button"
+                    className="widget-icon-button widget-drag-handle"
+                    draggable
+                    onDragStart={onDragStart(item.Id)}
+                    onDragEnd={onDragEnd}
+                    aria-label={`Move ${widget.Title}`}
+                    aria-grabbed={isDragging}
+                  >
+                    <Icon name="drag" className="icon" />
+                  </button>
+                  {widget.Sizes?.length > 1 ? (
+                    <button
+                      type="button"
+                      className="widget-action-button"
+                      onClick={() => onResize(item.Id)}
+                    >
+                      {resizeLabel}
+                    </button>
+                  ) : null}
+                  <div className="widget-reorder">
+                    <button
+                      type="button"
+                      className="widget-icon-button"
+                      onClick={() => onMove(item.Id, -1)}
+                      aria-label={`Move ${widget.Title} up`}
+                      disabled={index === 0}
+                    >
+                      <Icon name="sortUp" className="icon" />
+                    </button>
+                    <button
+                      type="button"
+                      className="widget-icon-button"
+                      onClick={() => onMove(item.Id, 1)}
+                      aria-label={`Move ${widget.Title} down`}
+                      disabled={index === layout.length - 1}
+                    >
+                      <Icon name="sortDown" className="icon" />
+                    </button>
+                  </div>
+                </div>
+              </header>
+              <WidgetComponent
+                {...(widget.Props || {})}
+                IsExpanded={item.Size === "wide"}
+                LayoutSize={item.Size}
+              />
             </article>
-          ))}
-        </div>
+          );
+        })}
       </section>
     </div>
   );

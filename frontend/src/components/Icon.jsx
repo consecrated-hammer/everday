@@ -163,6 +163,11 @@ const IconMap = {
     material: "material-symbols:arrow-downward",
     lucide: "lucide:arrow-down"
   },
+  drag: {
+    phosphor: "ph:dots-six-vertical",
+    material: "material-symbols:drag-handle",
+    lucide: "lucide:grip-vertical"
+  },
   info: {
     phosphor: "ph:info",
     material: "material-symbols:info",
