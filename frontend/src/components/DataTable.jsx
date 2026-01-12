@@ -12,9 +12,19 @@ const GetUniqueValues = (rows, key) => {
   return Array.from(new Set(values)).map((value) => String(value)).sort();
 };
 
-const DataTable = ({ columns, rows, tableKey, onEdit, onDelete, headerAddon }) => {
+const DataTable = ({
+  columns,
+  rows,
+  tableKey,
+  onEdit,
+  onDelete,
+  headerAddon,
+  searchTerm,
+  onSearchTermChange,
+  showSearch = true
+}) => {
   const tableRef = useRef(null);
-  const [searchTerm, setSearchTerm] = useState("");
+  const [internalSearchTerm, setInternalSearchTerm] = useState("");
   const [sort, setSort] = useState(DefaultSort);
   const [filters, setFilters] = useState({});
   const [visibleColumns, setVisibleColumns] = useState(() =>
@@ -78,9 +88,11 @@ const DataTable = ({ columns, rows, tableKey, onEdit, onDelete, headerAddon }) =
     };
   }, []);
 
+  const activeSearchTerm = searchTerm !== undefined ? searchTerm : internalSearchTerm;
+
   const sortedFilteredRows = useMemo(() => {
     let result = [...rows];
-    const query = searchTerm.trim().toLowerCase();
+    const query = activeSearchTerm.trim().toLowerCase();
     if (query) {
       result = result.filter((row) =>
         columns.some((column) => {
@@ -113,7 +125,7 @@ const DataTable = ({ columns, rows, tableKey, onEdit, onDelete, headerAddon }) =
       });
     }
     return result;
-  }, [rows, filters, sort, searchTerm, columns]);
+  }, [rows, filters, sort, activeSearchTerm, columns]);
 
   const visibleDefs = columns.filter((column) => visibleColumns[column.key]);
 
@@ -205,15 +217,24 @@ const DataTable = ({ columns, rows, tableKey, onEdit, onDelete, headerAddon }) =
   return (
     <div className="table-shell" ref={tableRef}>
       <div className="table-toolbar">
-        <div className="toolbar-left">
-          <div className="toolbar-search">
-            <input
-              placeholder="Search"
-              value={searchTerm}
-              onChange={(event) => setSearchTerm(event.target.value)}
-            />
+          <div className="toolbar-left">
+            {showSearch ? (
+              <div className="toolbar-search">
+                <input
+                  placeholder="Search"
+                  value={activeSearchTerm}
+                  onChange={(event) => {
+                    const nextValue = event.target.value;
+                    if (onSearchTermChange) {
+                      onSearchTermChange(nextValue);
+                    } else {
+                      setInternalSearchTerm(nextValue);
+                    }
+                  }}
+                />
+              </div>
+            ) : null}
           </div>
-        </div>
         <div className="toolbar-right">
           <div className="toolbar-flyout">
             <button

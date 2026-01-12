@@ -1641,6 +1641,72 @@ th {
   font-weight: 600;
 }
 
+.shopping-mobile {
+  display: none;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.shopping-mobile-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.shopping-mobile-controls label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.shopping-mobile-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface-strong);
+}
+
+.shopping-mobile-row.is-selected {
+  border-color: rgba(43, 110, 246, 0.35);
+  background: rgba(43, 110, 246, 0.06);
+}
+
+.shopping-mobile-select {
+  display: inline-flex;
+  align-items: flex-start;
+  padding-top: 2px;
+}
+
+.shopping-mobile-main {
+  display: grid;
+  gap: 4px;
+}
+
+.shopping-mobile-item {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.shopping-mobile-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.shopping-mobile-actions {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
 .cell-number {
   text-align: right;
 }
@@ -5594,5 +5660,46 @@ body.kids-theme {
   .kids-admin-history-mobile {
     display: grid;
     gap: 8px;
+  }
+
+  .shopping-panel .module-panel-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .shopping-panel .module-panel-actions {
+    width: 100%;
+  }
+
+  .shopping-panel .module-panel-actions .primary-button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .shopping-panel .table-wrap {
+    display: none;
+  }
+
+  .shopping-panel .table-toolbar {
+    align-items: stretch;
+    flex-wrap: wrap;
+  }
+
+  .shopping-panel .toolbar-left,
+  .shopping-panel .toolbar-right {
+    width: 100%;
+  }
+
+  .shopping-panel .toolbar-right {
+    display: none;
+  }
+
+  .shopping-panel .toolbar-search {
+    min-width: 100%;
+    width: 100%;
+  }
+
+  .shopping-mobile {
+    display: grid;
   }
 }

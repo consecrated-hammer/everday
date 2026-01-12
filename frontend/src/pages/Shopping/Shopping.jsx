@@ -32,7 +32,9 @@ const Shopping = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [status, setStatus] = useState("idle");
   const [error, setError] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
   const selectAllRef = useRef(null);
+  const selectAllMobileRef = useRef(null);
 
   const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
   const allSelected = items.length > 0 && items.every((item) => selectedSet.has(item.Id));
@@ -61,10 +63,12 @@ const Shopping = () => {
   }, []);
 
   useEffect(() => {
-    if (!selectAllRef.current) {
-      return;
+    if (selectAllRef.current) {
+      selectAllRef.current.indeterminate = hasSelected && !allSelected;
     }
-    selectAllRef.current.indeterminate = hasSelected && !allSelected;
+    if (selectAllMobileRef.current) {
+      selectAllMobileRef.current.indeterminate = hasSelected && !allSelected;
+    }
   }, [hasSelected, allSelected]);
 
   useEffect(() => {
@@ -202,15 +206,36 @@ const Shopping = () => {
     [selectedSet]
   );
 
+  const filteredItems = useMemo(() => {
+    const query = searchTerm.trim().toLowerCase();
+    if (!query) {
+      return items;
+    }
+    return items.filter((row) =>
+      columns.some((column) => {
+        const value = row[column.key];
+        if (value === null || value === undefined) {
+          return false;
+        }
+        return String(value).toLowerCase().includes(query);
+      })
+    );
+  }, [items, searchTerm, columns]);
+
   return (
-    <div className="module-panel">
+    <div className="module-panel shopping-panel">
       <header className="module-panel-header">
         <div>
           <h2>Shopping list</h2>
           <p>Track shared groceries and household items.</p>
           <p className="form-note">
-            Zebra helper examples: "Alexa, ask zebra helper to add milk", "Alexa, ask zebra helper to remove milk",
-            "Alexa, ask zebra helper to clear the list".
+            Zebra helper examples:
+            <br />
+            "Alexa, ask zebra helper to add milk"
+            <br />
+            "Alexa, ask zebra helper to remove milk"
+            <br />
+            "Alexa, ask zebra helper to clear the list"
           </p>
         </div>
         <div className="module-panel-actions">
@@ -226,6 +251,8 @@ const Shopping = () => {
         rows={items}
         onEdit={onEdit}
         onDelete={onDelete}
+        searchTerm={searchTerm}
+        onSearchTermChange={setSearchTerm}
         headerAddon={
           <>
             <label>
@@ -249,6 +276,67 @@ const Shopping = () => {
           </>
         }
       />
+      <div className="shopping-mobile">
+        <div className="shopping-mobile-controls">
+          <label>
+            <input
+              ref={selectAllMobileRef}
+              type="checkbox"
+              checked={allSelected}
+              onChange={onToggleSelectAll}
+              disabled={!hasItems || status === "saving"}
+            />
+            <span>Select all</span>
+          </label>
+          <button
+            type="button"
+            className="toolbar-button is-danger"
+            onClick={onRemoveSelected}
+            disabled={!hasSelected || status === "saving"}
+          >
+            Remove selected items
+          </button>
+        </div>
+        {filteredItems.length === 0 ? (
+          <p className="text-muted">{items.length === 0 ? "No items yet." : "No results."}</p>
+        ) : (
+          filteredItems.map((item) => (
+            <div
+              key={item.Id}
+              className={`shopping-mobile-row${selectedSet.has(item.Id) ? " is-selected" : ""}`}
+            >
+              <label className="shopping-mobile-select">
+                <input
+                  type="checkbox"
+                  checked={selectedSet.has(item.Id)}
+                  onChange={() => onToggleSelected(item.Id)}
+                  aria-label={`Select ${item.Item}`}
+                />
+              </label>
+              <div className="shopping-mobile-main">
+                <div className="shopping-mobile-item">{item.Item}</div>
+                <div className="shopping-mobile-meta">
+                  <span>{item.AddedByName || "-"}</span>
+                  <span>{FormatDateTime(item.CreatedAt)}</span>
+                </div>
+              </div>
+              <div className="shopping-mobile-actions">
+                <button type="button" className="icon-button" onClick={() => onEdit(item)} aria-label="Edit">
+                  <Icon name="edit" className="icon" />
+                </button>
+                <button
+                  type="button"
+                  className="icon-button is-danger"
+                  onClick={() => onDelete(item)}
+                  aria-label="Delete"
+                >
+                  <Icon name="trash" className="icon" />
+                </button>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
 
       {modalOpen ? (
         <div className="modal-backdrop" role="dialog" aria-modal="true">
