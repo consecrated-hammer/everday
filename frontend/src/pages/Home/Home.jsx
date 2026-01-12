@@ -31,7 +31,8 @@ const BuildWidgetCatalog = () => [
     DefaultSize: "compact",
     Sizes: ["compact", "wide"],
     NavTo: "/shopping",
-    NavLabel: "Shopping →"
+    NavLabel: "Shopping →",
+    Actions: [{ Id: "add-item", Label: "Add item" }]
   },
   {
     Id: "health",
@@ -40,7 +41,8 @@ const BuildWidgetCatalog = () => [
     DefaultSize: "compact",
     Sizes: ["compact", "wide"],
     NavTo: "/health/today",
-    NavLabel: "Health →"
+    NavLabel: "Health →",
+    Actions: [{ Id: "log-meal", Label: "Log meal" }]
   },
   {
     Id: "kids",
@@ -48,8 +50,9 @@ const BuildWidgetCatalog = () => [
     Component: KidsWidget,
     DefaultSize: "compact",
     Sizes: ["compact", "wide"],
-    NavTo: "/kids",
-    NavLabel: "Kids →"
+    NavTo: "/kids-admin",
+    NavLabel: "Kids →",
+    Actions: [{ Id: "quick-update", Label: "Quick update" }]
   }
 ];
 
@@ -196,6 +199,12 @@ const Home = () => {
     setLayout((prev) => MoveLayoutItem(prev, widgetId, direction));
   };
 
+  const onHeaderAction = (widgetId, actionId) => {
+    window.dispatchEvent(
+      new CustomEvent("dashboard-widget-action", { detail: { widgetId, actionId } })
+    );
+  };
+
   if (!layoutReady) {
     return (
       <div className="app-shell app-shell--wide dashboard">
@@ -226,19 +235,31 @@ const Home = () => {
               }${isDropTarget ? " is-drop-target" : ""}`}
               style={{ "--widget-span": size.ColumnSpan }}
               data-size={item.Size}
+              aria-label={widget.NavLabel || widget.Title}
               onDragOver={onDragOver(item.Id)}
               onDrop={onDrop(item.Id)}
             >
               <header className="widget-header">
-                <div>
-                  <h2 className="widget-title">{widget.Title}</h2>
-                </div>
-                <div className="widget-actions">
+                <div className="widget-header-primary">
                   {widget.NavTo ? (
-                    <Link className="widget-nav-link" to={widget.NavTo}>
+                    <Link className="widget-nav-link widget-title-link" to={widget.NavTo}>
                       {widget.NavLabel || "Open →"}
                     </Link>
-                  ) : null}
+                  ) : (
+                    <span className="widget-title">{widget.Title}</span>
+                  )}
+                </div>
+                <div className="widget-actions">
+                  {(widget.Actions || []).map((action) => (
+                    <button
+                      key={action.Id}
+                      type="button"
+                      className="widget-nav-link"
+                      onClick={() => onHeaderAction(widget.Id, action.Id)}
+                    >
+                      {action.Label}
+                    </button>
+                  ))}
                   <button
                     type="button"
                     className="widget-icon-button widget-drag-handle"
