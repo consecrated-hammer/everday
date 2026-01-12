@@ -15,7 +15,11 @@ import {
   UpdateMealEntry
 } from "../../lib/healthApi.js";
 
-const FormatDate = (value) => value.toISOString().slice(0, 10);
+const FormatDate = (value) => {
+  const offsetMs = value.getTimezoneOffset() * 60 * 1000;
+  const local = new Date(value.getTime() - offsetMs);
+  return local.toISOString().slice(0, 10);
+};
 const FormatAmount = (value) => {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) {
