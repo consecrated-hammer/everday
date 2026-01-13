@@ -29,7 +29,7 @@ from app.modules.health.services.daily_logs_service import (
     UpsertDailyLog,
 )
 from app.modules.health.services.settings_service import GetSettings
-from app.modules.health.utils.rbac import IsAdmin
+from app.modules.health.utils.rbac import IsParent
 
 router = APIRouter()
 
@@ -156,7 +156,7 @@ def DeleteMealEntryRoute(
     user: UserContext = Depends(RequireModuleRole("health", write=True)),
 ) -> Response:
     try:
-        DeleteMealEntry(db, user.Id, meal_entry_id, IsAdmin=IsAdmin(user))
+        DeleteMealEntry(db, user.Id, meal_entry_id, IsAdmin=IsParent(user))
         return Response(status_code=status.HTTP_204_NO_CONTENT)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc

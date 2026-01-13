@@ -7,7 +7,7 @@ from app.db import GetDb
 from app.modules.auth.deps import RequireModuleRole, UserContext
 from app.modules.health.schemas import CreateFoodInput, Food, UpdateFoodInput
 from app.modules.health.services.foods_service import DeleteFood, GetFoods, UpdateFood, UpsertFood
-from app.modules.health.utils.rbac import IsAdmin
+from app.modules.health.utils.rbac import IsParent
 
 router = APIRouter()
 logger = logging.getLogger("health.foods")
@@ -28,7 +28,7 @@ def CreateFood(
     user: UserContext = Depends(RequireModuleRole("health", write=True)),
 ) -> Food:
     try:
-        return UpsertFood(db, user.Id, payload, IsAdmin=IsAdmin(user))
+        return UpsertFood(db, user.Id, payload, IsAdmin=IsParent(user))
     except ValueError as exc:
         logger.warning("create food failed", exc_info=exc)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
@@ -42,7 +42,7 @@ def UpdateFoodRoute(
     user: UserContext = Depends(RequireModuleRole("health", write=True)),
 ) -> Food:
     try:
-        return UpdateFood(db, user.Id, food_id, payload, IsAdmin=IsAdmin(user))
+        return UpdateFood(db, user.Id, food_id, payload, IsAdmin=IsParent(user))
     except ValueError as exc:
         detail = str(exc)
         status_code = status.HTTP_403_FORBIDDEN if "Unauthorized" in detail else status.HTTP_404_NOT_FOUND
@@ -56,7 +56,7 @@ def DeleteFoodRoute(
     user: UserContext = Depends(RequireModuleRole("health", write=True)),
 ) -> None:
     try:
-        DeleteFood(db, user.Id, food_id, IsAdmin=IsAdmin(user))
+        DeleteFood(db, user.Id, food_id, IsAdmin=IsParent(user))
     except ValueError as exc:
         detail = str(exc)
         status_code = status.HTTP_403_FORBIDDEN if "Unauthorized" in detail else status.HTTP_400_BAD_REQUEST

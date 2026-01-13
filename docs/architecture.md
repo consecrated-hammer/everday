@@ -16,7 +16,7 @@ Everyday is a multi-user household app with a FastAPI backend, SQL Server databa
 
 ## Data Ownership and RBAC
 - Every record is owned by a `UserId`.
-- Roles: Admin, Editor, User, ReadOnly.
+- Roles: Parent, Kid (global; kids are restricted to the kids portal).
 - Authorization is enforced server-side per route and per record using policy helpers.
 
 ## Authentication

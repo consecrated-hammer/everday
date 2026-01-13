@@ -17,8 +17,7 @@ import { GetTokens, GetUserId, SetTokens } from "../../lib/authStorage.js";
 import { ResetDashboardLayout } from "../../lib/dashboardLayout.js";
 import { GetUiSettings, SetUiSettings } from "../../lib/uiSettings.js";
 
-const RoleOptions = ["Admin", "Edit", "Editor", "User", "ReadOnly", "Kid"];
-const ModuleOptions = ["budget", "health", "kids", "shopping", "settings"];
+const RoleOptions = ["Parent", "Kid"];
 const ThemeOptions = [
   { value: "auto", label: "Auto" },
   { value: "light", label: "Light" },
@@ -98,6 +97,7 @@ const Settings = () => {
     LastName: "",
     Email: "",
     DiscordHandle: "",
+    Role: "Kid",
     RequirePasswordChange: false
   });
   const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:8100";
@@ -119,7 +119,8 @@ const Settings = () => {
             LastName: current.LastName,
             Email: current.Email,
             DiscordHandle: current.DiscordHandle,
-            Username: current.Username
+            Username: current.Username,
+            Role: current.Role
           });
         }
       }
@@ -197,6 +198,7 @@ const Settings = () => {
         LastName: newUserForm.LastName || null,
         Email: newUserForm.Email || null,
         DiscordHandle: newUserForm.DiscordHandle || null,
+        Role: newUserForm.Role,
         RequirePasswordChange: newUserForm.RequirePasswordChange
       });
       setNewUserForm({
@@ -206,6 +208,7 @@ const Settings = () => {
         LastName: "",
         Email: "",
         DiscordHandle: "",
+        Role: "Kid",
         RequirePasswordChange: false
       });
       setShowAddUser(false);
@@ -257,15 +260,19 @@ const Settings = () => {
     loadHealthSettings();
   }, []);
 
-  const onRoleChange = async (userId, moduleName, role) => {
+  const onRoleChange = async (userId, role) => {
     try {
       setStatus("saving");
       setError("");
       const updated = await UpdateUserRole(userId, {
-        ModuleName: moduleName,
         Role: role
       });
       setUsers((prev) => prev.map((user) => (user.Id === updated.Id ? updated : user)));
+      const currentUserId = GetUserId();
+      if (currentUserId && updated.Id === currentUserId) {
+        const tokens = GetTokens() || {};
+        SetTokens({ ...tokens, Role: updated.Role });
+      }
       setStatus("ready");
     } catch (err) {
       setStatus("error");
@@ -364,7 +371,8 @@ const Settings = () => {
           LastName: updated.LastName,
           Email: updated.Email,
           DiscordHandle: updated.DiscordHandle,
-          Username: updated.Username
+          Username: updated.Username,
+          Role: updated.Role
         });
       }
       onCloseProfileModal();
@@ -945,6 +953,16 @@ const Settings = () => {
                             onChange={onNewUserChange}
                           />
                         </label>
+                        <label>
+                          Role
+                          <select name="Role" value={newUserForm.Role} onChange={onNewUserChange}>
+                            {RoleOptions.map((role) => (
+                              <option key={role} value={role}>
+                                {role}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
                         <div className="form-switch-row">
                           <span className="form-switch-label">
                             Require password change on first login
@@ -1013,42 +1031,22 @@ const Settings = () => {
                               <span>{user.DiscordHandle || "No Discord"}</span>
                               <span>Alexa service user Id {user.Id}</span>
                             </div>
-                            <div className="settings-role-pills">
-                              {ModuleOptions.map((module) => {
-                                const current = user.Roles.find((role) => role.ModuleName === module);
-                                return (
-                                  <span key={`${user.Id}-${module}`} className="settings-role-pill">
-                                    {module}: {current?.Role || "ReadOnly"}
-                                  </span>
-                                );
-                              })}
+                            <div className="settings-role-grid">
+                              <label>
+                                <span>Role</span>
+                                <select
+                                  value={user.Role || "Kid"}
+                                  onChange={(event) => onRoleChange(user.Id, event.target.value)}
+                                  disabled={status === "saving"}
+                                >
+                                  {RoleOptions.map((role) => (
+                                    <option key={role} value={role}>
+                                      {role}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
                             </div>
-                            <details className="settings-role-details">
-                              <summary>Manage roles</summary>
-                              <div className="settings-role-grid">
-                                {ModuleOptions.map((module) => {
-                                  const current = user.Roles.find((role) => role.ModuleName === module);
-                                  return (
-                                    <label key={`${user.Id}-${module}`}>
-                                      <span>{module}</span>
-                                      <select
-                                        value={current?.Role || "ReadOnly"}
-                                        onChange={(event) =>
-                                          onRoleChange(user.Id, module, event.target.value)
-                                        }
-                                        disabled={status === "saving"}
-                                      >
-                                        {RoleOptions.map((role) => (
-                                          <option key={role} value={role}>
-                                            {role}
-                                          </option>
-                                        ))}
-                                      </select>
-                                    </label>
-                                  );
-                                })}
-                              </div>
-                            </details>
                           </div>
                         );
                       })}

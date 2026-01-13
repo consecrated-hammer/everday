@@ -7,9 +7,9 @@ from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from app.db import GetDb
-from app.modules.auth.models import User, UserModuleRole
+from app.modules.auth.models import User
 
-ALLOWED_ROLES = {"Admin", "Edit", "Editor", "User", "ReadOnly", "Kid"}
+ALLOWED_ROLES = {"Parent", "Kid"}
 
 
 def _require_env(name: str) -> str:
@@ -33,7 +33,7 @@ def _decode_access_token(token: str) -> dict:
 class UserContext:
     Id: int
     Username: str
-    Roles: dict[str, str]
+    Role: str
 
 
 def RequireAuthenticated(
@@ -58,19 +58,17 @@ def RequireAuthenticated(
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
 
-    roles = {
-        role.ModuleName: role.Role
-        for role in db.query(UserModuleRole).filter(UserModuleRole.UserId == user.Id).all()
-    }
-    return UserContext(Id=user.Id, Username=user.Username, Roles=roles)
+    return UserContext(Id=user.Id, Username=user.Username, Role=user.Role)
 
 
 def RequireModuleRole(module_name: str, write: bool = False):
     def _checker(user: UserContext = Depends(RequireAuthenticated)) -> UserContext:
-        role = user.Roles.get(module_name)
+        role = user.Role
         if role not in ALLOWED_ROLES:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
-        if write and role == "ReadOnly":
+        if role == "Kid" and module_name != "kids":
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+        if write and role != "Parent":
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
         return user
 
