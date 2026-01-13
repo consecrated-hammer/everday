@@ -10,15 +10,11 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from app.db import GetDb
-from app.modules.auth.deps import ALLOWED_ROLES
-from app.modules.auth.models import User, UserModuleRole
+from app.modules.auth.models import User
 from app.modules.integrations.alexa.skill import BuildSkillHandler, LoadAlexaConfig, ResetAlexaContext, SetAlexaContext
 
 router = APIRouter(prefix="/api/alexa", tags=["alexa"])
 logger = logging.getLogger("integrations.alexa")
-
-SHOPPING_MODULE = "shopping"
-
 
 class _RateLimiter:
     def __init__(self) -> None:
@@ -83,14 +79,7 @@ def _require_service_user_access(db: Session, user_id: int, write: bool) -> None
     user = db.query(User).filter(User.Id == user_id).first()
     if not user:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
-    role = (
-        db.query(UserModuleRole)
-        .filter(UserModuleRole.UserId == user_id, UserModuleRole.ModuleName == SHOPPING_MODULE)
-        .first()
-    )
-    if not role or role.Role not in ALLOWED_ROLES:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
-    if write and role.Role == "ReadOnly":
+    if user.Role != "Parent":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
 
 

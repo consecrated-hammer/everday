@@ -4,7 +4,7 @@
 
 ### Setup
 - Run backend migrations so the shopping schema is created.
-- Create or choose a service user and grant them the `shopping` module role (not ReadOnly).
+- Create or choose a service user and grant them the `shopping` module role (`Parent`).
 - Configure the Alexa endpoint to `https://everday.batserver.au/api/alexa` and keep the reverse proxy forwarding raw body + headers.
 
 ### Env vars

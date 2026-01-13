@@ -23,7 +23,7 @@ from app.modules.health.services.meal_templates_service import (
 )
 from app.modules.health.services.meal_text_parse_service import ParseMealText
 from app.modules.health.services.foods_service import GetFoods
-from app.modules.health.utils.rbac import IsAdmin
+from app.modules.health.utils.rbac import IsParent
 
 router = APIRouter()
 
@@ -57,7 +57,7 @@ def UpdateMealTemplateRoute(
     user: UserContext = Depends(RequireModuleRole("health", write=True)),
 ) -> MealTemplateWithItems:
     try:
-        return UpdateMealTemplate(db, user.Id, meal_template_id, payload, IsAdmin=IsAdmin(user))
+        return UpdateMealTemplate(db, user.Id, meal_template_id, payload, IsAdmin=IsParent(user))
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
@@ -69,7 +69,7 @@ def DeleteMealTemplateRoute(
     user: UserContext = Depends(RequireModuleRole("health", write=True)),
 ) -> Response:
     try:
-        DeleteMealTemplate(db, user.Id, meal_template_id, IsAdmin=IsAdmin(user))
+        DeleteMealTemplate(db, user.Id, meal_template_id, IsAdmin=IsParent(user))
         return Response(status_code=status.HTTP_204_NO_CONTENT)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc

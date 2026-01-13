@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.db import GetDb
 from app.modules.auth.deps import RequireModuleRole, UserContext, NowUtc, _require_env
-from app.modules.auth.models import RefreshToken, User, UserModuleRole
+from app.modules.auth.models import RefreshToken, User
 from app.modules.kids.models import KidLink
 from app.modules.auth.schemas import (
     CreateUserRequest,
@@ -11,7 +11,6 @@ from app.modules.auth.schemas import (
     UpdateUserProfileRequest,
     UpdateUserRoleRequest,
     UserOut,
-    UserRoleOut,
 )
 from app.modules.auth.service import HashPassword
 
@@ -24,30 +23,20 @@ def ListUsers(
     user: UserContext = Depends(RequireModuleRole("settings", write=False)),
 ) -> list[UserOut]:
     users = db.query(User).order_by(User.Username.asc()).all()
-    role_map = {}
-    for role in db.query(UserModuleRole).all():
-        role_map.setdefault(role.UserId, []).append(role)
-
-    results = []
-    for entry in users:
-        roles = [
-            UserRoleOut(ModuleName=role.ModuleName, Role=role.Role)
-            for role in role_map.get(entry.Id, [])
-        ]
-        results.append(
-            UserOut(
-                Id=entry.Id,
-                Username=entry.Username,
-                FirstName=entry.FirstName,
-                LastName=entry.LastName,
-                Email=entry.Email,
-                DiscordHandle=entry.DiscordHandle,
-                Roles=roles,
-                CreatedAt=entry.CreatedAt,
-                RequirePasswordChange=entry.RequirePasswordChange,
-            )
+    return [
+        UserOut(
+            Id=entry.Id,
+            Username=entry.Username,
+            FirstName=entry.FirstName,
+            LastName=entry.LastName,
+            Email=entry.Email,
+            DiscordHandle=entry.DiscordHandle,
+            Role=entry.Role,
+            CreatedAt=entry.CreatedAt,
+            RequirePasswordChange=entry.RequirePasswordChange,
         )
-    return results
+        for entry in users
+    ]
 
 
 @router.post("/users", response_model=UserOut, status_code=status.HTTP_201_CREATED)
@@ -70,6 +59,10 @@ def CreateUser(
             detail=f"Password must be at least {min_length} characters",
         )
 
+    role = payload.Role.strip() if payload.Role else "Kid"
+    if role not in {"Parent", "Kid"}:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid role")
+
     record = User(
         Username=username,
         PasswordHash=HashPassword(payload.Password),
@@ -77,6 +70,7 @@ def CreateUser(
         LastName=payload.LastName.strip() if payload.LastName else None,
         Email=payload.Email.strip().lower() if payload.Email else None,
         DiscordHandle=payload.DiscordHandle.strip() if payload.DiscordHandle else None,
+        Role=role,
         RequirePasswordChange=payload.RequirePasswordChange,
     )
     db.add(record)
@@ -89,7 +83,7 @@ def CreateUser(
         LastName=record.LastName,
         Email=record.Email,
         DiscordHandle=record.DiscordHandle,
-        Roles=[],
+        Role=record.Role,
         CreatedAt=record.CreatedAt,
         RequirePasswordChange=record.RequirePasswordChange,
     )
@@ -102,33 +96,15 @@ def UpdateUserRole(
     db: Session = Depends(GetDb),
     user: UserContext = Depends(RequireModuleRole("settings", write=True)),
 ) -> UserOut:
-    if payload.Role not in {"Admin", "Edit", "Editor", "User", "ReadOnly", "Kid"}:
+    if payload.Role not in {"Parent", "Kid"}:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid role")
 
     target = db.query(User).filter(User.Id == user_id).first()
     if not target:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
-    role = (
-        db.query(UserModuleRole)
-        .filter(UserModuleRole.UserId == target.Id, UserModuleRole.ModuleName == payload.ModuleName)
-        .first()
-    )
-    now = NowUtc()
-    if role:
-        role.Role = payload.Role
-        role.UpdatedAt = now
-    else:
-        role = UserModuleRole(
-            UserId=target.Id,
-            ModuleName=payload.ModuleName,
-            Role=payload.Role,
-            CreatedAt=now,
-            UpdatedAt=now,
-        )
-        db.add(role)
-
-    if payload.ModuleName == "kids" and payload.Role == "Kid":
+    target.Role = payload.Role
+    if payload.Role == "Kid":
         existing_link = (
             db.query(KidLink)
             .filter(KidLink.ParentUserId == user.Id, KidLink.KidUserId == target.Id)
@@ -136,12 +112,10 @@ def UpdateUserRole(
         )
         if not existing_link:
             db.add(KidLink(ParentUserId=user.Id, KidUserId=target.Id))
+    else:
+        db.query(KidLink).filter(KidLink.KidUserId == target.Id).delete()
     db.commit()
 
-    roles = [
-        UserRoleOut(ModuleName=entry.ModuleName, Role=entry.Role)
-        for entry in db.query(UserModuleRole).filter(UserModuleRole.UserId == target.Id).all()
-    ]
     return UserOut(
         Id=target.Id,
         Username=target.Username,
@@ -149,7 +123,7 @@ def UpdateUserRole(
         LastName=target.LastName,
         Email=target.Email,
         DiscordHandle=target.DiscordHandle,
-        Roles=roles,
+        Role=target.Role,
         CreatedAt=target.CreatedAt,
         RequirePasswordChange=target.RequirePasswordChange,
     )
@@ -186,10 +160,6 @@ def UpdateUserPassword(
     db.add(target)
     db.commit()
 
-    roles = [
-        UserRoleOut(ModuleName=entry.ModuleName, Role=entry.Role)
-        for entry in db.query(UserModuleRole).filter(UserModuleRole.UserId == target.Id).all()
-    ]
     return UserOut(
         Id=target.Id,
         Username=target.Username,
@@ -197,7 +167,7 @@ def UpdateUserPassword(
         LastName=target.LastName,
         Email=target.Email,
         DiscordHandle=target.DiscordHandle,
-        Roles=roles,
+        Role=target.Role,
         CreatedAt=target.CreatedAt,
         RequirePasswordChange=target.RequirePasswordChange,
     )
@@ -222,10 +192,6 @@ def UpdateUserProfile(
     db.add(target)
     db.commit()
 
-    roles = [
-        UserRoleOut(ModuleName=entry.ModuleName, Role=entry.Role)
-        for entry in db.query(UserModuleRole).filter(UserModuleRole.UserId == target.Id).all()
-    ]
     return UserOut(
         Id=target.Id,
         Username=target.Username,
@@ -233,7 +199,7 @@ def UpdateUserProfile(
         LastName=target.LastName,
         Email=target.Email,
         DiscordHandle=target.DiscordHandle,
-        Roles=roles,
+        Role=target.Role,
         CreatedAt=target.CreatedAt,
         RequirePasswordChange=target.RequirePasswordChange,
     )

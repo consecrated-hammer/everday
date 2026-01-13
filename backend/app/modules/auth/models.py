@@ -17,6 +17,7 @@ class User(Base):
     LastName = Column(String(120))
     Email = Column(String(254))
     DiscordHandle = Column(String(120))
+    Role = Column(String(20), nullable=False, default="Parent")
     BirthDate = Column(Date)
     HeightCm = Column(Integer)
     WeightKg = Column(Numeric(6, 2))

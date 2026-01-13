@@ -68,10 +68,32 @@ export const GetRoles = () => {
   return tokens?.Roles || [];
 };
 
+export const GetRole = () => {
+  const tokens = GetTokens();
+  if (tokens?.Role) {
+    return tokens.Role;
+  }
+  const roles = tokens?.Roles || [];
+  const isKid = roles.some((entry) => entry.ModuleName === "kids" && entry.Role === "Kid");
+  return isKid ? "Kid" : "Parent";
+};
+
 export const HasModuleRole = (moduleName, role) => {
+  const tokens = GetTokens();
+  if (tokens?.Role) {
+    if (moduleName === "kids" && role === "Kid") {
+      return tokens.Role === "Kid";
+    }
+    if (role === "Parent") {
+      return tokens.Role === "Parent";
+    }
+    return false;
+  }
   const roles = GetRoles();
   return roles.some((entry) => entry.ModuleName === moduleName && entry.Role === role);
 };
+
+export const IsKid = () => GetRole() === "Kid";
 
 export const GetUserId = () => {
   const data = DecodeAccessToken();

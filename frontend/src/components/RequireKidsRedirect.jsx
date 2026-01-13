@@ -1,10 +1,10 @@
 import { Navigate, useLocation } from "react-router-dom";
 
-import { HasModuleRole } from "../lib/authStorage.js";
+import { IsKid } from "../lib/authStorage.js";
 
 const RequireKidsRedirect = ({ children }) => {
   const location = useLocation();
-  const isKid = HasModuleRole("kids", "Kid");
+  const isKid = IsKid();
   if (!isKid) {
     return children;
   }

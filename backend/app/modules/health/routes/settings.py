@@ -25,7 +25,7 @@ from app.modules.health.services.settings_service import (
     UpdateSettings,
     UpdateUserProfile,
 )
-from app.modules.health.utils.rbac import IsAdmin
+from app.modules.health.utils.rbac import IsParent
 
 router = APIRouter()
 
@@ -56,7 +56,7 @@ def GetProfileRoute(
     user: UserContext = Depends(RequireModuleRole("health", write=False)),
 ) -> UserProfile:
     try:
-        return GetUserProfile(db, user.Id, IsAdmin(user))
+        return GetUserProfile(db, user.Id, IsAdmin=IsParent(user))
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
@@ -68,7 +68,7 @@ def UpdateProfileRoute(
     user: UserContext = Depends(RequireModuleRole("health", write=True)),
 ) -> UserProfile:
     try:
-        return UpdateUserProfile(db, user.Id, payload, IsAdmin(user))
+        return UpdateUserProfile(db, user.Id, payload, IsAdmin=IsParent(user))
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
@@ -78,7 +78,7 @@ def GetAiRecommendations(
     db: Session = Depends(GetDb),
     user: UserContext = Depends(RequireModuleRole("health", write=True)),
 ) -> NutritionRecommendationResponse:
-    profile = GetUserProfile(db, user.Id, IsAdmin(user))
+    profile = GetUserProfile(db, user.Id, IsAdmin=IsParent(user))
     if not profile.BirthDate:
         raise HTTPException(status_code=400, detail="Birthdate is required for recommendations.")
     if not profile.HeightCm:
