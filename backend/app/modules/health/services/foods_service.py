@@ -4,6 +4,7 @@ import uuid
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.modules.auth.models import User
 from app.modules.health.models import Food as FoodModel
 from app.modules.health.models import MealEntry as MealEntryModel
 from app.modules.health.models import MealTemplateItem as MealTemplateItemModel
@@ -44,10 +45,17 @@ def _ParseServingDescription(description: str) -> tuple[float, str]:
     return quantity, unit
 
 
-def _BuildFood(row: FoodModel) -> Food:
+def _DisplayName(user: User) -> str:
+    parts = [user.FirstName, user.LastName]
+    name = " ".join([part for part in parts if part])
+    return name or user.Username
+
+
+def _BuildFood(row: FoodModel, created_by_name: str | None = None) -> Food:
     return Food(
         FoodId=row.FoodId,
         OwnerUserId=row.OwnerUserId,
+        CreatedByName=created_by_name,
         FoodName=row.FoodName,
         ServingDescription=row.ServingDescription,
         ServingQuantity=float(row.ServingQuantity) if row.ServingQuantity is not None else 1.0,
@@ -70,11 +78,15 @@ def _BuildFood(row: FoodModel) -> Food:
 
 
 def SeedFoodsForUser(db: Session, UserId: int) -> None:
-    existing = db.query(FoodModel).filter(FoodModel.OwnerUserId == UserId).first()
-    if existing:
+    seeded = db.query(FoodModel).filter(FoodModel.DataSource == "seed").first()
+    if seeded:
         return
 
+    existing_names = {row.FoodName for row in db.query(FoodModel.FoodName).all()}
+    inserted = False
     for FoodName, ServingDescription, CaloriesPerServing, ProteinPerServing in DefaultFoods:
+        if FoodName in existing_names:
+            continue
         quantity, unit = _ParseServingDescription(ServingDescription)
         record = FoodModel(
             FoodId=str(uuid.uuid4()),
@@ -90,26 +102,35 @@ def SeedFoodsForUser(db: Session, UserId: int) -> None:
             IsFavourite=False,
         )
         db.add(record)
-    db.commit()
+        inserted = True
+    if inserted:
+        db.commit()
 
 
 def GetFoods(db: Session, UserId: int) -> list[Food]:
     SeedFoodsForUser(db, UserId)
 
     rows = db.query(FoodModel).order_by(FoodModel.FoodName.asc()).all()
-    return [_BuildFood(row) for row in rows]
+    owner_ids = {row.OwnerUserId for row in rows if row.OwnerUserId}
+    owners = db.query(User).filter(User.Id.in_(owner_ids)).all() if owner_ids else []
+    owner_map = {owner.Id: _DisplayName(owner) for owner in owners}
+    return [_BuildFood(row, owner_map.get(row.OwnerUserId)) for row in rows]
 
 
-def UpsertFood(db: Session, UserId: int, Input: CreateFoodInput) -> Food:
+def UpsertFood(db: Session, UserId: int, Input: CreateFoodInput, IsAdmin: bool = False) -> Food:
+    food_name = Input.FoodName.strip()
     ServingDescription = f"{Input.ServingQuantity} {Input.ServingUnit}".strip()
 
     existing = (
         db.query(FoodModel)
-        .filter(FoodModel.OwnerUserId == UserId, FoodModel.FoodName == Input.FoodName)
+        .filter(func.lower(FoodModel.FoodName) == food_name.lower())
         .first()
     )
 
     if existing:
+        if existing.OwnerUserId != UserId and not IsAdmin:
+            raise ValueError("Food already exists. Ask an admin to update it.")
+        existing.FoodName = food_name
         existing.ServingDescription = ServingDescription
         existing.ServingQuantity = Input.ServingQuantity
         existing.ServingUnit = Input.ServingUnit
@@ -132,7 +153,7 @@ def UpsertFood(db: Session, UserId: int, Input: CreateFoodInput) -> Food:
     record = FoodModel(
         FoodId=str(uuid.uuid4()),
         OwnerUserId=UserId,
-        FoodName=Input.FoodName,
+        FoodName=food_name,
         ServingDescription=ServingDescription,
         ServingQuantity=Input.ServingQuantity,
         ServingUnit=Input.ServingUnit,
@@ -169,7 +190,15 @@ def UpdateFood(db: Session, UserId: int, FoodId: str, Input: UpdateFoodInput, Is
         raise ValueError("Unauthorized")
 
     if Input.FoodName is not None:
-        existing.FoodName = Input.FoodName
+        name = Input.FoodName.strip()
+        conflict = (
+            db.query(FoodModel)
+            .filter(func.lower(FoodModel.FoodName) == name.lower(), FoodModel.FoodId != FoodId)
+            .first()
+        )
+        if conflict:
+            raise ValueError("Food name already exists.")
+        existing.FoodName = name
 
     if Input.ServingQuantity is not None or Input.ServingUnit is not None:
         new_quantity = Input.ServingQuantity if Input.ServingQuantity is not None else float(existing.ServingQuantity)

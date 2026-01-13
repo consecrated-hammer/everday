@@ -28,7 +28,7 @@ def CreateFood(
     user: UserContext = Depends(RequireModuleRole("health", write=True)),
 ) -> Food:
     try:
-        return UpsertFood(db, user.Id, payload)
+        return UpsertFood(db, user.Id, payload, IsAdmin=IsAdmin(user))
     except ValueError as exc:
         logger.warning("create food failed", exc_info=exc)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
