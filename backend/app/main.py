@@ -23,6 +23,7 @@ from app.modules.health.router import router as health_router
 from app.modules.kids.router import router as kids_router
 from app.modules.shopping.router import router as shopping_router
 from app.modules.integrations.alexa.router import router as alexa_router
+from app.modules.life_admin.router import router as life_admin_router
 
 setup_logging()
 warnings.filterwarnings(
@@ -155,6 +156,7 @@ app.include_router(health_router)
 app.include_router(kids_router)
 app.include_router(shopping_router)
 app.include_router(alexa_router)
+app.include_router(life_admin_router)
 
 class SpaStaticFiles(StaticFiles):
     async def get_response(self, path: str, scope):

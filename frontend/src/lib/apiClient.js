@@ -1,5 +1,5 @@
 import { Refresh } from "./authApi.js";
-import { ClearTokens, GetTokens, SetTokens } from "./authStorage.js";
+import { ClearTokens, GetTokens, IsAccessTokenExpired, SetTokens } from "./authStorage.js";
 
 const NormalizeBaseUrl = (value) => {
   const trimmed = value.replace(/\/+$/, "");
@@ -66,7 +66,32 @@ const TryRefresh = async () => {
   }
 };
 
+export const EnsureFreshTokens = async () => {
+  const tokens = GetTokens();
+  if (!tokens?.AccessToken) {
+    return null;
+  }
+  if (!IsAccessTokenExpired()) {
+    return tokens;
+  }
+  try {
+    const refreshed = await TryRefresh();
+    if (refreshed) {
+      return refreshed;
+    }
+  } catch (error) {
+    ClearTokens();
+    throw error;
+  }
+  ClearTokens();
+  return null;
+};
+
 export const RequestWithAuth = async (path, options = {}) => {
+  const tokens = GetTokens();
+  if (tokens?.AccessToken && IsAccessTokenExpired()) {
+    await EnsureFreshTokens();
+  }
   const response = await fetch(`${ApiBaseUrl}${path}`, {
     ...options,
     headers: { ...BuildHeaders(), ...(options.headers || {}) }

@@ -39,6 +39,22 @@ const DecodeAccessToken = () => {
   }
 };
 
+export const GetAccessTokenExpiry = () => {
+  const data = DecodeAccessToken();
+  if (!data?.exp) {
+    return null;
+  }
+  return data.exp * 1000;
+};
+
+export const IsAccessTokenExpired = (skewSeconds = 30) => {
+  const expiresAt = GetAccessTokenExpiry();
+  if (!expiresAt) {
+    return true;
+  }
+  return Date.now() + skewSeconds * 1000 >= expiresAt;
+};
+
 export const SetTokens = (tokens) => {
   const existing = GetTokens() || {};
   const merged = { ...existing, ...tokens };

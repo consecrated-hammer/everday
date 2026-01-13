@@ -13,6 +13,7 @@ const navSections = [
       { label: "Dashboard", path: "/", icon: "dashboard", tone: "sunrise" },
       { label: "Budget", path: "/budget/allocations", icon: "budget", tone: "mint" },
       { label: "Shopping", path: "/shopping", icon: "shopping", tone: "sky" },
+      { label: "Life admin", path: "/life-admin/records", icon: "agenda", tone: "sky" },
       { label: "Health", path: "/health", icon: "health", tone: "rose" },
       { label: "Kids", path: "/kids-admin", icon: "team", tone: "amber" }
     ]

@@ -26,6 +26,8 @@ import KidsLayout from "./pages/Kids/KidsLayout.jsx";
 import KidsHome from "./pages/Kids/KidsHome.jsx";
 import KidsHistory from "./pages/Kids/KidsHistory.jsx";
 import KidsAdmin from "./pages/Kids/KidsAdmin.jsx";
+import LifeAdminLayout from "./pages/LifeAdmin/LifeAdminLayout.jsx";
+import LifeAdminRecords from "./pages/LifeAdmin/Records.jsx";
 
 const App = () => (
   <BrowserRouter>
@@ -60,6 +62,11 @@ const App = () => (
           <Route path="settings" element={<HealthSettings />} />
         </Route>
         <Route path="/shopping" element={<Shopping />} />
+        <Route path="/life-admin" element={<LifeAdminLayout />}>
+          <Route index element={<Navigate to="/life-admin/records" replace />} />
+          <Route path="records" element={<LifeAdminRecords />} />
+          <Route path="builder" element={<Navigate to="/settings" replace />} />
+        </Route>
         <Route path="/settings" element={<Settings />} />
         <Route path="/kids-admin" element={<KidsAdmin />} />
       </Route>

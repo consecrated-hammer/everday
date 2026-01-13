@@ -39,6 +39,31 @@ const DataTable = ({
   const resizing = useRef(null);
 
   useEffect(() => {
+    setVisibleColumns((prev) => {
+      const next = Object.fromEntries(
+        columns.map((column) => [column.key, prev?.[column.key] ?? true])
+      );
+      const prevKeys = Object.keys(prev || {});
+      const nextKeys = Object.keys(next);
+      if (prevKeys.length === nextKeys.length && prevKeys.every((key) => prev[key] === next[key])) {
+        return prev;
+      }
+      return next;
+    });
+    setColumnWidths((prev) => {
+      const next = Object.fromEntries(
+        columns.map((column) => [column.key, prev?.[column.key] ?? (column.width || 180)])
+      );
+      const prevKeys = Object.keys(prev || {});
+      const nextKeys = Object.keys(next);
+      if (prevKeys.length === nextKeys.length && prevKeys.every((key) => prev[key] === next[key])) {
+        return prev;
+      }
+      return next;
+    });
+  }, [columns]);
+
+  useEffect(() => {
     const stored = localStorage.getItem(BuildStorageKey(tableKey));
     if (!stored) {
       return;
