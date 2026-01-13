@@ -24,6 +24,12 @@ export const NavItems = [
     MatchPrefixes: ["/shopping"]
   },
   {
+    Label: "Life admin",
+    Path: "/life-admin/records",
+    Icon: "agenda",
+    MatchPrefixes: ["/life-admin"]
+  },
+  {
     Label: "Kids",
     Path: "/kids-admin",
     Icon: "team",

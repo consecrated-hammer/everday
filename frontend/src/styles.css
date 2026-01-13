@@ -912,9 +912,19 @@ iconify-icon {
   padding: 6px 8px;
 }
 
+.widget-body .health-summary-grid {
+  gap: 4px;
+}
+
+.widget-body .health-summary-item {
+  gap: 2px;
+  padding: 6px 8px;
+}
+
 .health-summary-value {
   font-weight: 600;
   font-size: 0.9rem;
+  white-space: nowrap;
 }
 
 .kids-balance-list {
@@ -1266,6 +1276,44 @@ iconify-icon {
   color: var(--text-muted);
 }
 
+.form-grid .form-switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.form-grid--tight {
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.form-grid--tight label {
+  gap: 6px;
+}
+
+.form-grid-label {
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.form-date-range {
+  grid-template-columns: repeat(2, minmax(140px, 220px));
+  column-gap: 12px;
+  row-gap: 10px;
+  align-items: end;
+}
+
+.form-date-range .form-grid-label {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 720px) {
+  .form-date-range {
+    grid-template-columns: 1fr;
+  }
+}
+
 .form-grid input,
 .form-grid select,
 .form-grid textarea {
@@ -1292,6 +1340,66 @@ iconify-icon {
 .form-switch-label {
   font-weight: 600;
   color: var(--text-muted);
+}
+
+.life-admin-modal .form-switch-row {
+  justify-content: flex-start;
+  gap: 10px;
+}
+
+.form-switch-row--inline {
+  justify-content: flex-start;
+  gap: 10px;
+}
+
+.form-grid .form-switch-row--inline {
+  justify-content: flex-start;
+  gap: 10px;
+}
+
+.form-switch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.form-switch input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.form-switch .switch-track {
+  width: 44px;
+  height: 24px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  display: flex;
+  align-items: center;
+  padding: 2px;
+  transition: background 0.2s ease, border-color 0.2s ease;
+  cursor: pointer;
+}
+
+.form-switch .switch-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--text-soft);
+  transform: translateX(0);
+  transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.form-switch input:checked + .switch-track {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+
+.form-switch input:checked + .switch-track .switch-thumb {
+  transform: translateX(18px);
+  background: var(--accent);
 }
 
 .form-actions {
@@ -1369,6 +1477,16 @@ iconify-icon {
   cursor: pointer;
 }
 
+.checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.checkbox input {
+  margin: 0;
+}
+
 .form-error {
   margin-top: 16px;
   color: #b23b2e;
@@ -1418,6 +1536,29 @@ iconify-icon {
   flex-wrap: wrap;
   align-items: center;
   gap: 10px;
+}
+
+.life-admin-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.life-admin-tab {
+  border: 1px solid var(--border);
+  background: var(--surface-strong);
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.life-admin-tab.is-active {
+  background: var(--accent);
+  color: var(--accent-contrast);
+  border-color: transparent;
 }
 
 .income-table-section {

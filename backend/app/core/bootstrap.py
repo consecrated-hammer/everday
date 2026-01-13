@@ -96,7 +96,7 @@ def EnsureDatabaseSetup() -> None:
     db_engine = create_engine(admin_db_url, pool_pre_ping=True)
 
     logger.info("ensuring schemas, role, and grants")
-    schemas = ["auth", "budget", "health", "kids", "agenda", "files", "ai", "ref", "shopping"]
+    schemas = ["auth", "budget", "health", "kids", "agenda", "files", "ai", "ref", "shopping", "life_admin"]
 
     with db_engine.begin() as connection:
         for schema in schemas:
