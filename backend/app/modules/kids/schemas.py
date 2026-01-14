@@ -27,6 +27,8 @@ class ChoreOut(BaseModel):
     Amount: float
     IsActive: bool
     SortOrder: int
+    StartDate: date | None = None
+    EndDate: date | None = None
     AssignedKidIds: list[int] | None = None
 
 
@@ -36,6 +38,8 @@ class ChoreCreate(BaseModel):
     Amount: float = Field(ge=0)
     IsActive: bool = True
     SortOrder: int = 0
+    StartDate: date | None = None
+    EndDate: date | None = None
 
 
 class ChoreUpdate(BaseModel):
@@ -44,6 +48,8 @@ class ChoreUpdate(BaseModel):
     Amount: float | None = Field(default=None, ge=0)
     IsActive: bool | None = None
     SortOrder: int | None = None
+    StartDate: date | None = None
+    EndDate: date | None = None
 
 
 class ChoreAssignmentRequest(BaseModel):
@@ -193,3 +199,39 @@ class KidsApprovalOut(BaseModel):
     Notes: str | None = None
     Status: str
     CreatedAt: datetime
+
+
+class ParentChoreEntryCreate(BaseModel):
+    ChoreId: int
+    EntryDate: date
+    Notes: str | None = Field(default=None, max_length=500)
+    Amount: float | None = Field(default=None, ge=0)
+
+
+class ParentChoreEntryUpdate(BaseModel):
+    EntryDate: date | None = None
+    Notes: str | None = Field(default=None, max_length=500)
+    Amount: float | None = Field(default=None, ge=0)
+    Status: str | None = Field(default=None, min_length=1, max_length=20)
+
+
+class KidsMonthDayOut(BaseModel):
+    Date: date
+    DailyDone: int
+    DailyTotal: int
+    BonusApprovedTotal: float
+    PendingCount: int
+
+
+class KidsMonthOverviewResponse(BaseModel):
+    MonthStart: date
+    MonthEnd: date
+    Days: list[KidsMonthDayOut]
+
+
+class KidsDayDetailResponse(BaseModel):
+    Date: date
+    DailyJobs: list[ChoreOut]
+    Habits: list[ChoreOut]
+    BonusTasks: list[ChoreOut]
+    Entries: list[ChoreEntryOut]

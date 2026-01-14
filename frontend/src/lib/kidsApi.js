@@ -63,8 +63,45 @@ export const FetchKidChoreEntries = async (kidId, limit = 200, includeDeleted = 
 export const FetchKidChoreEntryAudit = async (kidId, entryId) =>
   RequestJson(`/kids/parents/children/${kidId}/chore-entries/${entryId}/audit`);
 
-export const FetchKidMonthSummary = async (kidId) =>
-  RequestJson(`/kids/parents/children/${kidId}/month-summary`);
+export const FetchKidMonthSummary = async (kidId, month = "") => {
+  const query = month ? `?month=${encodeURIComponent(month)}` : "";
+  return RequestJson(`/kids/parents/children/${kidId}/month-summary${query}`);
+};
+
+export const FetchKidMonthOverview = async (kidId, month = "") => {
+  const query = month ? `?month=${encodeURIComponent(month)}` : "";
+  return RequestJson(`/kids/parents/children/${kidId}/month-overview${query}`);
+};
+
+export const FetchKidDayDetail = async (kidId, entryDate) =>
+  RequestJson(
+    `/kids/parents/children/${kidId}/day?entry_date=${encodeURIComponent(entryDate)}`
+  );
+
+export const CreateParentKidChoreEntry = async (kidId, payload) =>
+  RequestJson(`/kids/parents/children/${kidId}/chore-entries`, {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+
+export const UpdateParentKidChoreEntry = async (kidId, entryId, payload) =>
+  RequestJson(`/kids/parents/children/${kidId}/chore-entries/${entryId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload)
+  });
+
+export const DeleteParentKidChoreEntry = async (kidId, entryId) => {
+  const response = await RequestWithAuth(
+    `/kids/parents/children/${kidId}/chore-entries/${entryId}`,
+    {
+      method: "DELETE"
+    }
+  );
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(detail || "Request failed");
+  }
+};
 
 export const FetchKidsPendingApprovals = async ({ kidId = "", choreType = "" } = {}) => {
   const params = new URLSearchParams();
