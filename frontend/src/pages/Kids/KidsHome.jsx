@@ -100,6 +100,8 @@ const KidsHome = () => {
   const today = overview?.Today || overview?.SelectedDate || "";
   const dayProtected = overview?.DayProtected ?? false;
   const dailySlice = Number(overview?.DailySlice ?? 0);
+  const monthStart = overview?.MonthStart || projection[0]?.Date || "";
+  const monthlyAllowance = Number(overview?.MonthlyAllowance || 40);
 
   const entryByChoreId = useMemo(() => {
     const map = new Map();
@@ -156,15 +158,57 @@ const KidsHome = () => {
     }
   };
 
+  const balanceAsOf = useMemo(() => {
+    if (!ledgerEntries.length) {
+      return null;
+    }
+    return (dateValue) => {
+      const cutoffTime = ParseDateValue(dateValue)?.getTime();
+      if (!cutoffTime) {
+        return null;
+      }
+      return ledgerEntries.reduce((acc, entry) => {
+        const entryTime = ParseDateValue(entry.EntryDate)?.getTime();
+        if (!entryTime || entryTime > cutoffTime) {
+          return acc;
+        }
+        return acc + Number(entry.Amount || 0);
+      }, 0);
+    };
+  }, [ledgerEntries]);
+
+  const baseBalance = balanceAsOf ? balanceAsOf(monthStart) ?? 0 : 0;
+  const projectionByDate = useMemo(() => {
+    const map = new Map();
+    projection.forEach((point) => {
+      map.set(point.Date, Number(point.Amount || 0));
+    });
+    return map;
+  }, [projection]);
+  const projectionAtToday =
+    projectionByDate.get(today) ??
+    projection[projection.length - 1]?.Amount ??
+    0;
+
   const projectionSeries = useMemo(() => {
     const todayValue = ParseDateValue(today);
     const todayTime = todayValue?.getTime() ?? null;
-    const amountAtToday =
-      projection.find((point) => point.Date === today)?.Amount ??
-      projection[projection.length - 1]?.Amount ??
-      0;
+    const amountAtToday = baseBalance + projectionAtToday;
+    const lastIndex = projection.length ? projection.length - 1 : -1;
+    const finalDate = projection[lastIndex]?.Date || "";
+    const totalDaysAhead =
+      todayTime && finalDate
+        ? Math.max(
+            0,
+            Math.round((ParseDateValue(finalDate)?.getTime() - todayTime) / 86400000)
+          )
+        : 0;
+    const daysInMonth = projection.length || 0;
+    const allowanceRemainder = Math.max(0, monthlyAllowance - dailySlice * daysInMonth);
+    const remainderPerDay =
+      totalDaysAhead > 0 ? allowanceRemainder / totalDaysAhead : 0;
 
-    return projection.map((point) => {
+    return projection.map((point, index) => {
       const pointDate = ParseDateValue(point.Date);
       const pointTime = pointDate?.getTime() ?? null;
       const isOnOrBeforeToday =
@@ -175,41 +219,35 @@ const KidsHome = () => {
         todayTime !== null && pointTime !== null
           ? Math.round((pointTime - todayTime) / 86400000)
           : 0;
+      const pointProjection =
+        projectionByDate.get(point.Date) ?? Number(point.Amount || 0);
+      const actualValue = isOnOrBeforeToday ? baseBalance + pointProjection : null;
+      let projectedValue = isOnOrAfterToday
+        ? amountAtToday + dailySlice * daysAhead + remainderPerDay * daysAhead
+        : null;
       return {
         DateKey: point.Date,
         TooltipLabel: FormatTooltipLabel(point.Date),
-        ActualAmount: isOnOrBeforeToday ? point.Amount : null,
-        ProjectedAmount: isOnOrAfterToday ? amountAtToday + dailySlice * daysAhead : null
+        ActualAmount: actualValue,
+        ProjectedAmount: projectedValue
       };
     });
-  }, [projection, today, dailySlice]);
+  }, [
+    projection,
+    today,
+    dailySlice,
+    baseBalance,
+    balanceAsOf,
+    monthlyAllowance,
+    projectionByDate,
+    projectionAtToday
+  ]);
 
   const currentBalance = useMemo(() => {
-    if (!projection.length) {
-      return 0;
-    }
-    const todayPoint = projection.find((point) => point.Date === today);
-    if (todayPoint) {
-      return todayPoint.Amount;
-    }
-    const todayValue = ParseDateValue(today);
-    if (!todayValue) {
-      return projection[projection.length - 1]?.Amount ?? 0;
-    }
-    let latestAmount = null;
-    projection.forEach((point) => {
-      const pointDate = ParseDateValue(point.Date);
-      if (!pointDate) {
-        return;
-      }
-      if (pointDate.getTime() <= todayValue.getTime()) {
-        latestAmount = point.Amount;
-      }
-    });
-    return latestAmount ?? projection[projection.length - 1]?.Amount ?? 0;
-  }, [projection, today]);
+    return projectionSeries.find((point) => point.DateKey === today)?.ActualAmount ?? 0;
+  }, [projectionSeries, today]);
 
-  const availableBalance = ledgerBalance ?? currentBalance;
+  const availableBalance = currentBalance;
 
   const filteredProjectionSeries = useMemo(() => {
     if (!projectionSeries.length) {
@@ -397,13 +435,16 @@ const KidsHome = () => {
                     disabled={busyChoreId === chore.Id}
                   >
                     <div className="kids-chore-row-main">
-                      <span>{choreLabel}</span>
+                      <span className="kids-chore-label">{choreLabel}</span>
                       {isPending ? (
                         <span className="kids-pill kids-pill--muted">Pending approval</span>
                       ) : isRejected ? (
                         <span className="kids-pill kids-pill--muted">Rejected</span>
                       ) : null}
                     </div>
+                    <span className="kids-chore-check" aria-hidden="true">
+                      {isActive ? "✅" : "⬜️"}
+                    </span>
                     <span className={`kids-chore-toggle${isActive ? " is-on" : ""}`} />
                   </button>
                 );
@@ -443,13 +484,16 @@ const KidsHome = () => {
                     disabled={busyChoreId === chore.Id}
                   >
                     <div className="kids-chore-row-main">
-                      <span>{choreLabel}</span>
+                      <span className="kids-chore-label">{choreLabel}</span>
                       {isPending ? (
                         <span className="kids-pill kids-pill--muted">Pending approval</span>
                       ) : isRejected ? (
                         <span className="kids-pill kids-pill--muted">Rejected</span>
                       ) : null}
                     </div>
+                    <span className="kids-chore-check" aria-hidden="true">
+                      {isActive ? "✅" : "⬜️"}
+                    </span>
                     <span className={`kids-chore-toggle${isActive ? " is-on" : ""}`} />
                   </button>
                 );
@@ -487,13 +531,16 @@ const KidsHome = () => {
                     disabled={busyChoreId === chore.Id}
                   >
                     <div className="kids-chore-row-main">
-                      <span>{`${choreLabel}${amountLabel}`}</span>
+                      <span className="kids-chore-label">{`${choreLabel}${amountLabel}`}</span>
                       {isPending ? (
                         <span className="kids-pill kids-pill--muted">Pending approval</span>
                       ) : isRejected ? (
                         <span className="kids-pill kids-pill--muted">Rejected</span>
                       ) : null}
                     </div>
+                    <span className="kids-chore-check" aria-hidden="true">
+                      {isActive ? "✅" : "⬜️"}
+                    </span>
                     <span className={`kids-chore-toggle${isActive ? " is-on" : ""}`} />
                   </button>
                 );

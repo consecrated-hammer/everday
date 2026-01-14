@@ -64,6 +64,21 @@ const BuildShortDate = (dateValue) =>
     month: "short"
   });
 
+const ParseDateValue = (value) => {
+  if (!value) {
+    return null;
+  }
+  const parts = value.split("-");
+  if (parts.length !== 3) {
+    return null;
+  }
+  const [year, month, day] = parts.map((part) => Number.parseInt(part, 10));
+  if (!year || !month || !day) {
+    return null;
+  }
+  return new Date(year, month - 1, day);
+};
+
 const MoneyEntryTypes = new Set(["Deposit", "Withdrawal", "StartingBalance"]);
 
 const MoneyTypeLabel = (value) => {
@@ -142,6 +157,7 @@ const KidsAdmin = () => {
   const [monthSummary, setMonthSummary] = useState(null);
   const [monthOverview, setMonthOverview] = useState(null);
   const [pendingApprovals, setPendingApprovals] = useState([]);
+  const [approvalsLoaded, setApprovalsLoaded] = useState(false);
   const [historyEntries, setHistoryEntries] = useState([]);
   const [chores, setChores] = useState([]);
   const [ledgerEntries, setLedgerEntries] = useState([]);
@@ -149,7 +165,6 @@ const KidsAdmin = () => {
   const [status, setStatus] = useState("idle");
   const [error, setError] = useState("");
 
-  const [approvalFilterKid, setApprovalFilterKid] = useState("all");
   const [approvalFilterType, setApprovalFilterType] = useState("all");
   const [approvalRangeStart, setApprovalRangeStart] = useState("");
   const [approvalRangeEnd, setApprovalRangeEnd] = useState("");
@@ -229,20 +244,26 @@ const KidsAdmin = () => {
   };
 
   const loadApprovals = async () => {
+    if (!activeKidId) {
+      setPendingApprovals([]);
+      setApprovalsLoaded(false);
+      return;
+    }
     setStatus("loading");
     setError("");
+    setApprovalsLoaded(false);
     try {
-      const kidIdValue = approvalFilterKid === "all" ? "" : Number(approvalFilterKid);
-      const choreTypeValue = approvalFilterType === "all" ? "" : approvalFilterType;
       const approvals = await FetchKidsPendingApprovals({
-        kidId: kidIdValue,
-        choreType: choreTypeValue
+        kidId: activeKidId
       });
       setPendingApprovals(approvals || []);
       setStatus("ready");
     } catch (err) {
       setStatus("error");
       setError(err?.message || "Unable to load approvals.");
+      setPendingApprovals([]);
+    } finally {
+      setApprovalsLoaded(true);
     }
   };
 
@@ -336,10 +357,13 @@ const KidsAdmin = () => {
   }, [activeKidId]);
 
   useEffect(() => {
-    if (activeTab === "approvals") {
-      loadApprovals();
+    if (!activeKidId) {
+      setPendingApprovals([]);
+      setApprovalsLoaded(false);
+      return;
     }
-  }, [activeTab, approvalFilterKid, approvalFilterType]);
+    loadApprovals();
+  }, [activeKidId]);
 
   useEffect(() => {
     if (activeTab === "history") {
@@ -348,10 +372,22 @@ const KidsAdmin = () => {
   }, [activeTab, activeKidId, monthParam]);
 
   useEffect(() => {
+    if (activeTab === "approvals") {
+      loadApprovals();
+    }
+  }, [activeTab, activeKidId]);
+
+  useEffect(() => {
     if (selectedDay) {
       loadDayDetail(selectedDay);
     }
   }, [selectedDay, activeKidId]);
+
+  useEffect(() => {
+    if (activeTab === "approvals" && approvalsLoaded && pendingApprovals.length === 0) {
+      setActiveTab("month");
+    }
+  }, [activeTab, approvalsLoaded, pendingApprovals.length]);
 
   useEffect(() => {
     if (!showEntryModal || !activeKidId || !entryForm.EntryDate) {
@@ -560,6 +596,9 @@ const KidsAdmin = () => {
 
   const filteredApprovals = useMemo(() => {
     return pendingApprovals.filter((entry) => {
+      if (approvalFilterType !== "all" && entry.ChoreType !== approvalFilterType) {
+        return false;
+      }
       if (approvalRangeStart && entry.EntryDate < approvalRangeStart) {
         return false;
       }
@@ -568,7 +607,7 @@ const KidsAdmin = () => {
       }
       return true;
     });
-  }, [pendingApprovals, approvalRangeStart, approvalRangeEnd]);
+  }, [pendingApprovals, approvalFilterType, approvalRangeStart, approvalRangeEnd]);
 
   const approvalsByDate = useMemo(() => {
     const grouped = {};
@@ -593,6 +632,30 @@ const KidsAdmin = () => {
     monthSummary?.MonthEnd ||
     BuildDateKey(new Date(monthCursor.getFullYear(), monthCursor.getMonth() + 1, 0));
   const ledgerCutoffKey = isCurrentMonth ? todayKey : monthEndKey;
+
+  const balanceAsOf = useMemo(() => {
+    if (!ledgerEntries.length) {
+      return null;
+    }
+    return (dateValue) => {
+      const cutoffTime = ParseDateValue(dateValue)?.getTime();
+      if (!cutoffTime) {
+        return null;
+      }
+      return ledgerEntries.reduce((acc, entry) => {
+        const entryTime = ParseDateValue(entry.EntryDate)?.getTime();
+        if (!entryTime || entryTime > cutoffTime) {
+          return acc;
+        }
+        return acc + Number(entry.Amount || 0);
+      }, 0);
+    };
+  }, [ledgerEntries]);
+
+  const baseBalance = useMemo(
+    () => (balanceAsOf ? balanceAsOf(monthStartKey) ?? 0 : 0),
+    [balanceAsOf, monthStartKey]
+  );
 
   const ledgerTotals = useMemo(() => {
     if (!ledgerEntries.length) {
@@ -645,24 +708,70 @@ const KidsAdmin = () => {
     return Math.max(total, 0);
   }, [monthSummary, monthOverview, isCurrentMonth, todayKey]);
 
-  const currentTotalDisplay = useMemo(() => {
-    if (ledgerBalance !== null && ledgerBalance !== undefined) {
-      return Number(ledgerBalance) || 0;
+  const projectionByDate = useMemo(() => {
+    const map = new Map();
+    (monthOverview?.Projection || []).forEach((point) => {
+      map.set(point.Date, Number(point.Amount || 0));
+    });
+    return map;
+  }, [monthOverview]);
+
+  const projectionAtCutoff = useMemo(() => {
+    const projectionPoints = monthOverview?.Projection || [];
+    if (!projectionPoints.length) {
+      return currentTotal;
     }
-    return currentTotal;
-  }, [ledgerBalance, currentTotal]);
+    const cutoffKey = isCurrentMonth ? todayKey : monthEndKey;
+    if (projectionByDate.has(cutoffKey)) {
+      return projectionByDate.get(cutoffKey) ?? currentTotal;
+    }
+    return Number(projectionPoints[projectionPoints.length - 1]?.Amount || currentTotal);
+  }, [monthOverview, projectionByDate, currentTotal, isCurrentMonth, todayKey, monthEndKey]);
+
+  const daysInMonth = useMemo(() => {
+    const start = ParseDateValue(monthStartKey);
+    const end = ParseDateValue(monthEndKey);
+    if (!start || !end) {
+      return 0;
+    }
+    return Math.round((end.getTime() - start.getTime()) / 86400000) + 1;
+  }, [monthStartKey, monthEndKey]);
+
+  const currentTotalDisplay = useMemo(() => {
+    if (!monthSummary) {
+      return 0;
+    }
+    return baseBalance + projectionAtCutoff;
+  }, [monthSummary, baseBalance, projectionAtCutoff]);
 
   const projectedTotalDisplay = useMemo(() => {
     if (!monthSummary) {
       return 0;
     }
-    const baseProjection = Number(monthSummary.ProjectedPayout || 0);
-    if (ledgerBalance === null || ledgerBalance === undefined) {
-      return baseProjection;
-    }
-    const offset = Number(ledgerBalance || 0) - currentTotal;
-    return Math.max(baseProjection + offset, 0);
-  }, [monthSummary, ledgerBalance, currentTotal]);
+    const monthlyAllowance = Number(monthSummary.MonthlyAllowance || 0);
+    const dailySlice = Number(monthSummary.DailySlice || 0);
+    const cutoffKey = isCurrentMonth ? todayKey : monthEndKey;
+    const cutoffTime = ParseDateValue(cutoffKey)?.getTime();
+    const endTime = ParseDateValue(monthEndKey)?.getTime();
+    const remainingDays =
+      isCurrentMonth && cutoffTime !== null && endTime !== null
+        ? Math.max(0, Math.round((endTime - cutoffTime) / 86400000))
+        : 0;
+    const allowanceRemainder = Math.max(0, monthlyAllowance - dailySlice * daysInMonth);
+    const projectedPayout =
+      projectionAtCutoff +
+      dailySlice * remainingDays +
+      (remainingDays > 0 ? allowanceRemainder : 0);
+    return Math.max(baseBalance + projectedPayout, 0);
+  }, [
+    monthSummary,
+    baseBalance,
+    projectionAtCutoff,
+    isCurrentMonth,
+    todayKey,
+    monthEndKey,
+    daysInMonth
+  ]);
   const choreEntriesForMonth = useMemo(() => {
     const start = new Date(monthCursor.getFullYear(), monthCursor.getMonth(), 1);
     const end = new Date(monthCursor.getFullYear(), monthCursor.getMonth() + 1, 0);
@@ -1273,6 +1382,7 @@ const KidsAdmin = () => {
   const monthTitle = BuildMonthLabel(monthCursor);
   const activeKidName = activeKid ? BuildKidName(activeKid) : "Kid";
   const dayPendingCount = selectedDay ? overviewByDate[selectedDay]?.PendingCount || 0 : 0;
+  const hasApprovals = approvalsLoaded && pendingApprovals.length > 0;
 
   return (
     <div className="kids-admin-container">
@@ -1319,7 +1429,8 @@ const KidsAdmin = () => {
           {[
             { key: "month", label: "Month" },
             { key: "history", label: "History" },
-            { key: "chores", label: "Chores" }
+            { key: "chores", label: "Chores" },
+            ...(hasApprovals ? [{ key: "approvals", label: "Approvals" }] : [])
           ].map((tab) => (
             <button
               key={tab.key}
@@ -1332,15 +1443,6 @@ const KidsAdmin = () => {
               {tab.label}
             </button>
           ))}
-        </div>
-        <div className="kids-admin-header-actions">
-          <button
-            type="button"
-            className={`button-secondary-pill${activeTab === "approvals" ? " is-active" : ""}`}
-            onClick={() => setActiveTab("approvals")}
-          >
-            Approvals
-          </button>
         </div>
 
         {error ? <p className="form-error">{error}</p> : null}
@@ -1391,12 +1493,6 @@ const KidsAdmin = () => {
                     </span>
                   </div>
                   <div>
-                    <span className="kids-admin-summary-label">Current total</span>
-                    <span className="kids-admin-summary-value">
-                      {monthSummary ? FormatCurrency(currentTotalDisplay) : "-"}
-                    </span>
-                  </div>
-                  <div>
                     <span className="kids-admin-summary-label">Money in</span>
                     <span className="kids-admin-summary-value">
                       {monthSummary ? FormatCurrency(ledgerTotals.moneyIn) : "-"}
@@ -1428,6 +1524,11 @@ const KidsAdmin = () => {
                       {monthSummary ? FormatCurrency(monthSummary.PendingBonusTotal) : "-"}
                     </span>
                   </div>
+                </div>
+                <div className="kids-admin-summary-divider" />
+                <div className="kids-admin-summary-current">
+                  <span>Current total</span>
+                  <strong>{monthSummary ? FormatCurrency(currentTotalDisplay) : "-"}</strong>
                 </div>
                 <div className="kids-admin-summary-total">
                   <span>Projected total</span>
@@ -1499,20 +1600,6 @@ const KidsAdmin = () => {
               </div>
             </div>
             <div className="kids-admin-approval-filters">
-              <label>
-                <span>Kid</span>
-                <select
-                  value={approvalFilterKid}
-                  onChange={(event) => setApprovalFilterKid(event.target.value)}
-                >
-                  <option value="all">All kids</option>
-                  {kidOptions.map((kid) => (
-                    <option key={kid.Id} value={String(kid.Id)}>
-                      {kid.Name}
-                    </option>
-                  ))}
-                </select>
-              </label>
               <label>
                 <span>Type</span>
                 <select
