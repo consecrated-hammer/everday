@@ -663,7 +663,6 @@ const KidsAdmin = () => {
     const offset = Number(ledgerBalance || 0) - currentTotal;
     return Math.max(baseProjection + offset, 0);
   }, [monthSummary, ledgerBalance, currentTotal]);
-
   const choreEntriesForMonth = useMemo(() => {
     const start = new Date(monthCursor.getFullYear(), monthCursor.getMonth(), 1);
     const end = new Date(monthCursor.getFullYear(), monthCursor.getMonth() + 1, 0);
