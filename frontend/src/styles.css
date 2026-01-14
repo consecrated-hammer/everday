@@ -5131,6 +5131,16 @@ body.kids-theme {
   flex: 1;
 }
 
+.kids-chore-label {
+  font-weight: 600;
+}
+
+.kids-chore-check {
+  display: none;
+  font-size: 1rem;
+  line-height: 1;
+}
+
 .kids-chore-toggle {
   width: 42px;
   height: 24px;
@@ -6269,9 +6279,22 @@ body.kids-theme {
   font-weight: 700;
 }
 
-.kids-admin-summary-total {
+.kids-admin-summary-divider {
   border-top: 1px solid var(--border);
-  padding-top: 12px;
+}
+
+.kids-admin-summary-current {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 700;
+}
+
+.kids-admin-summary-current strong {
+  font-size: 1.1rem;
+}
+
+.kids-admin-summary-total {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -7566,5 +7589,30 @@ body.kids-theme {
 
   .shopping-mobile {
     display: grid;
+  }
+}
+
+@media (max-width: 1200px), (hover: none) and (pointer: coarse) {
+  .kids-chores-section-header h4 {
+    font-size: 1.2rem;
+  }
+
+  .kids-chore-label {
+    font-size: 1rem;
+  }
+
+  .kids-chores-card .kids-chore-row {
+    background: rgba(255, 255, 255, 0.7);
+    border: 1px solid var(--kids-border);
+    border-radius: 999px;
+    padding: 10px 12px;
+  }
+
+  .kids-chore-toggle {
+    display: none;
+  }
+
+  .kids-chore-check {
+    display: inline-flex;
   }
 }
