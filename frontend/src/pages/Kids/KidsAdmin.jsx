@@ -26,6 +26,7 @@ import {
   UpdatePocketMoneyRule
 } from "../../lib/kidsApi.js";
 import { FormatCurrency, NormalizeAmountInput } from "../../lib/formatters.js";
+import { BuildKidsTotals } from "../../lib/kidsTotals.js";
 import Icon from "../../components/Icon.jsx";
 
 const BuildToday = () => new Date().toISOString().slice(0, 10);
@@ -63,21 +64,6 @@ const BuildShortDate = (dateValue) =>
     day: "numeric",
     month: "short"
   });
-
-const ParseDateValue = (value) => {
-  if (!value) {
-    return null;
-  }
-  const parts = value.split("-");
-  if (parts.length !== 3) {
-    return null;
-  }
-  const [year, month, day] = parts.map((part) => Number.parseInt(part, 10));
-  if (!year || !month || !day) {
-    return null;
-  }
-  return new Date(year, month - 1, day);
-};
 
 const MoneyEntryTypes = new Set(["Deposit", "Withdrawal", "StartingBalance"]);
 
@@ -633,30 +619,6 @@ const KidsAdmin = () => {
     BuildDateKey(new Date(monthCursor.getFullYear(), monthCursor.getMonth() + 1, 0));
   const ledgerCutoffKey = isCurrentMonth ? todayKey : monthEndKey;
 
-  const balanceAsOf = useMemo(() => {
-    if (!ledgerEntries.length) {
-      return null;
-    }
-    return (dateValue) => {
-      const cutoffTime = ParseDateValue(dateValue)?.getTime();
-      if (!cutoffTime) {
-        return null;
-      }
-      return ledgerEntries.reduce((acc, entry) => {
-        const entryTime = ParseDateValue(entry.EntryDate)?.getTime();
-        if (!entryTime || entryTime > cutoffTime) {
-          return acc;
-        }
-        return acc + Number(entry.Amount || 0);
-      }, 0);
-    };
-  }, [ledgerEntries]);
-
-  const baseBalance = useMemo(
-    () => (balanceAsOf ? balanceAsOf(monthStartKey) ?? 0 : 0),
-    [balanceAsOf, monthStartKey]
-  );
-
   const ledgerTotals = useMemo(() => {
     if (!ledgerEntries.length) {
       return { moneyIn: 0, moneyOut: 0 };
@@ -686,92 +648,31 @@ const KidsAdmin = () => {
     [ledgerEntries]
   );
 
-  const currentTotal = useMemo(() => {
-    if (!monthSummary || !monthOverview?.Days?.length) {
-      return 0;
-    }
-    const dailySlice = Number(monthSummary.DailySlice || 0);
-    const cutoffKey = isCurrentMonth ? todayKey : monthSummary.MonthEnd;
-    let total = 0;
-    monthOverview.Days.forEach((day) => {
-      if (day.Date > cutoffKey) {
-        return;
-      }
-      const isDone = day.DailyTotal === 0 || day.DailyDone >= day.DailyTotal;
-      if (isDone) {
-        total += dailySlice;
-      }
-      if (day.BonusApprovedTotal) {
-        total += Number(day.BonusApprovedTotal);
-      }
-    });
-    return Math.max(total, 0);
-  }, [monthSummary, monthOverview, isCurrentMonth, todayKey]);
+  const totals = useMemo(
+    () =>
+      BuildKidsTotals({
+        TodayKey: todayKey,
+        MonthStartKey: monthStartKey,
+        MonthEndKey: monthEndKey,
+        MonthlyAllowance: monthSummary?.MonthlyAllowance ?? 0,
+        DailySlice: monthSummary?.DailySlice ?? 0,
+        OverviewDays: monthOverview?.Days || [],
+        LedgerEntries: ledgerEntries,
+        IsCurrentMonth: isCurrentMonth
+      }),
+    [
+      todayKey,
+      monthStartKey,
+      monthEndKey,
+      monthSummary,
+      monthOverview,
+      ledgerEntries,
+      isCurrentMonth
+    ]
+  );
 
-  const projectionByDate = useMemo(() => {
-    const map = new Map();
-    (monthOverview?.Projection || []).forEach((point) => {
-      map.set(point.Date, Number(point.Amount || 0));
-    });
-    return map;
-  }, [monthOverview]);
-
-  const projectionAtCutoff = useMemo(() => {
-    const projectionPoints = monthOverview?.Projection || [];
-    if (!projectionPoints.length) {
-      return currentTotal;
-    }
-    const cutoffKey = isCurrentMonth ? todayKey : monthEndKey;
-    if (projectionByDate.has(cutoffKey)) {
-      return projectionByDate.get(cutoffKey) ?? currentTotal;
-    }
-    return Number(projectionPoints[projectionPoints.length - 1]?.Amount || currentTotal);
-  }, [monthOverview, projectionByDate, currentTotal, isCurrentMonth, todayKey, monthEndKey]);
-
-  const daysInMonth = useMemo(() => {
-    const start = ParseDateValue(monthStartKey);
-    const end = ParseDateValue(monthEndKey);
-    if (!start || !end) {
-      return 0;
-    }
-    return Math.round((end.getTime() - start.getTime()) / 86400000) + 1;
-  }, [monthStartKey, monthEndKey]);
-
-  const currentTotalDisplay = useMemo(() => {
-    if (!monthSummary) {
-      return 0;
-    }
-    return baseBalance + projectionAtCutoff;
-  }, [monthSummary, baseBalance, projectionAtCutoff]);
-
-  const projectedTotalDisplay = useMemo(() => {
-    if (!monthSummary) {
-      return 0;
-    }
-    const monthlyAllowance = Number(monthSummary.MonthlyAllowance || 0);
-    const dailySlice = Number(monthSummary.DailySlice || 0);
-    const cutoffKey = isCurrentMonth ? todayKey : monthEndKey;
-    const cutoffTime = ParseDateValue(cutoffKey)?.getTime();
-    const endTime = ParseDateValue(monthEndKey)?.getTime();
-    const remainingDays =
-      isCurrentMonth && cutoffTime !== null && endTime !== null
-        ? Math.max(0, Math.round((endTime - cutoffTime) / 86400000))
-        : 0;
-    const allowanceRemainder = Math.max(0, monthlyAllowance - dailySlice * daysInMonth);
-    const projectedPayout =
-      projectionAtCutoff +
-      dailySlice * remainingDays +
-      (remainingDays > 0 ? allowanceRemainder : 0);
-    return Math.max(baseBalance + projectedPayout, 0);
-  }, [
-    monthSummary,
-    baseBalance,
-    projectionAtCutoff,
-    isCurrentMonth,
-    todayKey,
-    monthEndKey,
-    daysInMonth
-  ]);
+  const currentTotalDisplay = totals.CurrentTotal;
+  const projectedTotalDisplay = totals.ProjectedTotal;
   const choreEntriesForMonth = useMemo(() => {
     const start = new Date(monthCursor.getFullYear(), monthCursor.getMonth(), 1);
     const end = new Date(monthCursor.getFullYear(), monthCursor.getMonth() + 1, 0);
