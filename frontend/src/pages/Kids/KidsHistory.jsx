@@ -501,7 +501,9 @@ const KidsHistory = () => {
                       >
                         <div className="kids-history-row-main">
                           <span className="kids-history-title">
-                            {emoji} {entry.Title}
+                            <span className="kids-history-title-text">
+                              {emoji} {entry.Title}
+                            </span>
                           </span>
                           {showAmount ? (
                             <span
@@ -605,7 +607,10 @@ const KidsHistory = () => {
                               onClick={() => onSelectChore(chore.Id)}
                               aria-pressed={logForm.ChoreId === String(chore.Id)}
                             >
-                              <span>{chore.Label}</span>
+                              <span className="kids-chore-label">{chore.Label}</span>
+                              <span className="kids-chore-check" aria-hidden="true">
+                                {logForm.ChoreId === String(chore.Id) ? "✅" : "⬜️"}
+                              </span>
                             </button>
                           ))
                         )}
@@ -626,7 +631,10 @@ const KidsHistory = () => {
                             onClick={() => onSelectChore(chore.Id)}
                             aria-pressed={logForm.ChoreId === String(chore.Id)}
                           >
-                            <span>{chore.Label}</span>
+                            <span className="kids-chore-label">{chore.Label}</span>
+                            <span className="kids-chore-check" aria-hidden="true">
+                              {logForm.ChoreId === String(chore.Id) ? "✅" : "⬜️"}
+                            </span>
                           </button>
                         ))
                       )}
