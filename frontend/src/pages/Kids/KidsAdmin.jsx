@@ -5,6 +5,9 @@ import {
   ApproveKidsChoreEntry,
   CreateParentChore,
   CreateParentKidChoreEntry,
+  CreateKidDeposit,
+  CreateKidStartingBalance,
+  CreateKidWithdrawal,
   DeleteParentChore,
   DeleteParentKidChoreEntry,
   FetchKidLedger,
@@ -60,6 +63,29 @@ const BuildShortDate = (dateValue) =>
     day: "numeric",
     month: "short"
   });
+
+const MoneyEntryTypes = new Set(["Deposit", "Withdrawal", "StartingBalance"]);
+
+const MoneyTypeLabel = (value) => {
+  switch (value) {
+    case "Deposit":
+      return "Deposit";
+    case "Withdrawal":
+      return "Withdrawal";
+    case "StartingBalance":
+      return "Balance adjustment";
+    default:
+      return "Money";
+  }
+};
+
+const BuildMoneyForm = () => ({
+  EntryType: "StartingBalance",
+  EntryDate: BuildToday(),
+  Amount: "",
+  Narrative: "Balance adjustment",
+  Notes: ""
+});
 
 const BuildDateTimeLabel = (dateValue) =>
   new Date(dateValue).toLocaleString("en-AU", {
@@ -119,6 +145,7 @@ const KidsAdmin = () => {
   const [historyEntries, setHistoryEntries] = useState([]);
   const [chores, setChores] = useState([]);
   const [ledgerEntries, setLedgerEntries] = useState([]);
+  const [ledgerBalance, setLedgerBalance] = useState(null);
   const [status, setStatus] = useState("idle");
   const [error, setError] = useState("");
 
@@ -134,6 +161,11 @@ const KidsAdmin = () => {
 
   const [showAllowanceModal, setShowAllowanceModal] = useState(false);
   const [allowanceForm, setAllowanceForm] = useState({ Amount: "40", StartDate: BuildToday() });
+
+  const [showMoneyModal, setShowMoneyModal] = useState(false);
+  const [moneyForm, setMoneyForm] = useState(BuildMoneyForm());
+  const [moneyStatus, setMoneyStatus] = useState("idle");
+  const [moneyError, setMoneyError] = useState("");
 
   const [showChoresModal, setShowChoresModal] = useState(false);
   const [showChoreForm, setShowChoreForm] = useState(false);
@@ -237,8 +269,10 @@ const KidsAdmin = () => {
     try {
       const data = await FetchKidLedger(activeKidId, 500);
       setLedgerEntries(data?.Entries || []);
+      setLedgerBalance(data?.Balance ?? null);
     } catch (err) {
       setLedgerEntries([]);
+      setLedgerBalance(null);
     }
   };
 
@@ -584,6 +618,11 @@ const KidsAdmin = () => {
     );
   }, [ledgerEntries, monthStartKey, ledgerCutoffKey]);
 
+  const manualLedgerEntries = useMemo(
+    () => ledgerEntries.filter((entry) => MoneyEntryTypes.has(entry.EntryType)),
+    [ledgerEntries]
+  );
+
   const currentTotal = useMemo(() => {
     if (!monthSummary || !monthOverview?.Days?.length) {
       return 0;
@@ -606,7 +645,7 @@ const KidsAdmin = () => {
     return Math.max(total, 0);
   }, [monthSummary, monthOverview, isCurrentMonth, todayKey]);
 
-  const entriesForMonth = useMemo(() => {
+  const choreEntriesForMonth = useMemo(() => {
     const start = new Date(monthCursor.getFullYear(), monthCursor.getMonth(), 1);
     const end = new Date(monthCursor.getFullYear(), monthCursor.getMonth() + 1, 0);
     return historyEntries.filter((entry) => {
@@ -615,8 +654,52 @@ const KidsAdmin = () => {
     });
   }, [historyEntries, monthCursor]);
 
+  const ledgerEntriesForMonth = useMemo(() => {
+    const start = new Date(monthCursor.getFullYear(), monthCursor.getMonth(), 1);
+    const end = new Date(monthCursor.getFullYear(), monthCursor.getMonth() + 1, 0);
+    return manualLedgerEntries.filter((entry) => {
+      const entryDate = new Date(`${entry.EntryDate}T00:00:00`);
+      return entryDate >= start && entryDate <= end;
+    });
+  }, [manualLedgerEntries, monthCursor]);
+
+  const historyItems = useMemo(() => {
+    const choreItems = choreEntriesForMonth.map((entry) => ({
+      Kind: "chore",
+      Key: `chore-${entry.Id}`,
+      Id: entry.Id,
+      EntryDate: entry.EntryDate,
+      CreatedAt: entry.CreatedAt,
+      Title: entry.ChoreLabel,
+      ChoreType: entry.ChoreType,
+      Status: entry.Status,
+      ChoreId: entry.ChoreId,
+      Notes: entry.Notes,
+      Amount: entry.Amount
+    }));
+    const ledgerItems = ledgerEntriesForMonth.map((entry) => ({
+      Kind: "ledger",
+      Key: `ledger-${entry.Id}`,
+      Id: entry.Id,
+      EntryDate: entry.EntryDate,
+      CreatedAt: entry.CreatedAt,
+      Title: entry.Narrative?.trim() || MoneyTypeLabel(entry.EntryType),
+      EntryType: entry.EntryType,
+      Notes: entry.Notes,
+      Amount: entry.Amount,
+      CreatedByName: entry.CreatedByName
+    }));
+    return [...choreItems, ...ledgerItems];
+  }, [choreEntriesForMonth, ledgerEntriesForMonth]);
+
   const filteredHistory = useMemo(() => {
-    return entriesForMonth.filter((entry) => {
+    return historyItems.filter((entry) => {
+      if (historyFilter === "Money") {
+        return entry.Kind === "ledger";
+      }
+      if (entry.Kind === "ledger") {
+        return historyFilter === "all";
+      }
       if (historyFilter === "Daily") {
         return entry.ChoreType === "Daily";
       }
@@ -637,16 +720,29 @@ const KidsAdmin = () => {
       }
       return true;
     });
-  }, [entriesForMonth, historyFilter]);
+  }, [historyItems, historyFilter]);
+
+  const sortedHistory = useMemo(() => {
+    const sorted = [...filteredHistory];
+    sorted.sort((a, b) => {
+      if (a.EntryDate !== b.EntryDate) {
+        return a.EntryDate > b.EntryDate ? -1 : 1;
+      }
+      const aTime = new Date(a.CreatedAt).getTime();
+      const bTime = new Date(b.CreatedAt).getTime();
+      return bTime - aTime;
+    });
+    return sorted;
+  }, [filteredHistory]);
 
   const historyByDate = useMemo(() => {
     const grouped = {};
-    filteredHistory.forEach((entry) => {
+    sortedHistory.forEach((entry) => {
       grouped[entry.EntryDate] = grouped[entry.EntryDate] || [];
       grouped[entry.EntryDate].push(entry);
     });
     return grouped;
-  }, [filteredHistory]);
+  }, [sortedHistory]);
 
   const historyDates = useMemo(() => {
     return Object.keys(historyByDate).sort(
@@ -703,6 +799,84 @@ const KidsAdmin = () => {
     } catch (err) {
       setStatus("error");
       setError(err?.message || "Unable to load allowance.");
+    }
+  };
+
+  const openMoneyModal = () => {
+    setMoneyForm(BuildMoneyForm());
+    setMoneyError("");
+    setShowMoneyModal(true);
+  };
+
+  const closeMoneyModal = () => {
+    setShowMoneyModal(false);
+    setMoneyStatus("idle");
+    setMoneyError("");
+  };
+
+  const onMoneyFormChange = (event) => {
+    const { name, value } = event.target;
+    setMoneyForm((prev) => {
+      if (name === "EntryType") {
+        const previousDefault = MoneyTypeLabel(prev.EntryType);
+        const nextDefault = MoneyTypeLabel(value);
+        const shouldUpdateNarrative = !prev.Narrative || prev.Narrative === previousDefault;
+        return {
+          ...prev,
+          EntryType: value,
+          Narrative: shouldUpdateNarrative ? nextDefault : prev.Narrative
+        };
+      }
+      if (name === "Amount") {
+        return { ...prev, Amount: NormalizeAmountInput(value) };
+      }
+      return { ...prev, [name]: value };
+    });
+  };
+
+  const onSaveMoney = async (event) => {
+    event.preventDefault();
+    if (!activeKidId) {
+      return;
+    }
+    const amountValue = Number(moneyForm.Amount || 0);
+    if (!amountValue || amountValue <= 0) {
+      setMoneyError("Enter an amount.");
+      return;
+    }
+    if (!moneyForm.EntryDate) {
+      setMoneyError("Select a date.");
+      return;
+    }
+    if (!moneyForm.Narrative.trim()) {
+      setMoneyError("Add a label.");
+      return;
+    }
+    setMoneyStatus("saving");
+    setMoneyError("");
+    try {
+      const payload = {
+        Amount: amountValue,
+        EntryDate: moneyForm.EntryDate,
+        Narrative: moneyForm.Narrative.trim(),
+        Notes: moneyForm.Notes?.trim() || null
+      };
+      if (moneyForm.EntryType === "Deposit") {
+        await CreateKidDeposit(activeKidId, payload);
+      } else if (moneyForm.EntryType === "Withdrawal") {
+        await CreateKidWithdrawal(activeKidId, payload);
+      } else {
+        await CreateKidStartingBalance(activeKidId, payload);
+      }
+      closeMoneyModal();
+      loadLedger();
+      if (activeTab === "history") {
+        loadHistory();
+      }
+    } catch (err) {
+      setMoneyError(err?.message || "Unable to save entry.");
+    } finally {
+      setMoneyStatus("idle");
     }
   };
 
@@ -1170,14 +1344,19 @@ const KidsAdmin = () => {
                   <Icon name="chevronRight" className="icon" />
                 </button>
               </div>
-              <button
-                type="button"
-                className="button-secondary-pill"
-                onClick={openAllowanceModal}
-                disabled={!activeKidId}
-              >
-                Edit allowance
-              </button>
+              <div className="kids-admin-month-actions">
+                <button
+                  type="button"
+                  className="button-secondary-pill"
+                  onClick={openAllowanceModal}
+                  disabled={!activeKidId}
+                >
+                  Edit allowance
+                </button>
+                <button type="button" className="primary-button" onClick={openMoneyModal}>
+                  Log money
+                </button>
+              </div>
             </div>
 
             <div className="kids-admin-month-layout">
@@ -1447,6 +1626,7 @@ const KidsAdmin = () => {
                   { key: "Daily", label: "Daily jobs" },
                   { key: "Habit", label: "Habits" },
                   { key: "Bonus", label: "Bonus tasks" },
+                  { key: "Money", label: "Money" },
                   { key: "Pending", label: "Pending approval" },
                   { key: "Approved", label: "Approved" },
                   { key: "Rejected", label: "Rejected" }
@@ -1530,21 +1710,34 @@ const KidsAdmin = () => {
                       {isOpen ? (
                         <div className="kids-history-group-list">
                           {entries.map((entry) => {
-                            const isEntryExpanded = historyEntryExpandedId === entry.Id;
+                            const isEntryExpanded = historyEntryExpandedId === entry.Key;
+                            const isLedger = entry.Kind === "ledger";
+                            const amountValue = Number(entry.Amount || 0);
+                            const showAmount = Number.isFinite(amountValue) && amountValue !== 0;
+                            const amountLabel = FormatCurrency(amountValue);
                             return (
-                              <div key={entry.Id} className="kids-history-item">
+                              <div key={entry.Key} className="kids-history-item">
                                 <button
                                   type="button"
                                   className={`kids-history-row${
                                     isEntryExpanded ? " is-expanded" : ""
                                   }`}
                                   onClick={() =>
-                                    setHistoryEntryExpandedId(isEntryExpanded ? null : entry.Id)
+                                    setHistoryEntryExpandedId(isEntryExpanded ? null : entry.Key)
                                   }
                                   aria-expanded={isEntryExpanded}
                                 >
                                   <div className="kids-history-row-main">
-                                    <span className="kids-history-title">{entry.ChoreLabel}</span>
+                                    <span className="kids-history-title">{entry.Title}</span>
+                                    {showAmount ? (
+                                      <span
+                                        className={`kids-history-amount kids-history-inline-amount${
+                                          amountValue < 0 ? " is-negative" : ""
+                                        }`}
+                                      >
+                                        {amountLabel}
+                                      </span>
+                                    ) : null}
                                   </div>
                                   <span
                                     className={`kids-history-chevron${
@@ -1566,34 +1759,36 @@ const KidsAdmin = () => {
                                     </div>
                                     <div className="kids-history-detail-row">
                                       <span className="kids-history-detail-label">Type</span>
-                                      <span>{TypeLabel(entry.ChoreType)}</span>
+                                      <span>
+                                        {isLedger
+                                          ? MoneyTypeLabel(entry.EntryType)
+                                          : TypeLabel(entry.ChoreType)}
+                                      </span>
                                     </div>
-                                    <div className="kids-history-detail-row">
-                                      <span className="kids-history-detail-label">Status</span>
-                                      <span>{entry.Status || "-"}</span>
-                                    </div>
-                                    {entry.Amount ? (
+                                    {!isLedger ? (
                                       <div className="kids-history-detail-row">
-                                        <span className="kids-history-detail-label">Amount</span>
-                                        <span>{FormatCurrency(entry.Amount)}</span>
+                                        <span className="kids-history-detail-label">Status</span>
+                                        <span>{entry.Status || "-"}</span>
                                       </div>
                                     ) : null}
-                                    <div className="kids-admin-history-actions">
-                                      <button
-                                        type="button"
-                                        className="button-secondary-pill"
-                                        onClick={() => openEntryModal({ entry })}
-                                      >
-                                        Edit
-                                      </button>
-                                      <button
-                                        type="button"
-                                        className="button-secondary-pill"
-                                        onClick={() => onDeleteEntry(entry)}
-                                      >
-                                        Delete
-                                      </button>
-                                    </div>
+                                    {!isLedger ? (
+                                      <div className="kids-admin-history-actions">
+                                        <button
+                                          type="button"
+                                          className="button-secondary-pill"
+                                          onClick={() => openEntryModal({ entry })}
+                                        >
+                                          Edit
+                                        </button>
+                                        <button
+                                          type="button"
+                                          className="button-secondary-pill"
+                                          onClick={() => onDeleteEntry(entry)}
+                                        >
+                                          Delete
+                                        </button>
+                                      </div>
+                                    ) : null}
                                   </div>
                                 ) : null}
                               </div>
@@ -1852,6 +2047,79 @@ const KidsAdmin = () => {
                 <div className="kids-admin-form-wide">
                   <button type="submit" className="primary-button" disabled={status === "saving"}>
                     {status === "saving" ? "Saving..." : "Save allowance"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {showMoneyModal ? (
+        <div className="modal-backdrop" role="dialog" aria-modal="true" onClick={closeMoneyModal}>
+          <div className="modal" onClick={(event) => event.stopPropagation()}>
+            <div className="modal-header">
+              <div>
+                <h3>Log money</h3>
+                {ledgerBalance !== null ? (
+                  <p className="text-muted">Current balance: {FormatCurrency(ledgerBalance)}</p>
+                ) : null}
+              </div>
+              <div className="modal-header-actions">
+                <button
+                  type="button"
+                  className="icon-button"
+                  onClick={closeMoneyModal}
+                  aria-label="Close modal"
+                >
+                  <Icon name="close" className="icon" />
+                </button>
+              </div>
+            </div>
+            <div className="modal-body">
+              <form className="kids-admin-form" onSubmit={onSaveMoney}>
+                <label>
+                  <span>Type</span>
+                  <select name="EntryType" value={moneyForm.EntryType} onChange={onMoneyFormChange}>
+                    <option value="StartingBalance">Balance adjustment</option>
+                    <option value="Deposit">Deposit</option>
+                    <option value="Withdrawal">Withdrawal</option>
+                  </select>
+                </label>
+                <label>
+                  <span>Amount</span>
+                  <input name="Amount" value={moneyForm.Amount} onChange={onMoneyFormChange} />
+                </label>
+                <label>
+                  <span>Date</span>
+                  <input
+                    type="date"
+                    name="EntryDate"
+                    value={moneyForm.EntryDate}
+                    onChange={onMoneyFormChange}
+                  />
+                </label>
+                <label>
+                  <span>Label</span>
+                  <input
+                    name="Narrative"
+                    value={moneyForm.Narrative}
+                    onChange={onMoneyFormChange}
+                  />
+                </label>
+                <label className="kids-admin-form-wide">
+                  <span>Notes</span>
+                  <textarea
+                    name="Notes"
+                    rows={3}
+                    value={moneyForm.Notes}
+                    onChange={onMoneyFormChange}
+                  />
+                </label>
+                {moneyError ? <p className="form-error">{moneyError}</p> : null}
+                <div className="kids-admin-form-wide">
+                  <button type="submit" className="primary-button" disabled={moneyStatus === "saving"}>
+                    {moneyStatus === "saving" ? "Saving..." : "Save entry"}
                   </button>
                 </div>
               </form>
