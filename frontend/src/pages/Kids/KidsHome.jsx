@@ -9,6 +9,7 @@ import {
 } from "../../lib/kidsApi.js";
 import { GetChoreEmoji, GetKidsHeaderEmoji } from "../../lib/kidsEmoji.js";
 import { FormatCurrency } from "../../lib/formatters.js";
+import { BuildKidsTotals } from "../../lib/kidsTotals.js";
 import { LabelList, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 const FormatAxisLabel = (value, includeMonth) => {
@@ -63,7 +64,6 @@ const KidsHome = () => {
   const [status, setStatus] = useState("idle");
   const [error, setError] = useState("");
   const [ledgerEntries, setLedgerEntries] = useState([]);
-  const [ledgerBalance, setLedgerBalance] = useState(null);
   const [busyChoreId, setBusyChoreId] = useState(null);
 
   const loadOverview = async () => {
@@ -85,10 +85,8 @@ const KidsHome = () => {
       try {
         const data = await FetchKidsLedger(200);
         setLedgerEntries(data?.Entries || []);
-        setLedgerBalance(data?.Balance ?? null);
       } catch (err) {
         setLedgerEntries([]);
-        setLedgerBalance(null);
       }
     };
     loadLedger();
@@ -101,6 +99,7 @@ const KidsHome = () => {
   const dayProtected = overview?.DayProtected ?? false;
   const dailySlice = Number(overview?.DailySlice ?? 0);
   const monthStart = overview?.MonthStart || projection[0]?.Date || "";
+  const monthEnd = overview?.MonthEnd || projection[projection.length - 1]?.Date || "";
   const monthlyAllowance = Number(overview?.MonthlyAllowance || 40);
 
   const entryByChoreId = useMemo(() => {
@@ -158,94 +157,39 @@ const KidsHome = () => {
     }
   };
 
-  const balanceAsOf = useMemo(() => {
-    if (!ledgerEntries.length) {
-      return null;
-    }
-    return (dateValue) => {
-      const cutoffTime = ParseDateValue(dateValue)?.getTime();
-      if (!cutoffTime) {
-        return null;
-      }
-      return ledgerEntries.reduce((acc, entry) => {
-        const entryTime = ParseDateValue(entry.EntryDate)?.getTime();
-        if (!entryTime || entryTime > cutoffTime) {
-          return acc;
-        }
-        return acc + Number(entry.Amount || 0);
-      }, 0);
-    };
-  }, [ledgerEntries]);
+  const totals = useMemo(
+    () =>
+      BuildKidsTotals({
+        TodayKey: today,
+        MonthStartKey: monthStart,
+        MonthEndKey: monthEnd,
+        MonthlyAllowance: monthlyAllowance,
+        DailySlice: dailySlice,
+        ProjectionPoints: projection,
+        LedgerEntries: ledgerEntries,
+        IsCurrentMonth: true
+      }),
+    [
+      today,
+      monthStart,
+      monthEnd,
+      monthlyAllowance,
+      dailySlice,
+      projection,
+      ledgerEntries
+    ]
+  );
 
-  const baseBalance = balanceAsOf ? balanceAsOf(monthStart) ?? 0 : 0;
-  const projectionByDate = useMemo(() => {
-    const map = new Map();
-    projection.forEach((point) => {
-      map.set(point.Date, Number(point.Amount || 0));
-    });
-    return map;
-  }, [projection]);
-  const projectionAtToday =
-    projectionByDate.get(today) ??
-    projection[projection.length - 1]?.Amount ??
-    0;
+  const projectionSeries = useMemo(
+    () =>
+      totals.Series.map((point) => ({
+        ...point,
+        TooltipLabel: FormatTooltipLabel(point.DateKey)
+      })),
+    [totals.Series]
+  );
 
-  const projectionSeries = useMemo(() => {
-    const todayValue = ParseDateValue(today);
-    const todayTime = todayValue?.getTime() ?? null;
-    const amountAtToday = baseBalance + projectionAtToday;
-    const lastIndex = projection.length ? projection.length - 1 : -1;
-    const finalDate = projection[lastIndex]?.Date || "";
-    const totalDaysAhead =
-      todayTime && finalDate
-        ? Math.max(
-            0,
-            Math.round((ParseDateValue(finalDate)?.getTime() - todayTime) / 86400000)
-          )
-        : 0;
-    const daysInMonth = projection.length || 0;
-    const allowanceRemainder = Math.max(0, monthlyAllowance - dailySlice * daysInMonth);
-    const remainderPerDay =
-      totalDaysAhead > 0 ? allowanceRemainder / totalDaysAhead : 0;
-
-    return projection.map((point, index) => {
-      const pointDate = ParseDateValue(point.Date);
-      const pointTime = pointDate?.getTime() ?? null;
-      const isOnOrBeforeToday =
-        todayTime !== null && pointTime !== null ? pointTime <= todayTime : true;
-      const isOnOrAfterToday =
-        todayTime !== null && pointTime !== null ? pointTime >= todayTime : false;
-      const daysAhead =
-        todayTime !== null && pointTime !== null
-          ? Math.round((pointTime - todayTime) / 86400000)
-          : 0;
-      const pointProjection =
-        projectionByDate.get(point.Date) ?? Number(point.Amount || 0);
-      const actualValue = isOnOrBeforeToday ? baseBalance + pointProjection : null;
-      let projectedValue = isOnOrAfterToday
-        ? amountAtToday + dailySlice * daysAhead + remainderPerDay * daysAhead
-        : null;
-      return {
-        DateKey: point.Date,
-        TooltipLabel: FormatTooltipLabel(point.Date),
-        ActualAmount: actualValue,
-        ProjectedAmount: projectedValue
-      };
-    });
-  }, [
-    projection,
-    today,
-    dailySlice,
-    baseBalance,
-    balanceAsOf,
-    monthlyAllowance,
-    projectionByDate,
-    projectionAtToday
-  ]);
-
-  const currentBalance = useMemo(() => {
-    return projectionSeries.find((point) => point.DateKey === today)?.ActualAmount ?? 0;
-  }, [projectionSeries, today]);
+  const currentBalance = totals.CurrentTotal;
 
   const availableBalance = currentBalance;
 
