@@ -4,9 +4,10 @@ import { useNavigate } from "react-router-dom";
 import {
   CreateKidsChoreEntry,
   FetchKidsChoreEntries,
+  FetchKidsLedger,
   FetchKidsOverview
 } from "../../lib/kidsApi.js";
-import { FormatDate, FormatTime } from "../../lib/formatters.js";
+import { FormatCurrency, FormatDate, FormatTime } from "../../lib/formatters.js";
 import Icon from "../../components/Icon.jsx";
 import { GetChoreEmoji, GetKidsHeaderEmoji } from "../../lib/kidsEmoji.js";
 
@@ -41,8 +42,24 @@ const Filters = [
   { Key: "Daily", Label: "Daily jobs" },
   { Key: "Habit", Label: "Habits" },
   { Key: "Bonus", Label: "Bonus tasks" },
+  { Key: "money", Label: "Money" },
   { Key: "pending", Label: "Pending approval" }
 ];
+
+const MoneyEntryTypes = new Set(["Deposit", "Withdrawal", "StartingBalance"]);
+
+const MoneyTypeLabel = (value) => {
+  switch (value) {
+    case "Deposit":
+      return "Deposit";
+    case "Withdrawal":
+      return "Withdrawal";
+    case "StartingBalance":
+      return "Balance adjustment";
+    default:
+      return "Money";
+  }
+};
 
 const ParseDateValue = (value) => {
   if (!value) {
@@ -93,6 +110,7 @@ const KidsHistory = () => {
   const [status, setStatus] = useState("idle");
   const [error, setError] = useState("");
   const [entries, setEntries] = useState([]);
+  const [ledgerEntries, setLedgerEntries] = useState([]);
   const [activeFilter, setActiveFilter] = useState("all");
   const [expandedId, setExpandedId] = useState(null);
   const [chores, setChores] = useState([]);
@@ -114,8 +132,12 @@ const KidsHistory = () => {
     setStatus("loading");
     setError("");
     try {
-      const data = await FetchKidsChoreEntries(50, false);
-      setEntries(data || []);
+      const [choreData, ledgerData] = await Promise.all([
+        FetchKidsChoreEntries(50, false),
+        FetchKidsLedger(100)
+      ]);
+      setEntries(choreData || []);
+      setLedgerEntries(ledgerData?.Entries || []);
       setStatus("ready");
     } catch (err) {
       setStatus("error");
@@ -212,8 +234,47 @@ const KidsHistory = () => {
     return () => window.clearTimeout(timeout);
   }, [toast]);
 
+  const manualLedgerEntries = useMemo(
+    () => ledgerEntries.filter((entry) => MoneyEntryTypes.has(entry.EntryType)),
+    [ledgerEntries]
+  );
+
+  const historyItems = useMemo(() => {
+    const choreItems = entries.map((entry) => ({
+      Kind: "chore",
+      Key: `chore-${entry.Id}`,
+      Id: entry.Id,
+      EntryDate: entry.EntryDate,
+      CreatedAt: entry.CreatedAt,
+      Title: entry.ChoreLabel,
+      ChoreType: entry.ChoreType,
+      Status: entry.Status,
+      Notes: entry.Notes,
+      Amount: entry.Amount,
+      ChoreId: entry.ChoreId
+    }));
+    const ledgerItems = manualLedgerEntries.map((entry) => ({
+      Kind: "ledger",
+      Key: `ledger-${entry.Id}`,
+      Id: entry.Id,
+      EntryDate: entry.EntryDate,
+      CreatedAt: entry.CreatedAt,
+      Title: entry.Narrative?.trim() || MoneyTypeLabel(entry.EntryType),
+      EntryType: entry.EntryType,
+      Notes: entry.Notes,
+      Amount: entry.Amount
+    }));
+    return [...choreItems, ...ledgerItems];
+  }, [entries, manualLedgerEntries]);
+
   const filteredEntries = useMemo(() => {
-    return entries.filter((entry) => {
+    return historyItems.filter((entry) => {
+      if (activeFilter === "money") {
+        return entry.Kind === "ledger";
+      }
+      if (entry.Kind === "ledger") {
+        return activeFilter === "all";
+      }
       if (activeFilter === "pending") {
         return entry.Status === "Pending";
       }
@@ -222,7 +283,7 @@ const KidsHistory = () => {
       }
       return entry.ChoreType === activeFilter;
     });
-  }, [entries, activeFilter]);
+  }, [historyItems, activeFilter]);
 
   const sortedEntries = useMemo(() => {
     const sorted = [...filteredEntries];
@@ -419,55 +480,72 @@ const KidsHistory = () => {
             {isExpanded ? (
               <div className="kids-history-group-list">
                 {group.Items.map((entry) => {
-                const isExpanded = expandedId === entry.Id;
-                const timeLabel = entry.CreatedAt ? FormatTime(entry.CreatedAt) : "-";
-                const statusLabel = StatusLabel(entry.Status);
-                const typeLabel = TypeLabel(entry.ChoreType);
-                return (
-                  <div key={entry.Id} className="kids-history-item">
-                    <button
-                      type="button"
-                      className={`kids-history-row${isExpanded ? " is-expanded" : ""}`}
-                      onClick={() => setExpandedId(isExpanded ? null : entry.Id)}
-                      aria-expanded={isExpanded}
-                    >
-                      <div className="kids-history-row-main">
-                        <span className="kids-history-title">
-                          {GetChoreEmoji({ Id: entry.ChoreId, Type: entry.ChoreType })}{" "}
-                          {entry.ChoreLabel}
-                        </span>
-                      </div>
-                      <span className={`kids-history-chevron${isExpanded ? " is-open" : ""}`}>
-                        <Icon name="chevronDown" className="icon" />
-                      </span>
-                    </button>
-                    {isExpanded ? (
-                      <div className="kids-history-details">
-                        <div className="kids-history-detail-row">
-                          <span className="kids-history-detail-label">Notes</span>
-                          <span>{entry.Notes || "None"}</span>
-                        </div>
-                        <div className="kids-history-detail-row">
-                          <span className="kids-history-detail-label">Logged</span>
-                          <span>
-                            {entry.CreatedAt
-                              ? `${FormatDate(entry.CreatedAt)} ${timeLabel}`
-                              : timeLabel}
+                  const isExpanded = expandedId === entry.Key;
+                  const timeLabel = entry.CreatedAt ? FormatTime(entry.CreatedAt) : "-";
+                  const isLedger = entry.Kind === "ledger";
+                  const statusLabel = StatusLabel(entry.Status);
+                  const typeLabel = isLedger ? MoneyTypeLabel(entry.EntryType) : TypeLabel(entry.ChoreType);
+                  const amountValue = Number(entry.Amount || 0);
+                  const showAmount = Number.isFinite(amountValue) && amountValue !== 0;
+                  const amountLabel = FormatCurrency(amountValue);
+                  const emoji = isLedger
+                    ? GetKidsHeaderEmoji("AvailableNow")
+                    : GetChoreEmoji({ Id: entry.ChoreId, Type: entry.ChoreType });
+                  return (
+                    <div key={entry.Key} className="kids-history-item">
+                      <button
+                        type="button"
+                        className={`kids-history-row${isExpanded ? " is-expanded" : ""}`}
+                        onClick={() => setExpandedId(isExpanded ? null : entry.Key)}
+                        aria-expanded={isExpanded}
+                      >
+                        <div className="kids-history-row-main">
+                          <span className="kids-history-title">
+                            {emoji} {entry.Title}
                           </span>
+                          {showAmount ? (
+                            <span
+                              className={`kids-history-amount kids-history-inline-amount${
+                                amountValue < 0 ? " is-negative" : ""
+                              }`}
+                            >
+                              {amountLabel}
+                            </span>
+                          ) : null}
                         </div>
-                        <div className="kids-history-detail-row">
-                          <span className="kids-history-detail-label">Type</span>
-                          <span>{typeLabel}</span>
+                        <span className={`kids-history-chevron${isExpanded ? " is-open" : ""}`}>
+                          <Icon name="chevronDown" className="icon" />
+                        </span>
+                      </button>
+                      {isExpanded ? (
+                        <div className="kids-history-details">
+                          <div className="kids-history-detail-row">
+                            <span className="kids-history-detail-label">Notes</span>
+                            <span>{entry.Notes || "None"}</span>
+                          </div>
+                          <div className="kids-history-detail-row">
+                            <span className="kids-history-detail-label">Logged</span>
+                            <span>
+                              {entry.CreatedAt
+                                ? `${FormatDate(entry.CreatedAt)} ${timeLabel}`
+                                : timeLabel}
+                            </span>
+                          </div>
+                          <div className="kids-history-detail-row">
+                            <span className="kids-history-detail-label">Type</span>
+                            <span>{typeLabel}</span>
+                          </div>
+                          {!isLedger ? (
+                            <div className="kids-history-detail-row">
+                              <span className="kids-history-detail-label">Status</span>
+                              <span>{statusLabel || "-"}</span>
+                            </div>
+                          ) : null}
                         </div>
-                        <div className="kids-history-detail-row">
-                          <span className="kids-history-detail-label">Status</span>
-                          <span>{statusLabel || "-"}</span>
-                        </div>
-                      </div>
-                    ) : null}
-                  </div>
-                );
-              })}
+                      ) : null}
+                    </div>
+                  );
+                })}
               </div>
             ) : null}
           </div>

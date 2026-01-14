@@ -5921,6 +5921,13 @@ body.kids-theme {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  flex: 1;
+}
+
+.kids-history-inline-amount {
+  margin-left: 6px;
+  font-size: 0.72rem;
+  font-weight: 700;
 }
 
 .kids-history-time {
@@ -6212,6 +6219,13 @@ body.kids-theme {
   gap: 12px;
 }
 
+.kids-admin-month-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 .kids-admin-month-picker {
   display: inline-flex;
   align-items: center;
@@ -6453,6 +6467,14 @@ body.kids-theme {
 .kids-admin-history-header {
   display: grid;
   gap: 10px;
+}
+
+.kids-admin-history-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 .kids-admin-history-filters,
@@ -6979,7 +7001,8 @@ body.kids-theme {
 }
 
 .kids-admin-form input,
-.kids-admin-form select {
+.kids-admin-form select,
+.kids-admin-form textarea {
   border-radius: 12px;
   border: 1px solid var(--border);
   padding: 8px 12px;
@@ -7307,7 +7330,8 @@ body.kids-theme {
   }
 
   .kids-admin-form input,
-  .kids-admin-form select {
+  .kids-admin-form select,
+  .kids-admin-form textarea {
     padding: 6px 8px;
     border-radius: 6px;
   }
