@@ -6127,7 +6127,8 @@ body.kids-theme {
 }
 
 .kids-admin-container {
-  max-width: 1152px;
+  max-width: 100%;
+  width: 100%;
   margin: 0 auto;
   padding: 0 16px;
 }
