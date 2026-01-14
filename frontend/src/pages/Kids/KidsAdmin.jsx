@@ -751,10 +751,23 @@ const KidsAdmin = () => {
   }, [historyItems, historyFilter]);
 
   const sortedHistory = useMemo(() => {
+    const typeOrder = {
+      Daily: 0,
+      Habit: 1,
+      Bonus: 2,
+      Money: 3
+    };
     const sorted = [...filteredHistory];
     sorted.sort((a, b) => {
       if (a.EntryDate !== b.EntryDate) {
         return a.EntryDate > b.EntryDate ? -1 : 1;
+      }
+      const aType = a.Kind === "ledger" ? "Money" : a.ChoreType;
+      const bType = b.Kind === "ledger" ? "Money" : b.ChoreType;
+      const aOrder = typeOrder[aType] ?? 9;
+      const bOrder = typeOrder[bType] ?? 9;
+      if (aOrder !== bOrder) {
+        return aOrder - bOrder;
       }
       const aTime = new Date(a.CreatedAt).getTime();
       const bTime = new Date(b.CreatedAt).getTime();
@@ -1686,20 +1699,22 @@ const KidsAdmin = () => {
                           className="kids-admin-history-day-toggle"
                           onClick={() => toggleHistoryGroup(dateKey)}
                         >
-                          <div className="kids-admin-history-day-main">
-                            <span className="kids-admin-history-date">
-                              {BuildDayLabel(dateKey)}
-                            </span>
-                            {pendingCount ? (
-                              <span className="kids-admin-day-pending">!</span>
+                          <div className="kids-admin-history-day-left">
+                            <div className="kids-admin-history-day-main">
+                              <span className="kids-admin-history-date">
+                                {BuildDayLabel(dateKey)}
+                              </span>
+                              {pendingCount ? (
+                                <span className="kids-admin-day-pending">!</span>
+                              ) : null}
+                            </div>
+                            <span className="kids-admin-history-date-meta">{dailySummary}</span>
+                            {bonusTotal ? (
+                              <span className="kids-admin-history-day-bonus">
+                                +{FormatCurrency(bonusTotal)}
+                              </span>
                             ) : null}
                           </div>
-                          <span className="kids-admin-history-date-meta">{dailySummary}</span>
-                          {bonusTotal ? (
-                            <span className="kids-admin-history-day-bonus">
-                              +{FormatCurrency(bonusTotal)}
-                            </span>
-                          ) : null}
                           <Icon
                             name="chevronDown"
                             className={`icon${isOpen ? " is-up" : ""}`}
@@ -1721,6 +1736,9 @@ const KidsAdmin = () => {
                             const amountValue = Number(entry.Amount || 0);
                             const showAmount = Number.isFinite(amountValue) && amountValue !== 0;
                             const amountLabel = FormatCurrency(amountValue);
+                            const typeLabel = isLedger
+                              ? MoneyTypeLabel(entry.EntryType)
+                              : TypeLabel(entry.ChoreType);
                             return (
                               <div key={entry.Key} className="kids-history-item">
                                 <button
@@ -1734,7 +1752,16 @@ const KidsAdmin = () => {
                                   aria-expanded={isEntryExpanded}
                                 >
                                   <div className="kids-history-row-main">
-                                    <span className="kids-history-title">{entry.Title}</span>
+                                    <div className="kids-history-title">
+                                      <span className="kids-history-title-text">
+                                        {entry.Title}
+                                      </span>
+                                      {!isLedger ? (
+                                        <span className="kids-pill kids-pill--muted">
+                                          {typeLabel}
+                                        </span>
+                                      ) : null}
+                                    </div>
                                     {showAmount ? (
                                       <span
                                         className={`kids-history-amount kids-history-inline-amount${
@@ -1766,9 +1793,7 @@ const KidsAdmin = () => {
                                     <div className="kids-history-detail-row">
                                       <span className="kids-history-detail-label">Type</span>
                                       <span>
-                                        {isLedger
-                                          ? MoneyTypeLabel(entry.EntryType)
-                                          : TypeLabel(entry.ChoreType)}
+                                        {typeLabel}
                                       </span>
                                     </div>
                                     {!isLedger ? (

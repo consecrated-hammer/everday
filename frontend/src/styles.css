@@ -5926,12 +5926,20 @@ body.kids-theme {
 }
 
 .kids-history-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-weight: 600;
   font-size: 0.7rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.kids-history-title-text {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  flex: 1;
+  min-width: 0;
 }
 
 .kids-history-inline-amount {
@@ -6561,6 +6569,14 @@ body.kids-theme {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+}
+
+.kids-admin-history-day-left {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  flex: 1;
 }
 
 .kids-admin-history-date {
@@ -7601,11 +7617,19 @@ body.kids-theme {
     font-size: 1rem;
   }
 
-  .kids-chores-card .kids-chore-row {
+  .kids-chore-row,
+  .kids-chore-button {
     background: rgba(255, 255, 255, 0.7);
     border: 1px solid var(--kids-border);
     border-radius: 999px;
     padding: 10px 12px;
+  }
+
+  .kids-chore-button {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
   }
 
   .kids-chore-toggle {
