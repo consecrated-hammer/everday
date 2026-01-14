@@ -23,21 +23,33 @@ class KidLinkCreate(BaseModel):
 class ChoreOut(BaseModel):
     Id: int
     Label: str
+    Type: str
     Amount: float
     IsActive: bool
+    SortOrder: int
+    StartDate: date | None = None
+    EndDate: date | None = None
     AssignedKidIds: list[int] | None = None
 
 
 class ChoreCreate(BaseModel):
     Label: str = Field(min_length=1, max_length=200)
-    Amount: float = Field(gt=0)
+    Type: str = Field(min_length=1, max_length=20)
+    Amount: float = Field(ge=0)
     IsActive: bool = True
+    SortOrder: int = 0
+    StartDate: date | None = None
+    EndDate: date | None = None
 
 
 class ChoreUpdate(BaseModel):
     Label: str | None = Field(default=None, min_length=1, max_length=200)
-    Amount: float | None = Field(default=None, gt=0)
+    Type: str | None = Field(default=None, min_length=1, max_length=20)
+    Amount: float | None = Field(default=None, ge=0)
     IsActive: bool | None = None
+    SortOrder: int | None = None
+    StartDate: date | None = None
+    EndDate: date | None = None
 
 
 class ChoreAssignmentRequest(BaseModel):
@@ -49,12 +61,16 @@ class ChoreEntryOut(BaseModel):
     KidUserId: int
     ChoreId: int
     ChoreLabel: str
+    ChoreType: str | None = None
+    Status: str
     Amount: float
     EntryDate: date
     Notes: str | None = None
     IsDeleted: bool
     CreatedByUserId: int
     UpdatedByUserId: int | None = None
+    ReviewedByUserId: int | None = None
+    ReviewedAt: datetime | None = None
     CreatedAt: datetime
     UpdatedAt: datetime
 
@@ -137,3 +153,85 @@ class KidsSummaryResponse(BaseModel):
 class KidsLedgerResponse(BaseModel):
     Balance: float
     Entries: list[LedgerEntryOut]
+
+
+class KidsProjectionPoint(BaseModel):
+    Date: date
+    Amount: float
+
+
+class KidsOverviewResponse(BaseModel):
+    Today: date
+    SelectedDate: date
+    AllowedStartDate: date
+    AllowedEndDate: date
+    MonthStart: date
+    MonthEnd: date
+    MonthlyAllowance: float
+    DailySlice: float
+    DayProtected: bool
+    Chores: list[ChoreOut]
+    Entries: list[ChoreEntryOut]
+    Projection: list[KidsProjectionPoint]
+
+
+class KidsMonthSummaryResponse(BaseModel):
+    MonthStart: date
+    MonthEnd: date
+    MonthlyAllowance: float
+    DailySlice: float
+    MissedDays: int
+    MissedDeduction: float
+    ApprovedBonusTotal: float
+    PendingBonusTotal: float
+    ProjectedPayout: float
+
+
+class KidsApprovalOut(BaseModel):
+    Id: int
+    KidUserId: int
+    KidName: str
+    ChoreId: int
+    ChoreLabel: str
+    ChoreType: str | None = None
+    EntryDate: date
+    Amount: float
+    Notes: str | None = None
+    Status: str
+    CreatedAt: datetime
+
+
+class ParentChoreEntryCreate(BaseModel):
+    ChoreId: int
+    EntryDate: date
+    Notes: str | None = Field(default=None, max_length=500)
+    Amount: float | None = Field(default=None, ge=0)
+
+
+class ParentChoreEntryUpdate(BaseModel):
+    EntryDate: date | None = None
+    Notes: str | None = Field(default=None, max_length=500)
+    Amount: float | None = Field(default=None, ge=0)
+    Status: str | None = Field(default=None, min_length=1, max_length=20)
+
+
+class KidsMonthDayOut(BaseModel):
+    Date: date
+    DailyDone: int
+    DailyTotal: int
+    BonusApprovedTotal: float
+    PendingCount: int
+
+
+class KidsMonthOverviewResponse(BaseModel):
+    MonthStart: date
+    MonthEnd: date
+    Days: list[KidsMonthDayOut]
+
+
+class KidsDayDetailResponse(BaseModel):
+    Date: date
+    DailyJobs: list[ChoreOut]
+    Habits: list[ChoreOut]
+    BonusTasks: list[ChoreOut]
+    Entries: list[ChoreEntryOut]

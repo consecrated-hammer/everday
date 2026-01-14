@@ -3,346 +3,512 @@ import { Link } from "react-router-dom";
 
 import {
   CreateKidsChoreEntry,
-  FetchKidsChoreEntries,
+  DeleteKidsChoreEntry,
   FetchKidsLedger,
-  FetchKidsSummary
+  FetchKidsOverview
 } from "../../lib/kidsApi.js";
+import { GetChoreEmoji, GetKidsHeaderEmoji } from "../../lib/kidsEmoji.js";
 import { FormatCurrency } from "../../lib/formatters.js";
-import Icon from "../../components/Icon.jsx";
-import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { LabelList, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
-const BuildToday = () => {
-  const now = new Date();
-  return new Date(now.getFullYear(), now.getMonth(), now.getDate())
-    .toISOString()
-    .slice(0, 10);
+const FormatAxisLabel = (value, includeMonth) => {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+  const day = date.getDate();
+  if (day === 1 || includeMonth) {
+    return date.toLocaleDateString("en-AU", { day: "numeric", month: "short" });
+  }
+  return String(day);
 };
 
-const DisplayEntryType = (entryType) => {
-  switch (entryType) {
-    case "Chore":
-      return "Chore";
-    case "Withdrawal":
-      return "Spent";
-    case "StartingBalance":
-      return "Adjustment";
-    case "Deposit":
-    case "PocketMoney":
-      return "Parent added";
-    default:
-      return "Update";
+const FormatTooltipLabel = (value) => {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "";
   }
+  return date.toLocaleDateString("en-AU", { day: "numeric", month: "short" });
+};
+
+const FormatCurrencyRounded = (value) => {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) {
+    return "";
+  }
+  return new Intl.NumberFormat("en-AU", {
+    style: "currency",
+    currency: "AUD",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0
+  }).format(Math.round(Number(value)));
+};
+
+const ParseDateValue = (value) => {
+  if (!value) {
+    return null;
+  }
+  const parts = value.split("-");
+  if (parts.length !== 3) {
+    return null;
+  }
+  const [year, month, day] = parts.map((part) => Number.parseInt(part, 10));
+  if (!year || !month || !day) {
+    return null;
+  }
+  return new Date(year, month - 1, day);
 };
 
 const KidsHome = () => {
-  const [summary, setSummary] = useState(null);
-  const [entries, setEntries] = useState([]);
-  const [ledgerEntries, setLedgerEntries] = useState([]);
+  const [overview, setOverview] = useState(null);
   const [status, setStatus] = useState("idle");
   const [error, setError] = useState("");
-  const [form, setForm] = useState({ ChoreId: "", EntryDate: BuildToday(), Notes: "" });
-  const [showChoreModal, setShowChoreModal] = useState(false);
-  const [showNotes, setShowNotes] = useState(false);
-  const [choreSearch, setChoreSearch] = useState("");
-  const [rangeKey, setRangeKey] = useState("7d");
+  const [ledgerEntries, setLedgerEntries] = useState([]);
+  const [busyChoreId, setBusyChoreId] = useState(null);
 
-  const chores = summary?.AssignedChores || [];
-  const balance = summary?.Balance ?? 0;
-
-  const loadData = async () => {
+  const loadOverview = async () => {
     setStatus("loading");
     setError("");
     try {
-      const [summaryData, entriesData, ledgerData] = await Promise.all([
-        FetchKidsSummary(),
-        FetchKidsChoreEntries(60, false),
-        FetchKidsLedger(300)
-      ]);
-      setSummary(summaryData);
-      setEntries(entriesData || []);
-      setLedgerEntries(ledgerData?.Entries || []);
+      const data = await FetchKidsOverview();
+      setOverview(data);
       setStatus("ready");
     } catch (err) {
       setStatus("error");
-      setError(err?.message || "Unable to load kids summary.");
+      setError(err?.message || "Unable to load chores.");
     }
   };
 
   useEffect(() => {
-    loadData();
+    loadOverview();
+    const loadLedger = async () => {
+      try {
+        const data = await FetchKidsLedger(200);
+        setLedgerEntries(data?.Entries || []);
+      } catch (err) {
+        setLedgerEntries([]);
+      }
+    };
+    loadLedger();
   }, []);
 
-  useEffect(() => {
-    if (!showChoreModal) {
-      return;
-    }
-    setError("");
-    setShowNotes(false);
-    setChoreSearch("");
-  }, [showChoreModal]);
+  const chores = overview?.Chores || [];
+  const entries = overview?.Entries || [];
+  const projection = overview?.Projection || [];
+  const today = overview?.Today || overview?.SelectedDate || "";
+  const dayProtected = overview?.DayProtected ?? false;
+  const dailySlice = Number(overview?.DailySlice ?? 0);
 
-  const onFormChange = (event) => {
-    const { name, value } = event.target;
-    setForm((prev) => ({ ...prev, [name]: value }));
-  };
-
-  const onSelectChore = (choreId) => {
-    setForm((prev) => ({ ...prev, ChoreId: String(choreId) }));
-  };
-
-  const onSubmit = async (event) => {
-    event.preventDefault();
-    if (!form.ChoreId) {
-      setError("Pick a chore to log.");
-      return;
-    }
-    setStatus("saving");
-    setError("");
-    try {
-      await CreateKidsChoreEntry({
-        ChoreId: Number(form.ChoreId),
-        EntryDate: form.EntryDate,
-        Notes: form.Notes || null
-      });
-      setForm((prev) => ({ ...prev, Notes: "" }));
-      setShowChoreModal(false);
-      await loadData();
-    } catch (err) {
-      setStatus("error");
-      setError(err?.message || "Unable to save chore entry.");
-    } finally {
-      setStatus("ready");
-    }
-  };
-
-  const recentChoreIds = useMemo(() => {
-    const sorted = [...entries].sort(
-      (a, b) => new Date(b.CreatedAt).getTime() - new Date(a.CreatedAt).getTime()
-    );
-    const seen = new Set();
-    const ids = [];
-    sorted.forEach((entry) => {
-      if (!seen.has(entry.ChoreId)) {
-        seen.add(entry.ChoreId);
-        ids.push(entry.ChoreId);
-      }
+  const entryByChoreId = useMemo(() => {
+    const map = new Map();
+    entries.forEach((entry) => {
+      map.set(entry.ChoreId, entry);
     });
-    return ids.slice(0, 6);
+    return map;
   }, [entries]);
 
-  const recentChores = useMemo(() => {
-    if (recentChoreIds.length === 0) {
-      return [];
+  const dailyJobs = useMemo(
+    () => chores.filter((chore) => chore.Type === "Daily"),
+    [chores]
+  );
+  const habits = useMemo(
+    () => chores.filter((chore) => chore.Type === "Habit"),
+    [chores]
+  );
+  const bonusTasks = useMemo(
+    () => chores.filter((chore) => chore.Type === "Bonus"),
+    [chores]
+  );
+  const habitsDone = useMemo(() => {
+    if (habits.length === 0) {
+      return true;
     }
-    const choreMap = new Map(chores.map((chore) => [chore.Id, chore]));
-    return recentChoreIds.map((id) => choreMap.get(id)).filter(Boolean);
-  }, [chores, recentChoreIds]);
+    return habits.every((chore) => {
+      const entry = entryByChoreId.get(chore.Id);
+      return entry?.Status === "Approved";
+    });
+  }, [habits, entryByChoreId]);
 
-  const filteredChores = useMemo(() => {
-    const query = choreSearch.trim().toLowerCase();
-    if (!query) {
-      return chores;
+  const onToggleChore = async (chore) => {
+    if (!today) {
+      return;
     }
-    return chores.filter((chore) => chore.Label.toLowerCase().includes(query));
-  }, [choreSearch, chores]);
-
-  const isSaving = status === "saving";
-  const selectedChoreId = form.ChoreId ? Number(form.ChoreId) : null;
-  const useSearchPicker = chores.length > 8;
-  const rangeOptions = [
-    { Key: "7d", Label: "7d", Days: 7 },
-    { Key: "30d", Label: "30d", Days: 30 },
-    { Key: "90d", Label: "90d", Days: 90 }
-  ];
-
-  const BuildDateKey = (date) => {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, "0");
-    const day = String(date.getDate()).padStart(2, "0");
-    return `${year}-${month}-${day}`;
+    setBusyChoreId(chore.Id);
+    setError("");
+    try {
+      const entry = entryByChoreId.get(chore.Id);
+      if (entry) {
+        await DeleteKidsChoreEntry(entry.Id);
+      } else {
+        await CreateKidsChoreEntry({
+          ChoreId: chore.Id,
+          EntryDate: today,
+          Notes: null
+        });
+      }
+      await loadOverview();
+    } catch (err) {
+      setError(err?.message || "Unable to update chore.");
+    } finally {
+      setBusyChoreId(null);
+    }
   };
 
-  const rangeWindow = useMemo(() => {
-    const match = rangeOptions.find((option) => option.Key === rangeKey) || rangeOptions[0];
-    const now = new Date();
-    const end = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const start = new Date(end);
-    start.setDate(end.getDate() - (match.Days - 1));
-    return { start, end };
-  }, [rangeKey]);
+  const projectionSeries = useMemo(() => {
+    const todayValue = ParseDateValue(today);
+    const todayTime = todayValue?.getTime() ?? null;
+    const amountAtToday =
+      projection.find((point) => point.Date === today)?.Amount ??
+      projection[projection.length - 1]?.Amount ??
+      0;
 
-  const rangeDates = useMemo(() => {
-    const dates = [];
-    const cursor = new Date(rangeWindow.start);
-    while (cursor <= rangeWindow.end) {
-      dates.push(new Date(cursor));
-      cursor.setDate(cursor.getDate() + 1);
-    }
-    return dates;
-  }, [rangeWindow]);
-
-  const rangeEntries = useMemo(() => {
-    return ledgerEntries.filter((entry) => {
-      const entryDate = entry.EntryDate ? new Date(entry.EntryDate) : null;
-      const created = entry.CreatedAt ? new Date(entry.CreatedAt) : null;
-      const date = entryDate && !Number.isNaN(entryDate.getTime()) ? entryDate : created;
-      if (!date || Number.isNaN(date.getTime())) {
-        return false;
-      }
-      return date >= rangeWindow.start && date <= rangeWindow.end;
-    });
-  }, [ledgerEntries, rangeWindow]);
-
-  const totalsByDate = useMemo(() => {
-    const totals = new Map();
-    rangeEntries.forEach((entry) => {
-      const entryDate = entry.EntryDate ? new Date(entry.EntryDate) : null;
-      const created = entry.CreatedAt ? new Date(entry.CreatedAt) : null;
-      const date = entryDate && !Number.isNaN(entryDate.getTime()) ? entryDate : created;
-      if (!date || Number.isNaN(date.getTime())) {
-        return;
-      }
-      const key = BuildDateKey(date);
-      const amount = Number(entry.Amount) || 0;
-      totals.set(key, (totals.get(key) || 0) + amount);
-    });
-    return totals;
-  }, [rangeEntries]);
-
-  const summaryByDate = useMemo(() => {
-    const summaryMap = new Map();
-    rangeEntries.forEach((entry) => {
-      const entryDate = entry.EntryDate ? new Date(entry.EntryDate) : null;
-      const created = entry.CreatedAt ? new Date(entry.CreatedAt) : null;
-      const date = entryDate && !Number.isNaN(entryDate.getTime()) ? entryDate : created;
-      if (!date || Number.isNaN(date.getTime())) {
-        return;
-      }
-      const key = BuildDateKey(date);
-      const label = DisplayEntryType(entry.EntryType);
-      const amount = Number(entry.Amount) || 0;
-      if (!summaryMap.has(key)) {
-        summaryMap.set(key, new Map());
-      }
-      const typeTotals = summaryMap.get(key);
-      typeTotals.set(label, (typeTotals.get(label) || 0) + amount);
-    });
-    const formattedMap = new Map();
-    summaryMap.forEach((typeTotals, key) => {
-      const rows = [...typeTotals.entries()]
-        .filter(([, amount]) => amount !== 0)
-        .map(([label, amount]) => ({ Label: label, Amount: amount }))
-        .sort((a, b) => Math.abs(b.Amount) - Math.abs(a.Amount));
-      if (rows.length) {
-        formattedMap.set(key, rows);
-      }
-    });
-    return formattedMap;
-  }, [rangeEntries]);
-
-  const balanceSeries = useMemo(() => {
-    let running = balance;
-    const balanceByDate = new Map();
-    const datesDesc = [...rangeDates].sort((a, b) => b - a);
-    datesDesc.forEach((date) => {
-      const key = BuildDateKey(date);
-      balanceByDate.set(key, running);
-      running -= totalsByDate.get(key) || 0;
-    });
-    return rangeDates.map((date) => {
-      const key = BuildDateKey(date);
+    return projection.map((point) => {
+      const pointDate = ParseDateValue(point.Date);
+      const pointTime = pointDate?.getTime() ?? null;
+      const isOnOrBeforeToday =
+        todayTime !== null && pointTime !== null ? pointTime <= todayTime : true;
+      const isOnOrAfterToday =
+        todayTime !== null && pointTime !== null ? pointTime >= todayTime : false;
+      const daysAhead =
+        todayTime !== null && pointTime !== null
+          ? Math.round((pointTime - todayTime) / 86400000)
+          : 0;
       return {
-        DateKey: key,
-        DateLabel: date.toLocaleDateString("en-AU", { day: "numeric", month: "short" }),
-        Balance: balanceByDate.get(key) ?? 0
+        DateKey: point.Date,
+        TooltipLabel: FormatTooltipLabel(point.Date),
+        ActualAmount: isOnOrBeforeToday ? point.Amount : null,
+        ProjectedAmount: isOnOrAfterToday ? amountAtToday + dailySlice * daysAhead : null
       };
     });
-  }, [balance, rangeDates, totalsByDate]);
+  }, [projection, today, dailySlice]);
 
-  const FormatSigned = (amount) => {
-    if (amount > 0) {
-      return `+${FormatCurrency(amount)}`;
+  const currentBalance = useMemo(() => {
+    if (!projection.length) {
+      return 0;
     }
-    return FormatCurrency(amount);
-  };
+    const todayPoint = projection.find((point) => point.Date === today);
+    if (todayPoint) {
+      return todayPoint.Amount;
+    }
+    const todayValue = ParseDateValue(today);
+    if (!todayValue) {
+      return projection[projection.length - 1]?.Amount ?? 0;
+    }
+    let latestAmount = null;
+    projection.forEach((point) => {
+      const pointDate = ParseDateValue(point.Date);
+      if (!pointDate) {
+        return;
+      }
+      if (pointDate.getTime() <= todayValue.getTime()) {
+        latestAmount = point.Amount;
+      }
+    });
+    return latestAmount ?? projection[projection.length - 1]?.Amount ?? 0;
+  }, [projection, today]);
+
+  const filteredProjectionSeries = useMemo(() => {
+    if (!projectionSeries.length) {
+      return projectionSeries;
+    }
+    return projectionSeries.map((point, index) => ({
+      ...point,
+      AxisLabel: FormatAxisLabel(point.DateKey, index === 0)
+    }));
+  }, [projectionSeries]);
+
+  const labelPlan = useMemo(() => {
+    const total = filteredProjectionSeries.length;
+    const lastProjectedIndex = total ? total - 1 : -1;
+    let lastActualIndex = -1;
+    for (let i = total - 1; i >= 0; i -= 1) {
+      if (filteredProjectionSeries[i].ActualAmount !== null) {
+        lastActualIndex = i;
+        break;
+      }
+    }
+    const hideActualForOverlap =
+      lastActualIndex >= 0 && lastProjectedIndex >= 0
+        ? lastProjectedIndex - lastActualIndex <= 2
+        : false;
+    return {
+      firstIndex: total ? 0 : -1,
+      lastActualIndex,
+      lastProjectedIndex,
+      hideActualForOverlap
+    };
+  }, [filteredProjectionSeries]);
+
+  const ledgerTotals = useMemo(() => {
+    const startDate = overview?.MonthStart || projectionSeries[0]?.DateKey || "";
+    if (!startDate || !today) {
+      return { earned: 0, spent: 0 };
+    }
+    const startTime = ParseDateValue(startDate)?.getTime() ?? 0;
+    const endTime = ParseDateValue(today)?.getTime() ?? Number.MAX_SAFE_INTEGER;
+    return ledgerEntries.reduce(
+      (acc, entry) => {
+        const dateValue = ParseDateValue(entry.EntryDate);
+        if (!dateValue) {
+          return acc;
+        }
+        const time = dateValue.getTime();
+        if (time < startTime || time > endTime) {
+          return acc;
+        }
+        const amount = Number(entry.Amount || 0);
+        if (amount >= 0) {
+          acc.earned += amount;
+        } else {
+          acc.spent += amount;
+        }
+        return acc;
+      },
+      { earned: 0, spent: 0 }
+    );
+  }, [ledgerEntries, overview, projectionSeries, today]);
+
+  const earnedLabel = `+${FormatCurrency(ledgerTotals.earned)}`;
+  const spentLabel = `-${FormatCurrency(Math.abs(ledgerTotals.spent))}`;
 
   const renderChartTooltip = ({ active, payload }) => {
     if (!active || !payload?.length) {
       return null;
     }
     const datum = payload[0].payload;
-    const summary = summaryByDate.get(datum.DateKey);
+    const activeValue =
+      payload.find((entry) => entry.value !== null && entry.value !== undefined)?.value ??
+      datum.ActualAmount ??
+      datum.ProjectedAmount ??
+      0;
     return (
       <div className="kids-chart-tooltip">
-        <div className="kids-chart-tooltip-date">{datum.DateLabel}</div>
-        <div className="kids-chart-tooltip-balance">{FormatCurrency(datum.Balance)}</div>
-        {summary ? (
-          <div className="kids-chart-tooltip-list">
-            {summary.map((row) => (
-              <div className="kids-chart-tooltip-row" key={row.Label}>
-                <span>{row.Label}</span>
-                <span
-                  className={`kids-chart-tooltip-amount${
-                    row.Amount < 0 ? " is-negative" : " is-positive"
-                  }`}
-                >
-                  {FormatSigned(row.Amount)}
-                </span>
-              </div>
-            ))}
-          </div>
-        ) : null}
+        <div className="kids-chart-tooltip-date">
+          {datum.TooltipLabel || FormatTooltipLabel(datum.DateKey)}
+        </div>
+        <div className="kids-chart-tooltip-balance">{FormatCurrency(activeValue)}</div>
       </div>
     );
   };
 
-  const earnedTotal = useMemo(() => {
-    return rangeEntries.reduce((sum, entry) => {
-      if (entry.EntryType !== "Chore") {
-        return sum;
-      }
-      const amount = Number(entry.Amount) || 0;
-      return amount > 0 ? sum + amount : sum;
-    }, 0);
-  }, [rangeEntries]);
-
-  const spentTotal = useMemo(() => {
-    const withdrawals = rangeEntries.filter(
-      (entry) => entry.EntryType === "Withdrawal" && Number(entry.Amount) < 0
+  const renderActualLabel = ({ index, value, x, y }) => {
+    if (value === null || value === undefined) {
+      return null;
+    }
+    if (labelPlan.hideActualForOverlap && index === labelPlan.lastActualIndex) {
+      return null;
+    }
+    const isFirst = index === labelPlan.firstIndex;
+    const isLastActual = index === labelPlan.lastActualIndex && !labelPlan.hideActualForOverlap;
+    if (!isFirst && !isLastActual) {
+      return null;
+    }
+    const isLast = index === labelPlan.lastProjectedIndex;
+    const anchor = isFirst ? "start" : isLast ? "end" : "middle";
+    const dx = isFirst ? 8 : isLast ? -8 : 0;
+    return (
+      <text
+        x={x}
+        y={y}
+        dx={dx}
+        dy={-8}
+        textAnchor={anchor}
+        fill="var(--kids-ink)"
+        fontSize="12"
+      >
+        {FormatCurrencyRounded(value)}
+      </text>
     );
-    const source = withdrawals.length
-      ? withdrawals
-      : rangeEntries.filter((entry) => entry.EntryType !== "Chore" && Number(entry.Amount) < 0);
-    return source.reduce((sum, entry) => sum + Math.abs(Number(entry.Amount) || 0), 0);
-  }, [rangeEntries]);
+  };
 
-  const BuildHistoryLink = (type) =>
-    `/kids/history?range=${encodeURIComponent(rangeKey)}&type=${encodeURIComponent(type)}`;
+  const renderProjectedLabel = ({ index, value, x, y }) => {
+    if (value === null || value === undefined) {
+      return null;
+    }
+    if (index !== labelPlan.lastProjectedIndex) {
+      return null;
+    }
+    const anchor = index === labelPlan.firstIndex ? "start" : "end";
+    const dx = index === labelPlan.firstIndex ? 8 : -8;
+    return (
+      <text
+        x={x}
+        y={y}
+        dx={dx}
+        dy={-8}
+        textAnchor={anchor}
+        fill="var(--kids-ink)"
+        fontSize="12"
+      >
+        {FormatCurrencyRounded(value)}
+      </text>
+    );
+  };
 
   return (
     <div className="kids-home">
-      <section className="kids-card kids-log-card">
-        <button
-          type="button"
-          className="kids-card-button"
-          onClick={() => setShowChoreModal(true)}
-        >
-          Log a chore
-        </button>
+      <section className="kids-card kids-balance-now">
+        <div className="kids-balance-now-header">
+          <p className="kids-label">{GetKidsHeaderEmoji("AvailableNow")} Available now</p>
+        </div>
+        <div className="kids-balance-now-row">
+          <div className="kids-balance-value">{FormatCurrency(currentBalance)}</div>
+          <div className="kids-balance-now-meta">
+            <span className="kids-balance-meta-title">This month</span>
+            <span className="kids-balance-meta is-earned">In {earnedLabel}</span>
+            <span className="kids-balance-meta is-spent">Out {spentLabel}</span>
+          </div>
+        </div>
+      </section>
+
+      <section className="kids-card kids-chores-card">
+        <div className="kids-chores-section is-daily">
+          <div className="kids-chores-section-header">
+            <div className="kids-chores-section-title">
+              <h4>{GetKidsHeaderEmoji("DailyJobs")} Daily jobs</h4>
+              <span className="kids-chores-status">
+                {dayProtected ? "Done for today!" : "In progress..."}
+              </span>
+            </div>
+          </div>
+          <div className="kids-chores-section-body">
+            {dailyJobs.length === 0 ? (
+              <p className="kids-muted">No daily jobs set yet.</p>
+            ) : (
+              dailyJobs.map((chore) => {
+                const emoji = GetChoreEmoji(chore);
+                const choreLabel = emoji ? `${emoji} ${chore.Label}` : chore.Label;
+                const entry = entryByChoreId.get(chore.Id);
+                const isComplete = entry?.Status === "Approved";
+                const isPending = entry?.Status === "Pending";
+                const isRejected = entry?.Status === "Rejected";
+                const isActive = isComplete || isPending;
+                return (
+                  <button
+                    key={chore.Id}
+                    type="button"
+                    className="kids-chore-row"
+                    onClick={() => onToggleChore(chore)}
+                    aria-pressed={isActive}
+                    disabled={busyChoreId === chore.Id}
+                  >
+                    <div className="kids-chore-row-main">
+                      <span>{choreLabel}</span>
+                      {isPending ? (
+                        <span className="kids-pill kids-pill--muted">Pending approval</span>
+                      ) : isRejected ? (
+                        <span className="kids-pill kids-pill--muted">Rejected</span>
+                      ) : null}
+                    </div>
+                    <span className={`kids-chore-toggle${isActive ? " is-on" : ""}`} />
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </div>
+        <div className="kids-chores-divider" />
+        <div className="kids-chores-section is-habits">
+          <div className="kids-chores-section-header">
+            <div className="kids-chores-section-title">
+              <h4>{GetKidsHeaderEmoji("Habits")} Habits</h4>
+              <span className="kids-chores-status">
+                {habitsDone ? "Done for today!" : "In progress..."}
+              </span>
+            </div>
+          </div>
+          <div className="kids-chores-section-body">
+            {habits.length === 0 ? (
+              <p className="kids-muted">No habits set yet.</p>
+            ) : (
+              habits.map((chore) => {
+                const emoji = GetChoreEmoji(chore);
+                const choreLabel = emoji ? `${emoji} ${chore.Label}` : chore.Label;
+                const entry = entryByChoreId.get(chore.Id);
+                const isComplete = entry?.Status === "Approved";
+                const isPending = entry?.Status === "Pending";
+                const isRejected = entry?.Status === "Rejected";
+                const isActive = isComplete || isPending;
+                return (
+                  <button
+                    key={chore.Id}
+                    type="button"
+                    className="kids-chore-row"
+                    onClick={() => onToggleChore(chore)}
+                    aria-pressed={isActive}
+                    disabled={busyChoreId === chore.Id}
+                  >
+                    <div className="kids-chore-row-main">
+                      <span>{choreLabel}</span>
+                      {isPending ? (
+                        <span className="kids-pill kids-pill--muted">Pending approval</span>
+                      ) : isRejected ? (
+                        <span className="kids-pill kids-pill--muted">Rejected</span>
+                      ) : null}
+                    </div>
+                    <span className={`kids-chore-toggle${isActive ? " is-on" : ""}`} />
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </div>
+        <div className="kids-chores-divider" />
+        <div className="kids-chores-section is-bonus">
+          <div className="kids-chores-section-header">
+            <div>
+              <h4>{GetKidsHeaderEmoji("BonusTasks")} Bonus tasks</h4>
+            </div>
+          </div>
+          <div className="kids-chores-section-body">
+            {bonusTasks.length === 0 ? (
+              <p className="kids-muted">No bonus tasks set yet.</p>
+            ) : (
+              bonusTasks.map((chore) => {
+                const emoji = GetChoreEmoji(chore);
+                const choreLabel = emoji ? `${emoji} ${chore.Label}` : chore.Label;
+                const entry = entryByChoreId.get(chore.Id);
+                const isComplete = entry?.Status === "Approved";
+                const isPending = entry?.Status === "Pending";
+                const isRejected = entry?.Status === "Rejected";
+                const isActive = isComplete || isPending;
+                const amountLabel = chore.Amount ? ` (${FormatCurrency(chore.Amount)})` : "";
+                return (
+                  <button
+                    key={chore.Id}
+                    type="button"
+                    className="kids-chore-row"
+                    onClick={() => onToggleChore(chore)}
+                    aria-pressed={isActive}
+                    disabled={busyChoreId === chore.Id}
+                  >
+                    <div className="kids-chore-row-main">
+                      <span>{`${choreLabel}${amountLabel}`}</span>
+                      {isPending ? (
+                        <span className="kids-pill kids-pill--muted">Pending approval</span>
+                      ) : isRejected ? (
+                        <span className="kids-pill kids-pill--muted">Rejected</span>
+                      ) : null}
+                    </div>
+                    <span className={`kids-chore-toggle${isActive ? " is-on" : ""}`} />
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </div>
       </section>
 
       <section className="kids-card kids-balance">
-        <p className="kids-label">Available now</p>
-        <h2 className="kids-balance-value">{FormatCurrency(balance)}</h2>
-        <div className="kids-balance-chart" aria-label="Balance history">
+        <p className="kids-label">{GetKidsHeaderEmoji("ThisMonth")} This month</p>
+        <div className="kids-balance-chart" aria-label="Monthly projection">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={balanceSeries}>
+            <LineChart data={filteredProjectionSeries} margin={{ top: 18, left: 8, right: 8 }}>
               <XAxis
-                dataKey="DateLabel"
+                dataKey="AxisLabel"
                 axisLine={false}
                 tickLine={false}
                 interval="preserveStartEnd"
-                minTickGap={20}
+                minTickGap={18}
                 tick={{ fontSize: 12, fill: "var(--kids-muted)" }}
               />
               <YAxis hide />
@@ -352,36 +518,27 @@ const KidsHome = () => {
               />
               <Line
                 type="monotone"
-                dataKey="Balance"
+                dataKey="ActualAmount"
                 stroke="#f18a4d"
                 strokeWidth={2.5}
                 dot={false}
-              />
+              >
+                <LabelList dataKey="ActualAmount" content={renderActualLabel} />
+              </Line>
+              <Line
+                type="monotone"
+                dataKey="ProjectedAmount"
+                stroke="#f18a4d"
+                strokeWidth={2.5}
+                strokeDasharray="6 6"
+                dot={false}
+              >
+                <LabelList dataKey="ProjectedAmount" content={renderProjectedLabel} />
+              </Line>
             </LineChart>
           </ResponsiveContainer>
         </div>
-        <div className="kids-balance-summary">
-          <div className="kids-range-toggle" role="group" aria-label="Select range">
-            {rangeOptions.map((option) => (
-              <button
-                key={option.Key}
-                type="button"
-                className={`kids-range-button${rangeKey === option.Key ? " is-active" : ""}`}
-                onClick={() => setRangeKey(option.Key)}
-              >
-                {option.Label}
-              </button>
-            ))}
-          </div>
-          <div className="kids-io-chips">
-            <Link to={BuildHistoryLink("Chore")} className="kids-io-chip is-earned">
-              Earned +{FormatCurrency(earnedTotal)}
-            </Link>
-            <Link to={BuildHistoryLink("Spent")} className="kids-io-chip is-spent">
-              Spent -{FormatCurrency(spentTotal)}
-            </Link>
-          </div>
-        </div>
+        <div className="kids-balance-summary" />
       </section>
 
       <div className="kids-secondary-nav">
@@ -390,161 +547,8 @@ const KidsHome = () => {
         </Link>
       </div>
 
-      {error && !showChoreModal ? <p className="kids-error">{error}</p> : null}
-
-      {showChoreModal ? (
-        <div
-          className="modal-backdrop"
-          role="dialog"
-          aria-modal="true"
-          onClick={() => setShowChoreModal(false)}
-        >
-          <div className="modal" onClick={(event) => event.stopPropagation()}>
-            <div className="modal-header">
-              <div>
-                <h3>Log a chore</h3>
-              </div>
-              <div className="modal-header-actions">
-                <button
-                  type="button"
-                  className="icon-button"
-                  onClick={() => setShowChoreModal(false)}
-                  aria-label="Close modal"
-                >
-                  <Icon name="close" className="icon" />
-                </button>
-              </div>
-            </div>
-            <div className="modal-body">
-              <form className="kids-log-form" onSubmit={onSubmit}>
-                <div className="kids-log-section">
-                  <span className="kids-log-label">Chore</span>
-                  {useSearchPicker ? (
-                    <div className="kids-chore-picker">
-                      <label className="kids-chore-search">
-                        <Icon name="search" className="icon" />
-                        <input
-                          type="text"
-                          placeholder="Search chores"
-                          value={choreSearch}
-                          onChange={(event) => setChoreSearch(event.target.value)}
-                          aria-label="Search chores"
-                        />
-                      </label>
-                      {recentChores.length ? (
-                        <div className="kids-chore-section">
-                          <span className="kids-chore-section-title">Recent</span>
-                          <div className="kids-chore-grid">
-                            {recentChores.map((chore) => (
-                              <button
-                                key={`recent-${chore.Id}`}
-                                type="button"
-                                className={`kids-chore-button${
-                                  selectedChoreId === chore.Id ? " is-selected" : ""
-                                }`}
-                                onClick={() => onSelectChore(chore.Id)}
-                                aria-pressed={selectedChoreId === chore.Id}
-                              >
-                                <span>{chore.Label}</span>
-                                <span>{FormatCurrency(chore.Amount)}</span>
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      ) : null}
-                      <div className="kids-chore-section">
-                        <span className="kids-chore-section-title">All chores</span>
-                        <div className="kids-chore-list">
-                          {filteredChores.length === 0 ? (
-                            <p className="kids-muted">No chores match your search.</p>
-                          ) : (
-                            filteredChores.map((chore) => (
-                              <button
-                                key={chore.Id}
-                                type="button"
-                                className={`kids-chore-row${
-                                  selectedChoreId === chore.Id ? " is-selected" : ""
-                                }`}
-                                onClick={() => onSelectChore(chore.Id)}
-                                aria-pressed={selectedChoreId === chore.Id}
-                              >
-                                <span>{chore.Label}</span>
-                                <span>{FormatCurrency(chore.Amount)}</span>
-                              </button>
-                            ))
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="kids-chore-grid">
-                      {chores.length === 0 ? (
-                        <p className="kids-muted">No chores assigned yet.</p>
-                      ) : (
-                        chores.map((chore) => (
-                          <button
-                            key={chore.Id}
-                            type="button"
-                            className={`kids-chore-button${
-                              selectedChoreId === chore.Id ? " is-selected" : ""
-                            }`}
-                            onClick={() => onSelectChore(chore.Id)}
-                            aria-pressed={selectedChoreId === chore.Id}
-                          >
-                            <span>{chore.Label}</span>
-                            <span>{FormatCurrency(chore.Amount)}</span>
-                          </button>
-                        ))
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                <div className="kids-log-section">
-                  <label className="kids-log-label">
-                    <span>Date</span>
-                    <input
-                      type="date"
-                      name="EntryDate"
-                      value={form.EntryDate}
-                      onChange={onFormChange}
-                    />
-                  </label>
-                </div>
-
-                <div className="kids-log-section">
-                  {!showNotes ? (
-                    <button
-                      type="button"
-                      className="kids-note-toggle"
-                      onClick={() => setShowNotes(true)}
-                    >
-                      Add a note
-                    </button>
-                  ) : (
-                    <label className="kids-log-label">
-                      Notes
-                      <textarea
-                        name="Notes"
-                        rows={3}
-                        value={form.Notes}
-                        onChange={onFormChange}
-                      />
-                    </label>
-                  )}
-                </div>
-
-                <div className="kids-log-actions">
-                  <button type="submit" disabled={!form.ChoreId || isSaving}>
-                    {isSaving ? "Saving..." : "Save"}
-                  </button>
-                </div>
-              </form>
-              {error ? <p className="kids-error">{error}</p> : null}
-            </div>
-          </div>
-        </div>
-      ) : null}
+      {status === "loading" ? <p className="kids-muted">Loading chores...</p> : null}
+      {error ? <p className="kids-error">{error}</p> : null}
     </div>
   );
 };

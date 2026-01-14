@@ -37,8 +37,12 @@ class Chore(Base):
     Id = Column(Integer, primary_key=True, index=True)
     OwnerUserId = Column(Integer, nullable=False, index=True)
     Label = Column(String(200), nullable=False)
+    Type = Column(String(20), nullable=False, default="Bonus")
     Amount = Column(Numeric(12, 2), nullable=False)
     IsActive = Column(Boolean, nullable=False, default=True)
+    SortOrder = Column(Integer, nullable=False, default=0)
+    StartsOn = Column(Date, nullable=False)
+    DisabledOn = Column(Date)
     CreatedAt = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
     UpdatedAt = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
 
@@ -53,7 +57,11 @@ class ChoreAssignment(Base):
     Id = Column(Integer, primary_key=True, index=True)
     ChoreId = Column(Integer, nullable=False, index=True)
     KidUserId = Column(Integer, nullable=False, index=True)
+    IsEnabled = Column(Boolean, nullable=False, default=True)
+    StartsOn = Column(Date, nullable=False)
+    DisabledOn = Column(Date)
     CreatedAt = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    UpdatedAt = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
 
 
 class ChoreEntry(Base):
@@ -64,11 +72,15 @@ class ChoreEntry(Base):
     KidUserId = Column(Integer, nullable=False, index=True)
     ChoreId = Column(Integer, nullable=False, index=True)
     EntryDate = Column(Date, nullable=False, index=True)
+    Status = Column(String(20), nullable=False, default="Approved")
+    ChoreType = Column(String(20))
     Amount = Column(Numeric(12, 2), nullable=False)
     Notes = Column(Text)
     IsDeleted = Column(Boolean, nullable=False, default=False)
     CreatedByUserId = Column(Integer, nullable=False)
     UpdatedByUserId = Column(Integer)
+    ReviewedByUserId = Column(Integer)
+    ReviewedAt = Column(DateTime(timezone=True))
     CreatedAt = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
     UpdatedAt = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
 

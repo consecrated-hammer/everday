@@ -1,188 +1,357 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { useLocation } from "react-router-dom";
 
 import {
-  CreateKidDeposit,
-  CreateKidStartingBalance,
-  CreateKidWithdrawal,
+  ApproveKidsChoreEntry,
   CreateParentChore,
+  CreateParentKidChoreEntry,
   DeleteParentChore,
+  DeleteParentKidChoreEntry,
   FetchKidLedger,
+  FetchKidChoreEntries,
+  FetchKidDayDetail,
+  FetchKidMonthOverview,
+  FetchKidMonthSummary,
+  FetchKidsPendingApprovals,
   FetchLinkedKids,
   FetchParentChores,
   FetchPocketMoneyRule,
+  RejectKidsChoreEntry,
   SetChoreAssignments,
   UpdateParentChore,
+  UpdateParentKidChoreEntry,
   UpdatePocketMoneyRule
 } from "../../lib/kidsApi.js";
-import { FormatCurrency, FormatDate, FormatTime } from "../../lib/formatters.js";
+import { FormatCurrency, NormalizeAmountInput } from "../../lib/formatters.js";
 import Icon from "../../components/Icon.jsx";
 
-const BuildToday = () => {
+const BuildToday = () => new Date().toISOString().slice(0, 10);
+
+const BuildMonthCursor = () => {
   const now = new Date();
-  return new Date(now.getFullYear(), now.getMonth(), now.getDate())
-    .toISOString()
-    .slice(0, 10);
+  return new Date(now.getFullYear(), now.getMonth(), 1);
 };
 
-const EmptyTransaction = () => ({
-  Type: "Deposit",
+const BuildMonthParam = (dateValue) => {
+  const year = dateValue.getFullYear();
+  const month = String(dateValue.getMonth() + 1).padStart(2, "0");
+  return `${year}-${month}-01`;
+};
+
+const BuildDateKey = (dateValue) => {
+  const year = dateValue.getFullYear();
+  const month = String(dateValue.getMonth() + 1).padStart(2, "0");
+  const day = String(dateValue.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const BuildMonthLabel = (dateValue) =>
+  dateValue.toLocaleDateString("en-AU", { month: "short", year: "numeric" });
+
+const BuildDayLabel = (dateValue) =>
+  new Date(`${dateValue}T00:00:00`).toLocaleDateString("en-AU", {
+    weekday: "short",
+    day: "numeric",
+    month: "short"
+  });
+
+const BuildShortDate = (dateValue) =>
+  new Date(`${dateValue}T00:00:00`).toLocaleDateString("en-AU", {
+    day: "numeric",
+    month: "short"
+  });
+
+const BuildDateTimeLabel = (dateValue) =>
+  new Date(dateValue).toLocaleString("en-AU", {
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+
+const EmptyChoreForm = () => ({
+  Label: "",
+  Type: "Daily",
   Amount: "",
-  EntryDate: BuildToday(),
-  Narrative: "",
-  Notes: ""
+  SortOrder: "0",
+  IsActive: true,
+  KidUserIds: [],
+  StartDate: BuildToday(),
+  EndDate: ""
 });
 
-const EmptyRule = () => ({
+const BuildEntryForm = (dateValue) => ({
+  EntryId: null,
+  EntryDate: dateValue || BuildToday(),
+  Type: "Daily",
+  ChoreId: "",
   Amount: "",
-  Frequency: "weekly",
-  DayOfWeek: "0",
-  DayOfMonth: "1",
-  StartDate: BuildToday(),
-  IsActive: true,
-  LastPostedOn: null
+  Notes: "",
+  Status: ""
 });
+
+const TypeLabel = (value) => {
+  switch (value) {
+    case "Daily":
+      return "Daily jobs";
+    case "Habit":
+      return "Habits";
+    case "Bonus":
+      return "Bonus tasks";
+    default:
+      return value || "-";
+  }
+};
+
+const BuildKidName = (kid) => kid.FirstName || kid.Username || `Kid ${kid.KidUserId}`;
 
 const KidsAdmin = () => {
-  const [searchParams] = useSearchParams();
+  const location = useLocation();
+
   const [kids, setKids] = useState([]);
-  const [kidLedgers, setKidLedgers] = useState({});
-  const [kidRules, setKidRules] = useState({});
-  const [transactionForms, setTransactionForms] = useState({});
-  const [showTransactionModal, setShowTransactionModal] = useState(false);
-  const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [activeKidId, setActiveKidId] = useState(null);
+  const [requestedKidId, setRequestedKidId] = useState(null);
+  const [activeTab, setActiveTab] = useState("month");
+  const [monthCursor, setMonthCursor] = useState(BuildMonthCursor);
+  const [monthSummary, setMonthSummary] = useState(null);
+  const [monthOverview, setMonthOverview] = useState(null);
+  const [pendingApprovals, setPendingApprovals] = useState([]);
+  const [historyEntries, setHistoryEntries] = useState([]);
+  const [chores, setChores] = useState([]);
+  const [ledgerEntries, setLedgerEntries] = useState([]);
   const [status, setStatus] = useState("idle");
   const [error, setError] = useState("");
-  const [choreForm, setChoreForm] = useState({ Label: "", Amount: "", KidUserIds: [] });
-  const [showChoreModal, setShowChoreModal] = useState(false);
-  const [editingChore, setEditingChore] = useState(null);
-  const [chores, setChores] = useState([]);
-  const [historySearch, setHistorySearch] = useState("");
-  const [historyFilterKid, setHistoryFilterKid] = useState("all");
-  const [historyFilterType, setHistoryFilterType] = useState("all");
-  const [historyShowDeleted, setHistoryShowDeleted] = useState(false);
-  const [historyFilterOpen, setHistoryFilterOpen] = useState(false);
-  const [historySort, setHistorySort] = useState({ Key: "When", Direction: "desc" });
-  const historyFilterRef = useRef(null);
-  const requestedKidId = useMemo(() => {
-    const raw = searchParams.get("kid");
-    if (!raw) {
-      return null;
-    }
-    const parsed = Number(raw);
-    return Number.isNaN(parsed) ? null : parsed;
-  }, [searchParams]);
 
-  const loadData = async () => {
+  const [approvalFilterKid, setApprovalFilterKid] = useState("all");
+  const [approvalFilterType, setApprovalFilterType] = useState("all");
+  const [approvalRangeStart, setApprovalRangeStart] = useState("");
+  const [approvalRangeEnd, setApprovalRangeEnd] = useState("");
+  const [approvalExpanded, setApprovalExpanded] = useState({});
+
+  const [historyFilter, setHistoryFilter] = useState("all");
+  const [historyExpanded, setHistoryExpanded] = useState({});
+  const [historyEntryExpandedId, setHistoryEntryExpandedId] = useState(null);
+
+  const [showAllowanceModal, setShowAllowanceModal] = useState(false);
+  const [allowanceForm, setAllowanceForm] = useState({ Amount: "40", StartDate: BuildToday() });
+
+  const [showChoresModal, setShowChoresModal] = useState(false);
+  const [showChoreForm, setShowChoreForm] = useState(false);
+  const [editingChore, setEditingChore] = useState(null);
+  const [choreForm, setChoreForm] = useState(EmptyChoreForm());
+  const [choreSearch, setChoreSearch] = useState("");
+  const [choreFilter, setChoreFilter] = useState("all");
+  const [returnToChoresModal, setReturnToChoresModal] = useState(false);
+
+  const [showDayDrawer, setShowDayDrawer] = useState(false);
+  const [selectedDay, setSelectedDay] = useState("");
+  const [dayDetail, setDayDetail] = useState(null);
+  const [dayStatus, setDayStatus] = useState("idle");
+
+  const [showEntryModal, setShowEntryModal] = useState(false);
+  const [entryForm, setEntryForm] = useState(BuildEntryForm(BuildToday()));
+  const [entryDetail, setEntryDetail] = useState(null);
+
+  const todayKey = BuildDateKey(new Date());
+  const monthParam = useMemo(() => BuildMonthParam(monthCursor), [monthCursor]);
+  const currentMonth = BuildMonthCursor();
+  const isCurrentMonth =
+    monthCursor.getFullYear() === currentMonth.getFullYear() &&
+    monthCursor.getMonth() === currentMonth.getMonth();
+
+  const loadBaseData = async () => {
     setStatus("loading");
     setError("");
     try {
-      const kidsList = await FetchLinkedKids();
-      setKids(kidsList);
-
-      const ledgerResults = await Promise.all(
-        kidsList.map((kid) => FetchKidLedger(kid.KidUserId, 500))
-      );
-      const ledgerMap = {};
-      kidsList.forEach((kid, index) => {
-        ledgerMap[kid.KidUserId] = ledgerResults[index];
-      });
-      setKidLedgers(ledgerMap);
-
-      const ruleResults = await Promise.all(
-        kidsList.map((kid) => FetchPocketMoneyRule(kid.KidUserId))
-      );
-      const ruleMap = {};
-      kidsList.forEach((kid, index) => {
-        const rule = ruleResults[index];
-        ruleMap[kid.KidUserId] = rule
-          ? {
-              Amount: String(rule.Amount || ""),
-              Frequency: rule.Frequency || "weekly",
-              DayOfWeek: rule.DayOfWeek !== null && rule.DayOfWeek !== undefined ? String(rule.DayOfWeek) : "0",
-              DayOfMonth: rule.DayOfMonth ? String(rule.DayOfMonth) : "1",
-              StartDate: rule.StartDate || BuildToday(),
-              IsActive: rule.IsActive !== false,
-              LastPostedOn: rule.LastPostedOn || null
-            }
-          : EmptyRule();
-      });
-      setKidRules(ruleMap);
-
-      const formMap = {};
-      kidsList.forEach((kid) => {
-        formMap[kid.KidUserId] = EmptyTransaction();
-      });
-      setTransactionForms(formMap);
-
-      const choreList = await FetchParentChores();
+      const [kidsList, choreList] = await Promise.all([
+        FetchLinkedKids(),
+        FetchParentChores()
+      ]);
+      setKids(kidsList || []);
       setChores(choreList || []);
-
       setStatus("ready");
     } catch (err) {
       setStatus("error");
-      setError(err?.message || "Unable to load kids data.");
+      setError(err?.message || "Unable to load kids admin data.");
     }
   };
 
+  const loadMonthData = async () => {
+    if (!activeKidId) {
+      return;
+    }
+    setStatus("loading");
+    setError("");
+    try {
+      const [summary, overview] = await Promise.all([
+        FetchKidMonthSummary(activeKidId, monthParam),
+        FetchKidMonthOverview(activeKidId, monthParam)
+      ]);
+      setMonthSummary(summary);
+      setMonthOverview(overview);
+      setStatus("ready");
+    } catch (err) {
+      setStatus("error");
+      setError(err?.message || "Unable to load month data.");
+    }
+  };
+
+  const loadApprovals = async () => {
+    setStatus("loading");
+    setError("");
+    try {
+      const kidIdValue = approvalFilterKid === "all" ? "" : Number(approvalFilterKid);
+      const choreTypeValue = approvalFilterType === "all" ? "" : approvalFilterType;
+      const approvals = await FetchKidsPendingApprovals({
+        kidId: kidIdValue,
+        choreType: choreTypeValue
+      });
+      setPendingApprovals(approvals || []);
+      setStatus("ready");
+    } catch (err) {
+      setStatus("error");
+      setError(err?.message || "Unable to load approvals.");
+    }
+  };
+
+  const loadHistory = async () => {
+    if (!activeKidId) {
+      return;
+    }
+    setStatus("loading");
+    setError("");
+    try {
+      const data = await FetchKidChoreEntries(activeKidId, 500, false);
+      setHistoryEntries(data || []);
+      setStatus("ready");
+    } catch (err) {
+      setStatus("error");
+      setError(err?.message || "Unable to load history.");
+    }
+  };
+
+  const loadLedger = async () => {
+    if (!activeKidId) {
+      return;
+    }
+    try {
+      const data = await FetchKidLedger(activeKidId, 500);
+      setLedgerEntries(data?.Entries || []);
+    } catch (err) {
+      setLedgerEntries([]);
+    }
+  };
+
+  const loadDayDetail = async (dateValue) => {
+    if (!activeKidId || !dateValue) {
+      return;
+    }
+    setDayStatus("loading");
+    try {
+      const detail = await FetchKidDayDetail(activeKidId, dateValue);
+      setDayDetail(detail);
+      setDayStatus("ready");
+    } catch (err) {
+      setDayStatus("error");
+      setError(err?.message || "Unable to load day detail.");
+    }
+  };
+
+  const refreshDayAndMonth = async (dateValue) => {
+    await Promise.all([loadMonthData(), loadDayDetail(dateValue)]);
+  };
+
   useEffect(() => {
-    loadData();
+    loadBaseData();
   }, []);
 
   useEffect(() => {
-    if (!requestedKidId || kids.length === 0) {
-      return;
+    const params = new URLSearchParams(location.search);
+    const kidParam = params.get("kid");
+    setRequestedKidId(kidParam ? Number(kidParam) : null);
+    const hash = location.hash.replace("#", "");
+    if (hash === "kids-history") {
+      setActiveTab("history");
+    } else if (hash === "kids-approvals") {
+      setActiveTab("approvals");
+    } else if (hash === "kids-chores") {
+      setActiveTab("chores");
     }
-    if (kids.some((kid) => kid.KidUserId === requestedKidId)) {
-      setActiveKidId(requestedKidId);
-    }
-  }, [kids, requestedKidId]);
+  }, [location.search, location.hash]);
 
   useEffect(() => {
     if (kids.length === 0) {
       setActiveKidId(null);
       return;
     }
+    if (requestedKidId && kids.some((kid) => kid.KidUserId === requestedKidId)) {
+      setActiveKidId(requestedKidId);
+      return;
+    }
     if (!activeKidId || !kids.some((kid) => kid.KidUserId === activeKidId)) {
       setActiveKidId(kids[0].KidUserId);
     }
-  }, [kids, activeKidId]);
+  }, [kids, requestedKidId, activeKidId]);
 
   useEffect(() => {
-    setShowTransactionModal(false);
-    setShowScheduleModal(false);
-    setShowChoreModal(false);
-    setEditingChore(null);
+    loadMonthData();
+  }, [activeKidId, monthParam]);
+
+  useEffect(() => {
+    loadLedger();
   }, [activeKidId]);
 
   useEffect(() => {
-    if (activeKidId) {
-      setHistoryFilterKid(String(activeKidId));
+    if (activeTab === "approvals") {
+      loadApprovals();
     }
-  }, [activeKidId]);
+  }, [activeTab, approvalFilterKid, approvalFilterType]);
 
   useEffect(() => {
-    if (!historyFilterOpen) {
+    if (activeTab === "history") {
+      loadHistory();
+    }
+  }, [activeTab, activeKidId, monthParam]);
+
+  useEffect(() => {
+    if (selectedDay) {
+      loadDayDetail(selectedDay);
+    }
+  }, [selectedDay, activeKidId]);
+
+  useEffect(() => {
+    if (!showEntryModal || !activeKidId || !entryForm.EntryDate) {
       return;
     }
-    const handleClick = (event) => {
-      if (!historyFilterRef.current) {
-        return;
-      }
-      if (!historyFilterRef.current.contains(event.target)) {
-        setHistoryFilterOpen(false);
+    const loadEntryDetail = async () => {
+      try {
+        const detail = await FetchKidDayDetail(activeKidId, entryForm.EntryDate);
+        setEntryDetail(detail);
+      } catch (err) {
+        setEntryDetail(null);
       }
     };
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, [historyFilterOpen]);
+    loadEntryDetail();
+  }, [showEntryModal, activeKidId, entryForm.EntryDate]);
+
+  useEffect(() => {
+    const handler = (event) => {
+      if (event.target.closest(".kids-admin-chore-menu")) {
+        return;
+      }
+      document
+        .querySelectorAll(".kids-admin-chore-menu[open]")
+        .forEach((menu) => menu.removeAttribute("open"));
+    };
+    document.addEventListener("click", handler);
+    return () => document.removeEventListener("click", handler);
+  }, []);
 
   const kidOptions = useMemo(
     () =>
       kids.map((kid) => ({
         Id: kid.KidUserId,
-        Name: kid.FirstName || kid.Username || `Kid ${kid.KidUserId}`
+        Name: BuildKidName(kid)
       })),
     [kids]
   );
@@ -192,471 +361,440 @@ const KidsAdmin = () => {
     [kids, activeKidId]
   );
 
-  const activeKidName = activeKid ? activeKid.FirstName || activeKid.Username : "Kid";
-  const activeKidLedger = activeKid ? kidLedgers[activeKid.KidUserId] : null;
-  const activeRule = activeKid ? kidRules[activeKid.KidUserId] || EmptyRule() : EmptyRule();
-  const activeForm = activeKid ? transactionForms[activeKid.KidUserId] || EmptyTransaction() : EmptyTransaction();
-  const isBalanceAdjustment = activeForm.Type === "StartingBalance";
-  const isEditingChore = Boolean(editingChore);
-
-  const latestEntry = useMemo(() => {
-    if (!activeKidLedger?.Entries?.length) {
-      return null;
-    }
-    return [...activeKidLedger.Entries].sort(
-      (a, b) => new Date(b.CreatedAt).getTime() - new Date(a.CreatedAt).getTime()
-    )[0];
-  }, [activeKidLedger]);
-
-  const latestEntryLabel = latestEntry
-    ? `${FormatDate(latestEntry.CreatedAt)} · ${FormatTime(latestEntry.CreatedAt)}`
-    : "-";
-  const latestEnteredBy = latestEntry?.CreatedByName || (latestEntry ? `User ${latestEntry.CreatedByUserId}` : "-");
-
-  const NormalizeDate = (value) => {
-    if (!value) {
-      return null;
-    }
-    const parsed = new Date(value);
-    if (Number.isNaN(parsed.getTime())) {
-      return null;
-    }
-    return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
-  };
-
-  const AddDays = (value, days) => {
-    const next = new Date(value);
-    next.setDate(next.getDate() + days);
-    return next;
-  };
-
-  const DaysInMonth = (year, monthIndex) => {
-    return new Date(year, monthIndex + 1, 0).getDate();
-  };
-
-  const WeekdayIndex = (value) => {
-    return (value.getDay() + 6) % 7;
-  };
-
-  const NextWeekly = (afterDate, dayOfWeek) => {
-    const delta = (dayOfWeek - WeekdayIndex(afterDate) + 7) % 7;
-    return AddDays(afterDate, delta === 0 ? 7 : delta);
-  };
-
-  const NextFortnightly = (afterDate, anchorDate) => {
-    if (afterDate < anchorDate) {
-      return anchorDate;
-    }
-    const deltaDays = Math.floor((afterDate - anchorDate) / 86400000);
-    const remainder = deltaDays % 14;
-    if (remainder === 0) {
-      return AddDays(afterDate, 14);
-    }
-    return AddDays(afterDate, 14 - remainder);
-  };
-
-  const NextMonthly = (afterDate, dayOfMonth) => {
-    const year = afterDate.getFullYear();
-    const monthIndex = afterDate.getMonth() + 1;
-    const targetYear = monthIndex > 11 ? year + 1 : year;
-    const targetMonth = monthIndex > 11 ? 0 : monthIndex;
-    const day = Math.min(dayOfMonth, DaysInMonth(targetYear, targetMonth));
-    return new Date(targetYear, targetMonth, day);
-  };
-
-  const FirstMonthly = (startDate, dayOfMonth) => {
-    const day = Math.min(dayOfMonth, DaysInMonth(startDate.getFullYear(), startDate.getMonth()));
-    const candidate = new Date(startDate.getFullYear(), startDate.getMonth(), day);
-    if (candidate < startDate) {
-      return NextMonthly(startDate, dayOfMonth);
-    }
-    return candidate;
-  };
-
-  const NextPocketMoneyRun = (rule) => {
-    if (!rule || !rule.IsActive || !rule.Amount) {
-      return null;
-    }
-    const startDate = NormalizeDate(rule.StartDate);
-    if (!startDate) {
-      return null;
-    }
-    const today = NormalizeDate(new Date());
-    const dayOfWeek = Number(rule.DayOfWeek);
-    const dayOfMonth = Number(rule.DayOfMonth);
-    let nextDate = null;
-    let anchorDate = startDate;
-
-    if (rule.Frequency === "weekly") {
-      if (Number.isNaN(dayOfWeek)) {
-        return null;
-      }
-      if (rule.LastPostedOn) {
-        const lastPosted = NormalizeDate(rule.LastPostedOn);
-        nextDate = lastPosted ? NextWeekly(lastPosted, dayOfWeek) : startDate;
-      } else {
-        nextDate = startDate;
-        if (WeekdayIndex(nextDate) !== dayOfWeek) {
-          nextDate = NextWeekly(AddDays(nextDate, -1), dayOfWeek);
-        }
-      }
-    } else if (rule.Frequency === "fortnightly") {
-      if (Number.isNaN(dayOfWeek)) {
-        return null;
-      }
-      if (WeekdayIndex(anchorDate) !== dayOfWeek) {
-        anchorDate = NextWeekly(AddDays(anchorDate, -1), dayOfWeek);
-      }
-      if (rule.LastPostedOn) {
-        const lastPosted = NormalizeDate(rule.LastPostedOn);
-        nextDate = lastPosted ? NextFortnightly(lastPosted, anchorDate) : anchorDate;
-      } else {
-        nextDate = anchorDate;
-      }
-    } else if (rule.Frequency === "monthly") {
-      if (Number.isNaN(dayOfMonth)) {
-        return null;
-      }
-      if (rule.LastPostedOn) {
-        const lastPosted = NormalizeDate(rule.LastPostedOn);
-        nextDate = lastPosted ? NextMonthly(lastPosted, dayOfMonth) : FirstMonthly(startDate, dayOfMonth);
-      } else {
-        nextDate = FirstMonthly(startDate, dayOfMonth);
-      }
-    }
-
-    if (!nextDate) {
-      return null;
-    }
-    while (nextDate < today) {
-      if (rule.Frequency === "weekly") {
-        nextDate = NextWeekly(nextDate, dayOfWeek);
-      } else if (rule.Frequency === "fortnightly") {
-        nextDate = NextFortnightly(nextDate, anchorDate);
-      } else {
-        nextDate = NextMonthly(nextDate, dayOfMonth);
-      }
-    }
-    return nextDate;
-  };
-
-  const runningBalanceMap = useMemo(() => {
-    const map = new Map();
-    kids.forEach((kid) => {
-      const ledger = kidLedgers[kid.KidUserId]?.Entries || [];
-      const sorted = [...ledger].sort((a, b) => {
-        const aDate = new Date(a.EntryDate).getTime();
-        const bDate = new Date(b.EntryDate).getTime();
-        if (aDate !== bDate) {
-          return aDate - bDate;
-        }
-        const aCreated = new Date(a.CreatedAt).getTime();
-        const bCreated = new Date(b.CreatedAt).getTime();
-        return aCreated - bCreated;
-      });
-      let total = 0;
-      sorted.forEach((entry) => {
-        total += Number(entry.Amount) || 0;
-        map.set(entry.Id, total);
-      });
+  const overviewByDate = useMemo(() => {
+    const map = {};
+    (monthOverview?.Days || []).forEach((day) => {
+      map[day.Date] = day;
     });
     return map;
-  }, [kids, kidLedgers]);
+  }, [monthOverview]);
 
-  const historyEntries = useMemo(() => {
-    return kids.flatMap((kid) => {
-      const ledger = kidLedgers[kid.KidUserId]?.Entries || [];
-      const kidName = kid.FirstName || kid.Username || `Kid ${kid.KidUserId}`;
-      return ledger.map((entry) => ({
-        ...entry,
-        KidUserId: kid.KidUserId,
-        KidName: kidName,
-        RunningBalance: runningBalanceMap.get(entry.Id) ?? null,
-        CreatedByName: entry.CreatedByName || null
-      }));
-    });
-  }, [kids, kidLedgers, runningBalanceMap]);
+  const calendarCells = useMemo(() => {
+    const start = new Date(monthCursor.getFullYear(), monthCursor.getMonth(), 1);
+    const daysInMonth = new Date(monthCursor.getFullYear(), monthCursor.getMonth() + 1, 0).getDate();
+    const startOffset = (start.getDay() + 6) % 7;
+    const cells = [];
+    for (let i = 0; i < startOffset; i += 1) {
+      cells.push({ isEmpty: true, key: `empty-${i}` });
+    }
+    for (let day = 1; day <= daysInMonth; day += 1) {
+      const dateValue = new Date(monthCursor.getFullYear(), monthCursor.getMonth(), day);
+      const dateKey = BuildDateKey(dateValue);
+      const data = overviewByDate[dateKey];
+      const dailyTotal = data?.DailyTotal || 0;
+      const dailyDone = data?.DailyDone || 0;
+      let statusText = "";
+      let statusTone = "";
+      let statusIcon = "";
+      if (dailyTotal > 0) {
+        if (dailyDone >= dailyTotal) {
+          statusText = "Done";
+          statusTone = "done";
+        } else if (dateKey === todayKey) {
+          statusText = "WIP";
+          statusTone = "progress";
+        } else if (dateKey < todayKey) {
+          statusText = "Missed";
+          statusTone = "missed";
+        }
+      } else if (dateKey <= todayKey) {
+        statusText = "N/A";
+        if (dateKey === todayKey) {
+          statusTone = "progress";
+        } else {
+          statusTone = "missed";
+        }
+      }
+      if (statusText === "Done") {
+        statusIcon = "check";
+      } else if (statusText === "Missed") {
+        statusIcon = "close";
+      } else if (statusText === "WIP") {
+        statusIcon = "reset";
+      } else if (statusText === "No chores available") {
+        statusIcon = "info";
+      }
+      cells.push({
+        isEmpty: false,
+        key: dateKey,
+        dateKey,
+        dayNumber: day,
+        statusText,
+        statusTone,
+        statusIcon,
+        bonusTotal: data?.BonusApprovedTotal || 0,
+        pendingCount: data?.PendingCount || 0
+      });
+    }
+    return cells;
+  }, [monthCursor, overviewByDate, todayKey]);
 
-  const historyTypes = useMemo(() => {
-    const types = new Set();
-    historyEntries.forEach((entry) => {
-      if (entry.EntryType) {
-        types.add(entry.EntryType);
+  const choresForKid = useMemo(() => {
+    if (!activeKidId) {
+      return [];
+    }
+    return chores.filter((chore) => (chore.AssignedKidIds || []).includes(activeKidId));
+  }, [chores, activeKidId]);
+
+  const groupedChores = useMemo(() => {
+    const filtered = chores
+      .filter((chore) => {
+        if (!choreSearch.trim()) {
+          return true;
+        }
+        return chore.Label.toLowerCase().includes(choreSearch.trim().toLowerCase());
+      })
+      .filter((chore) => chore.Label);
+
+    const groups = {
+      Daily: [],
+      Habit: [],
+      Bonus: []
+    };
+
+    filtered.forEach((chore) => {
+      if (groups[chore.Type]) {
+        groups[chore.Type].push(chore);
       }
     });
-    return Array.from(types).sort((a, b) => a.localeCompare(b));
-  }, [historyEntries]);
+
+    Object.keys(groups).forEach((type) => {
+      groups[type] = groups[type].sort((a, b) => {
+        if ((a.SortOrder || 0) !== (b.SortOrder || 0)) {
+          return (a.SortOrder || 0) - (b.SortOrder || 0);
+        }
+        return a.Label.localeCompare(b.Label);
+      });
+    });
+
+    return groups;
+  }, [chores, choreSearch]);
+
+  const choreCounts = useMemo(() => {
+    const counts = {
+      Daily: 0,
+      Habit: 0,
+      Bonus: 0,
+      Disabled: 0
+    };
+    chores.forEach((chore) => {
+      if (chore.IsActive === false) {
+        counts.Disabled += 1;
+      }
+      if (chore.Type === "Daily") {
+        counts.Daily += 1;
+      } else if (chore.Type === "Habit") {
+        counts.Habit += 1;
+      } else if (chore.Type === "Bonus") {
+        counts.Bonus += 1;
+      }
+    });
+    return counts;
+  }, [chores]);
+
+  const assignedToActiveCount = useMemo(() => {
+    if (!activeKidId) {
+      return 0;
+    }
+    return chores.filter((chore) => (chore.AssignedKidIds || []).includes(activeKidId)).length;
+  }, [chores, activeKidId]);
+
+  const visibleChoreGroups = useMemo(() => {
+    const disabledChores = [
+      ...groupedChores.Daily,
+      ...groupedChores.Habit,
+      ...groupedChores.Bonus
+    ].filter((chore) => chore.IsActive === false);
+    if (choreFilter === "Daily") {
+      return [["Daily", groupedChores.Daily]];
+    }
+    if (choreFilter === "Habit") {
+      return [["Habit", groupedChores.Habit]];
+    }
+    if (choreFilter === "Bonus") {
+      return [["Bonus", groupedChores.Bonus]];
+    }
+    if (choreFilter === "disabled") {
+      return [["Disabled", disabledChores]];
+    }
+    return [
+      ["Daily", groupedChores.Daily],
+      ["Habit", groupedChores.Habit],
+      ["Bonus", groupedChores.Bonus]
+    ];
+  }, [groupedChores, choreFilter, chores]);
+
+  const filteredApprovals = useMemo(() => {
+    return pendingApprovals.filter((entry) => {
+      if (approvalRangeStart && entry.EntryDate < approvalRangeStart) {
+        return false;
+      }
+      if (approvalRangeEnd && entry.EntryDate > approvalRangeEnd) {
+        return false;
+      }
+      return true;
+    });
+  }, [pendingApprovals, approvalRangeStart, approvalRangeEnd]);
+
+  const approvalsByDate = useMemo(() => {
+    const grouped = {};
+    filteredApprovals.forEach((entry) => {
+      grouped[entry.EntryDate] = grouped[entry.EntryDate] || [];
+      grouped[entry.EntryDate].push(entry);
+    });
+    return grouped;
+  }, [filteredApprovals]);
+
+  const approvalsDates = useMemo(() => {
+    return Object.keys(approvalsByDate).sort(
+      (a, b) =>
+        new Date(`${b}T00:00:00`).getTime() - new Date(`${a}T00:00:00`).getTime()
+    );
+  }, [approvalsByDate]);
+
+  const monthStartKey =
+    monthSummary?.MonthStart ||
+    BuildDateKey(new Date(monthCursor.getFullYear(), monthCursor.getMonth(), 1));
+  const monthEndKey =
+    monthSummary?.MonthEnd ||
+    BuildDateKey(new Date(monthCursor.getFullYear(), monthCursor.getMonth() + 1, 0));
+  const ledgerCutoffKey = isCurrentMonth ? todayKey : monthEndKey;
+
+  const ledgerTotals = useMemo(() => {
+    if (!ledgerEntries.length) {
+      return { moneyIn: 0, moneyOut: 0 };
+    }
+    const startTime = new Date(`${monthStartKey}T00:00:00`).getTime();
+    const endTime = new Date(`${ledgerCutoffKey}T23:59:59`).getTime();
+    return ledgerEntries.reduce(
+      (acc, entry) => {
+        const entryTime = new Date(`${entry.EntryDate}T00:00:00`).getTime();
+        if (Number.isNaN(entryTime) || entryTime < startTime || entryTime > endTime) {
+          return acc;
+        }
+        const amount = Number(entry.Amount || 0);
+        if (amount >= 0) {
+          acc.moneyIn += amount;
+        } else {
+          acc.moneyOut += Math.abs(amount);
+        }
+        return acc;
+      },
+      { moneyIn: 0, moneyOut: 0 }
+    );
+  }, [ledgerEntries, monthStartKey, ledgerCutoffKey]);
+
+  const currentTotal = useMemo(() => {
+    if (!monthSummary || !monthOverview?.Days?.length) {
+      return 0;
+    }
+    const dailySlice = Number(monthSummary.DailySlice || 0);
+    const cutoffKey = isCurrentMonth ? todayKey : monthSummary.MonthEnd;
+    let total = 0;
+    monthOverview.Days.forEach((day) => {
+      if (day.Date > cutoffKey) {
+        return;
+      }
+      const isDone = day.DailyTotal === 0 || day.DailyDone >= day.DailyTotal;
+      if (isDone) {
+        total += dailySlice;
+      }
+      if (day.BonusApprovedTotal) {
+        total += Number(day.BonusApprovedTotal);
+      }
+    });
+    return Math.max(total, 0);
+  }, [monthSummary, monthOverview, isCurrentMonth, todayKey]);
+
+  const entriesForMonth = useMemo(() => {
+    const start = new Date(monthCursor.getFullYear(), monthCursor.getMonth(), 1);
+    const end = new Date(monthCursor.getFullYear(), monthCursor.getMonth() + 1, 0);
+    return historyEntries.filter((entry) => {
+      const entryDate = new Date(`${entry.EntryDate}T00:00:00`);
+      return entryDate >= start && entryDate <= end;
+    });
+  }, [historyEntries, monthCursor]);
 
   const filteredHistory = useMemo(() => {
-    const query = historySearch.trim().toLowerCase();
-    return historyEntries.filter((entry) => {
-      if (!historyShowDeleted && entry.IsDeleted) {
-        return false;
+    return entriesForMonth.filter((entry) => {
+      if (historyFilter === "Daily") {
+        return entry.ChoreType === "Daily";
       }
-      if (historyFilterKid !== "all" && String(entry.KidUserId) !== historyFilterKid) {
-        return false;
+      if (historyFilter === "Habit") {
+        return entry.ChoreType === "Habit";
       }
-      if (historyFilterType !== "all" && entry.EntryType !== historyFilterType) {
-        return false;
+      if (historyFilter === "Bonus") {
+        return entry.ChoreType === "Bonus";
       }
-      if (!query) {
-        return true;
+      if (historyFilter === "Pending") {
+        return entry.Status === "Pending";
       }
-      const haystack = [
-        entry.KidName,
-        entry.EntryType,
-        entry.Narrative,
-        entry.Notes,
-        entry.CreatedByName,
-        String(entry.Amount),
-        entry.RunningBalance !== null ? String(entry.RunningBalance) : null,
-        FormatCurrency(entry.Amount),
-        entry.RunningBalance !== null ? FormatCurrency(entry.RunningBalance) : null,
-        FormatDate(entry.EntryDate),
-        FormatTime(entry.CreatedAt)
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
-      return haystack.includes(query);
+      if (historyFilter === "Approved") {
+        return entry.Status === "Approved";
+      }
+      if (historyFilter === "Rejected") {
+        return entry.Status === "Rejected";
+      }
+      return true;
     });
-  }, [
-    historyEntries,
-    historyFilterKid,
-    historyFilterType,
-    historySearch,
-    historyShowDeleted
-  ]);
+  }, [entriesForMonth, historyFilter]);
 
-  const BuildEntryDateTime = (entry) => {
-    const entryDate = new Date(entry.EntryDate);
-    const created = new Date(entry.CreatedAt);
-    if (Number.isNaN(entryDate.getTime())) {
-      return created;
-    }
-    if (Number.isNaN(created.getTime())) {
-      return entryDate;
-    }
-    const combined = new Date(entryDate);
-    combined.setHours(
-      created.getHours(),
-      created.getMinutes(),
-      created.getSeconds(),
-      created.getMilliseconds()
+  const historyByDate = useMemo(() => {
+    const grouped = {};
+    filteredHistory.forEach((entry) => {
+      grouped[entry.EntryDate] = grouped[entry.EntryDate] || [];
+      grouped[entry.EntryDate].push(entry);
+    });
+    return grouped;
+  }, [filteredHistory]);
+
+  const historyDates = useMemo(() => {
+    return Object.keys(historyByDate).sort(
+      (a, b) =>
+        new Date(`${b}T00:00:00`).getTime() - new Date(`${a}T00:00:00`).getTime()
     );
-    return combined;
-  };
+  }, [historyByDate]);
 
-  const sortedHistory = useMemo(() => {
-    const sorted = [...filteredHistory];
-    const direction = historySort.Direction === "asc" ? 1 : -1;
-    sorted.sort((a, b) => {
-      let valueA = "";
-      let valueB = "";
-      switch (historySort.Key) {
-        case "Kid":
-          valueA = a.KidName || "";
-          valueB = b.KidName || "";
-          break;
-        case "Type":
-          valueA = a.EntryType || "";
-          valueB = b.EntryType || "";
-          break;
-        case "Narrative":
-          valueA = a.Narrative || "";
-          valueB = b.Narrative || "";
-          break;
-        case "EnteredBy":
-          valueA = a.CreatedByName || "";
-          valueB = b.CreatedByName || "";
-          break;
-        case "When":
-          valueA = BuildEntryDateTime(a).getTime();
-          valueB = BuildEntryDateTime(b).getTime();
-          break;
-        case "Amount":
-          valueA = Number(a.Amount) || 0;
-          valueB = Number(b.Amount) || 0;
-          break;
-        case "Balance":
-          valueA = Number(a.RunningBalance) || 0;
-          valueB = Number(b.RunningBalance) || 0;
-          break;
-        default:
-          valueA = BuildEntryDateTime(a).getTime();
-          valueB = BuildEntryDateTime(b).getTime();
-      }
-      if (typeof valueA === "number" && typeof valueB === "number") {
-        return (valueA - valueB) * direction;
-      }
-      return String(valueA).localeCompare(String(valueB)) * direction;
+  const entryByChoreId = useMemo(() => {
+    const map = new Map();
+    (dayDetail?.Entries || []).forEach((entry) => {
+      map.set(entry.ChoreId, entry);
     });
-    return sorted;
-  }, [filteredHistory, historySort]);
+    return map;
+  }, [dayDetail]);
 
-  const SetHistorySort = (key) => {
-    setHistorySort((prev) => {
-      if (prev.Key === key) {
-        return { Key: key, Direction: prev.Direction === "asc" ? "desc" : "asc" };
-      }
-      return { Key: key, Direction: "desc" };
-    });
-  };
-
-  const HistorySortIcon = ({ columnKey }) => {
-    if (historySort.Key !== columnKey) {
-      return null;
+  const availableChoresByType = useMemo(() => {
+    if (showEntryModal && entryDetail && entryDetail.Date === entryForm.EntryDate) {
+      return {
+        Daily: entryDetail.DailyJobs || [],
+        Habit: entryDetail.Habits || [],
+        Bonus: entryDetail.BonusTasks || []
+      };
     }
-    return (
-      <Icon name={historySort.Direction === "asc" ? "sortUp" : "sortDown"} className="icon" />
-    );
+    if (!showEntryModal && dayDetail && dayDetail.Date === selectedDay) {
+      return {
+        Daily: dayDetail.DailyJobs || [],
+        Habit: dayDetail.Habits || [],
+        Bonus: dayDetail.BonusTasks || []
+      };
+    }
+    const active = choresForKid.filter((chore) => chore.IsActive !== false);
+    return {
+      Daily: active.filter((chore) => chore.Type === "Daily"),
+      Habit: active.filter((chore) => chore.Type === "Habit"),
+      Bonus: active.filter((chore) => chore.Type === "Bonus")
+    };
+  }, [showEntryModal, entryDetail, entryForm.EntryDate, dayDetail, selectedDay, choresForKid]);
+
+  const openAllowanceModal = async () => {
+    if (!activeKidId) {
+      return;
+    }
+    setStatus("loading");
+    setError("");
+    try {
+      const rule = await FetchPocketMoneyRule(activeKidId);
+      setAllowanceForm({
+        Amount: rule?.Amount ? String(rule.Amount) : "40",
+        StartDate: rule?.StartDate || BuildToday()
+      });
+      setShowAllowanceModal(true);
+      setStatus("ready");
+    } catch (err) {
+      setStatus("error");
+      setError(err?.message || "Unable to load allowance.");
+    }
   };
 
-  const onTransactionChange = (kidId, event) => {
-    const { name, value } = event.target;
-    setTransactionForms((prev) => ({
+  const openChoreForm = (chore = null, returnToList = false) => {
+    if (chore) {
+      setEditingChore(chore);
+      setChoreForm({
+        Label: chore.Label,
+        Type: chore.Type,
+        Amount: chore.Amount ? String(chore.Amount) : "",
+        SortOrder: String(chore.SortOrder || 0),
+        IsActive: chore.IsActive !== false,
+        KidUserIds: chore.AssignedKidIds || [],
+        StartDate: chore.StartDate || BuildToday(),
+        EndDate: chore.EndDate || ""
+      });
+    } else {
+      setEditingChore(null);
+      setChoreForm(EmptyChoreForm());
+    }
+    if (returnToList) {
+      setShowChoresModal(false);
+      setReturnToChoresModal(true);
+    } else {
+      setReturnToChoresModal(false);
+    }
+    setShowChoreForm(true);
+  };
+
+  const closeChoreForm = () => {
+    setShowChoreForm(false);
+    setEditingChore(null);
+    setChoreForm(EmptyChoreForm());
+    if (returnToChoresModal) {
+      setShowChoresModal(true);
+      setReturnToChoresModal(false);
+    }
+  };
+
+  const onChoreFormChange = (event) => {
+    const { name, value, type, checked } = event.target;
+    setChoreForm((prev) => ({
       ...prev,
-      [kidId]: { ...prev[kidId], [name]: value }
+      [name]: type === "checkbox" ? checked : value
     }));
   };
 
-  const submitTransaction = async (kidId) => {
-    const form = transactionForms[kidId];
-    if (!form || !form.Amount || !form.Narrative) {
-      setError("Add an amount and a short note.");
+  const onToggleKidAssignment = (kidId) => {
+    setChoreForm((prev) => {
+      const existing = new Set(prev.KidUserIds || []);
+      if (existing.has(kidId)) {
+        existing.delete(kidId);
+      } else {
+        existing.add(kidId);
+      }
+      return { ...prev, KidUserIds: Array.from(existing) };
+    });
+  };
+
+  const onSaveChore = async (event) => {
+    event.preventDefault();
+    if (!choreForm.Label.trim()) {
+      setError("Chore name is required.");
+      return;
+    }
+    if (choreForm.Type === "Bonus" && Number(choreForm.Amount || 0) <= 0) {
+      setError("Bonus amount is required.");
       return;
     }
     setStatus("saving");
     setError("");
     try {
       const payload = {
-        Amount: Number(form.Amount),
-        EntryDate: form.EntryDate,
-        Narrative: form.Narrative,
-        Notes: form.Notes || null
+        Label: choreForm.Label.trim(),
+        Type: choreForm.Type,
+        Amount: choreForm.Type === "Bonus" ? Number(choreForm.Amount || 0) : 0,
+        SortOrder: Number(choreForm.SortOrder || 0),
+        IsActive: choreForm.IsActive,
+        StartDate: choreForm.StartDate || null,
+        EndDate: choreForm.EndDate || null
       };
-      if (form.Type === "Deposit") {
-        await CreateKidDeposit(kidId, payload);
-      } else if (form.Type === "Withdrawal") {
-        await CreateKidWithdrawal(kidId, payload);
-      } else {
-        await CreateKidStartingBalance(kidId, payload);
-      }
-      await loadData();
-      setShowTransactionModal(false);
-    } catch (err) {
-      setStatus("error");
-      setError(err?.message || "Unable to add transaction.");
-    } finally {
-      setStatus("ready");
-    }
-  };
-
-  const onRuleChange = (kidId, event) => {
-    const { name, value, type, checked } = event.target;
-    setKidRules((prev) => ({
-      ...prev,
-      [kidId]: {
-        ...prev[kidId],
-        [name]: type === "checkbox" ? checked : value
-      }
-    }));
-  };
-
-  const saveRule = async (kidId) => {
-    const rule = kidRules[kidId] || EmptyRule();
-    if (!rule.Amount) {
-      setError("Set a pocket money amount.");
-      return;
-    }
-    setStatus("saving");
-    setError("");
-    try {
-      await UpdatePocketMoneyRule(kidId, {
-        Amount: Number(rule.Amount),
-        Frequency: rule.Frequency,
-        DayOfWeek: rule.Frequency !== "monthly" ? Number(rule.DayOfWeek) : null,
-        DayOfMonth: rule.Frequency === "monthly" ? Number(rule.DayOfMonth) : null,
-        StartDate: rule.StartDate,
-        IsActive: rule.IsActive
-      });
-      await loadData();
-      setShowScheduleModal(false);
-    } catch (err) {
-      setStatus("error");
-      setError(err?.message || "Unable to save pocket money.");
-    } finally {
-      setStatus("ready");
-    }
-  };
-
-  const onChoreChange = (event) => {
-    const { name, value } = event.target;
-    setChoreForm((prev) => ({ ...prev, [name]: value }));
-  };
-
-  const resetChoreForm = () => {
-    setChoreForm({ Label: "", Amount: "", KidUserIds: [] });
-  };
-
-  const openChoreModal = (chore = null) => {
-    const assigned = Array.isArray(chore?.AssignedKidIds)
-      ? chore.AssignedKidIds.map((kidId) => Number(kidId))
-      : [];
-    setEditingChore(chore);
-    setChoreForm({
-      Label: chore?.Label || "",
-      Amount: chore?.Amount ? String(chore.Amount) : "",
-      KidUserIds: assigned
-    });
-    setShowChoreModal(true);
-  };
-
-  const closeChoreModal = () => {
-    setShowChoreModal(false);
-    setEditingChore(null);
-    resetChoreForm();
-  };
-
-  const onChoreKidToggle = (kidId) => {
-    setChoreForm((prev) => {
-      const nextIds = new Set(prev.KidUserIds);
-      if (nextIds.has(kidId)) {
-        nextIds.delete(kidId);
-      } else {
-        nextIds.add(kidId);
-      }
-      return { ...prev, KidUserIds: Array.from(nextIds) };
-    });
-  };
-
-  const onSaveChore = async (event) => {
-    event.preventDefault();
-    if (!choreForm.Label || !choreForm.Amount) {
-      setError("Add a chore name and amount.");
-      return;
-    }
-    setStatus("saving");
-    setError("");
-    try {
+      let saved = null;
       if (editingChore) {
-        await UpdateParentChore(editingChore.Id, {
-          Label: choreForm.Label,
-          Amount: Number(choreForm.Amount)
-        });
-        await SetChoreAssignments(editingChore.Id, { KidUserIds: choreForm.KidUserIds });
+        saved = await UpdateParentChore(editingChore.Id, payload);
       } else {
-        const chore = await CreateParentChore({
-          Label: choreForm.Label,
-          Amount: Number(choreForm.Amount),
-          IsActive: true
-        });
-        if (choreForm.KidUserIds.length > 0) {
-          await SetChoreAssignments(chore.Id, { KidUserIds: choreForm.KidUserIds });
-        }
+        saved = await CreateParentChore(payload);
       }
-      await loadData();
-      closeChoreModal();
+      if (saved?.Id) {
+        await SetChoreAssignments(saved.Id, { KidUserIds: choreForm.KidUserIds || [] });
+      }
+      closeChoreForm();
+      await loadBaseData();
     } catch (err) {
       setStatus("error");
       setError(err?.message || "Unable to save chore.");
@@ -666,725 +804,1402 @@ const KidsAdmin = () => {
   };
 
   const onDeleteChore = async (chore) => {
-    if (!chore) {
+    const confirmed = window.confirm(
+      "Disable this chore? It will be hidden from kids but kept for history."
+    );
+    if (!confirmed) {
       return;
     }
-    if (!window.confirm(`Delete "${chore.Label}"?`)) {
-      return;
+    try {
+      await DeleteParentChore(chore.Id);
+      await loadBaseData();
+    } catch (err) {
+      setError(err?.message || "Unable to delete chore.");
     }
+  };
+
+  const closeChoreMenu = (event) => {
+    const menu = event.currentTarget.closest(".kids-admin-chore-menu");
+    if (menu) {
+      menu.removeAttribute("open");
+    }
+  };
+
+  const onToggleChoreActive = async (chore) => {
     setStatus("saving");
     setError("");
     try {
-      await DeleteParentChore(chore.Id);
-      await loadData();
+      await UpdateParentChore(chore.Id, { IsActive: !chore.IsActive });
+      await loadBaseData();
     } catch (err) {
       setStatus("error");
-      setError(err?.message || "Unable to delete chore.");
+      setError(err?.message || "Unable to update chore.");
     } finally {
       setStatus("ready");
     }
   };
 
-  const pocketNextRun = NextPocketMoneyRun(activeRule);
-  const pocketNextLabel = pocketNextRun ? FormatDate(pocketNextRun) : "-";
-  const pocketAmountLabel = activeRule?.Amount ? FormatCurrency(activeRule.Amount) : "-";
+  const onSaveAllowance = async (event) => {
+    event.preventDefault();
+    if (!activeKidId) {
+      return;
+    }
+    const amountValue = Number(allowanceForm.Amount || 0);
+    if (!amountValue || Number.isNaN(amountValue)) {
+      setError("Monthly allowance is required.");
+      return;
+    }
+    setStatus("saving");
+    setError("");
+    try {
+      const payload = {
+        Amount: amountValue,
+        Frequency: "monthly",
+        DayOfMonth: 1,
+        DayOfWeek: 0,
+        StartDate: allowanceForm.StartDate || BuildToday(),
+        IsActive: true
+      };
+      await UpdatePocketMoneyRule(activeKidId, payload);
+      setShowAllowanceModal(false);
+      await loadMonthData();
+    } catch (err) {
+      setStatus("error");
+      setError(err?.message || "Unable to save allowance.");
+    } finally {
+      setStatus("ready");
+    }
+  };
+
+  const onApprovalAction = async (entryId, action) => {
+    setStatus("saving");
+    setError("");
+    try {
+      if (action === "approve") {
+        await ApproveKidsChoreEntry(entryId);
+      } else {
+        await RejectKidsChoreEntry(entryId);
+      }
+      await loadApprovals();
+      await loadMonthData();
+    } catch (err) {
+      setStatus("error");
+      setError(err?.message || "Unable to update approval.");
+    } finally {
+      setStatus("ready");
+    }
+  };
+
+  const onApproveDateGroup = async (dateKey) => {
+    const entries = approvalsByDate[dateKey] || [];
+    if (entries.length === 0) {
+      return;
+    }
+    setStatus("saving");
+    setError("");
+    try {
+      await Promise.all(entries.map((entry) => ApproveKidsChoreEntry(entry.Id)));
+      await loadApprovals();
+      await loadMonthData();
+    } catch (err) {
+      setStatus("error");
+      setError(err?.message || "Unable to approve items.");
+    } finally {
+      setStatus("ready");
+    }
+  };
+
+  const openDay = (dateKey) => {
+    setSelectedDay(dateKey);
+    setShowDayDrawer(true);
+  };
+
+  const closeDayDrawer = () => {
+    setShowDayDrawer(false);
+  };
+
+  const onToggleDayChore = async (chore) => {
+    if (!activeKidId || !selectedDay) {
+      return;
+    }
+    setStatus("saving");
+    setError("");
+    try {
+      const entry = entryByChoreId.get(chore.Id);
+      if (entry) {
+        if (entry.Status === "Approved") {
+          await DeleteParentKidChoreEntry(activeKidId, entry.Id);
+        } else {
+          await UpdateParentKidChoreEntry(activeKidId, entry.Id, { Status: "Approved" });
+        }
+      } else {
+        await CreateParentKidChoreEntry(activeKidId, {
+          ChoreId: chore.Id,
+          EntryDate: selectedDay,
+          Notes: ""
+        });
+      }
+      await refreshDayAndMonth(selectedDay);
+    } catch (err) {
+      setStatus("error");
+      setError(err?.message || "Unable to update chore.");
+    } finally {
+      setStatus("ready");
+    }
+  };
+
+  const openEntryModal = (options = {}) => {
+    const targetDate = options.dateValue || selectedDay || BuildToday();
+    const entry = options.entry || null;
+    const entryType = entry?.ChoreType || options.type || "Daily";
+    setSelectedDay(targetDate);
+    setShowDayDrawer(false);
+    setEntryDetail(null);
+    if (entry) {
+      setEntryForm({
+        EntryId: entry.Id,
+        EntryDate: entry.EntryDate,
+        Type: entryType,
+        ChoreId: String(entry.ChoreId),
+        Amount: entry.Amount ? String(entry.Amount) : "",
+        Notes: entry.Notes || "",
+        Status: entry.Status
+      });
+    } else {
+      setEntryForm({
+        EntryId: null,
+        EntryDate: targetDate,
+        Type: entryType,
+        ChoreId: options.choreId ? String(options.choreId) : "",
+        Amount: options.amount ? String(options.amount) : "",
+        Notes: "",
+        Status: ""
+      });
+    }
+    setShowEntryModal(true);
+  };
+
+  const onEntryFormChange = (event) => {
+    const { name, value } = event.target;
+    setEntryForm((prev) => ({
+      ...prev,
+      [name]: value,
+      ...(name === "Type" ? { ChoreId: "", Amount: "" } : null)
+    }));
+  };
+
+  const onSaveEntry = async (event) => {
+    event.preventDefault();
+    if (!activeKidId) {
+      return;
+    }
+    if (!entryForm.ChoreId) {
+      setError("Chore is required.");
+      return;
+    }
+    setStatus("saving");
+    setError("");
+    try {
+      const payload = {
+        ChoreId: Number(entryForm.ChoreId),
+        EntryDate: entryForm.EntryDate,
+        Notes: entryForm.Notes || null
+      };
+      if (entryForm.Type === "Bonus") {
+        payload.Amount = Number(entryForm.Amount || 0);
+      }
+      if (entryForm.EntryId) {
+        const updatePayload = {
+          EntryDate: entryForm.EntryDate,
+          Notes: entryForm.Notes || null
+        };
+        if (entryForm.Type === "Bonus") {
+          updatePayload.Amount = Number(entryForm.Amount || 0);
+        }
+        if (entryForm.Status) {
+          updatePayload.Status = entryForm.Status;
+        }
+        await UpdateParentKidChoreEntry(activeKidId, entryForm.EntryId, updatePayload);
+      } else {
+        await CreateParentKidChoreEntry(activeKidId, payload);
+      }
+      setShowEntryModal(false);
+      await refreshDayAndMonth(entryForm.EntryDate);
+      if (activeTab === "history") {
+        await loadHistory();
+      }
+    } catch (err) {
+      setStatus("error");
+      setError(err?.message || "Unable to save entry.");
+    } finally {
+      setStatus("ready");
+    }
+  };
+
+  const onDeleteEntry = async (entry) => {
+    if (!activeKidId) {
+      return;
+    }
+    const confirmed = window.confirm("Delete this entry? This cannot be undone.");
+    if (!confirmed) {
+      return;
+    }
+    setStatus("saving");
+    setError("");
+    try {
+      await DeleteParentKidChoreEntry(activeKidId, entry.Id);
+      await refreshDayAndMonth(entry.EntryDate);
+      if (activeTab === "history") {
+        await loadHistory();
+      }
+    } catch (err) {
+      setStatus("error");
+      setError(err?.message || "Unable to delete entry.");
+    } finally {
+      setStatus("ready");
+    }
+  };
+
+  const toggleApprovalGroup = (dateKey) => {
+    setApprovalExpanded((prev) => ({
+      ...prev,
+      [dateKey]: !prev[dateKey]
+    }));
+  };
+
+  const toggleHistoryGroup = (dateKey) => {
+    setHistoryExpanded((prev) => ({
+      ...prev,
+      [dateKey]: !prev[dateKey]
+    }));
+  };
+
+  const handleMonthChange = (delta) => {
+    setMonthCursor((prev) => new Date(prev.getFullYear(), prev.getMonth() + delta, 1));
+  };
+
+  const monthTitle = BuildMonthLabel(monthCursor);
+  const activeKidName = activeKid ? BuildKidName(activeKid) : "Kid";
+  const dayPendingCount = selectedDay ? overviewByDate[selectedDay]?.PendingCount || 0 : 0;
 
   return (
-    <div className="app-shell app-shell--wide">
-      <div className="kids-admin-container">
-        <div className="kids-admin">
-          <header className="kids-admin-header">
-            <div className="kids-admin-header-copy">
-              <p className="eyebrow">Kids money</p>
-              <h1>Balances, chores, and schedules</h1>
-              <p className="lede">Quick visibility without the kids touching the main UI.</p>
-              {kids.length ? (
-                <div className="kids-admin-switcher">
-                  {kids.length <= 4 ? (
-                    kids.map((kid) => (
-                      <button
-                        key={kid.KidUserId}
-                        type="button"
-                        className={`kids-admin-tab${
-                          activeKidId === kid.KidUserId ? " is-active" : ""
-                        }`}
-                        onClick={() => setActiveKidId(kid.KidUserId)}
-                      >
-                        {kid.FirstName || kid.Username}
-                      </button>
-                    ))
-                  ) : (
-                    <select
-                      aria-label="Select kid"
-                      value={activeKidId || ""}
-                      onChange={(event) => setActiveKidId(Number(event.target.value))}
+    <div className="kids-admin-container">
+      <div className="kids-admin">
+        <header className="kids-admin-header">
+          <div className="kids-admin-header-copy">
+            <h1>Kids portal</h1>
+            <p className="lede">Approvals, month summary, and chore setup.</p>
+            {kids.length ? (
+              <div className="kids-admin-switcher">
+                {kids.length <= 4 ? (
+                  kids.map((kid) => (
+                    <button
+                      key={kid.KidUserId}
+                      type="button"
+                      className={`kids-admin-tab${activeKidId === kid.KidUserId ? " is-active" : ""}`}
+                      onClick={() => setActiveKidId(kid.KidUserId)}
                     >
-                      <option value="" disabled>
-                        Select kid
+                      {kid.FirstName || kid.Username}
+                    </button>
+                  ))
+                ) : (
+                  <select
+                    aria-label="Select kid"
+                    value={activeKidId || ""}
+                    onChange={(event) => setActiveKidId(Number(event.target.value))}
+                  >
+                    <option value="" disabled>
+                      Select kid
+                    </option>
+                    {kidOptions.map((kid) => (
+                      <option key={kid.Id} value={kid.Id}>
+                        {kid.Name}
                       </option>
-                      {kidOptions.map((kid) => (
-                        <option key={kid.Id} value={kid.Id}>
-                          {kid.Name}
-                        </option>
-                      ))}
-                    </select>
+                    ))}
+                  </select>
+                )}
+              </div>
+            ) : null}
+          </div>
+        </header>
+
+        <div className="kids-admin-tabs" role="tablist" aria-label="Kids admin sections">
+          {[
+            { key: "month", label: "Month" },
+            { key: "history", label: "History" },
+            { key: "chores", label: "Chores" }
+          ].map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              className={`kids-admin-tab-button${activeTab === tab.key ? " is-active" : ""}`}
+              onClick={() => setActiveTab(tab.key)}
+              role="tab"
+              aria-selected={activeTab === tab.key}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+        <div className="kids-admin-header-actions">
+          <button
+            type="button"
+            className={`button-secondary-pill${activeTab === "approvals" ? " is-active" : ""}`}
+            onClick={() => setActiveTab("approvals")}
+          >
+            Approvals
+          </button>
+        </div>
+
+        {error ? <p className="form-error">{error}</p> : null}
+
+        {activeTab === "month" ? (
+          <section className="kids-admin-month">
+            <div className="kids-admin-month-header">
+              <div className="kids-admin-month-picker">
+                <button type="button" className="icon-button" onClick={() => handleMonthChange(-1)}>
+                  <Icon name="chevronLeft" className="icon" />
+                </button>
+                <span className="kids-admin-month-label">{monthTitle}</span>
+                <button
+                  type="button"
+                  className="icon-button"
+                  onClick={() => handleMonthChange(1)}
+                  disabled={isCurrentMonth}
+                >
+                  <Icon name="chevronRight" className="icon" />
+                </button>
+              </div>
+              <button
+                type="button"
+                className="button-secondary-pill"
+                onClick={openAllowanceModal}
+                disabled={!activeKidId}
+              >
+                Edit allowance
+              </button>
+            </div>
+
+            <div className="kids-admin-month-layout">
+              <section className="kids-admin-card kids-admin-summary-card">
+                <div>
+                  <h3>Month summary</h3>
+                  <p className="text-muted">{activeKidName}</p>
+                </div>
+                <div className="kids-admin-summary-grid">
+                  <div>
+                    <span className="kids-admin-summary-label">Base allowance</span>
+                    <span className="kids-admin-summary-value">
+                      {monthSummary ? FormatCurrency(monthSummary.MonthlyAllowance) : "-"}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="kids-admin-summary-label">Current total</span>
+                    <span className="kids-admin-summary-value">
+                      {monthSummary ? FormatCurrency(currentTotal) : "-"}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="kids-admin-summary-label">Money in</span>
+                    <span className="kids-admin-summary-value">
+                      {monthSummary ? FormatCurrency(ledgerTotals.moneyIn) : "-"}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="kids-admin-summary-label">Money out</span>
+                    <span className="kids-admin-summary-value">
+                      {monthSummary ? FormatCurrency(ledgerTotals.moneyOut) : "-"}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="kids-admin-summary-label">Missed days</span>
+                    <span className="kids-admin-summary-value">
+                      {monthSummary
+                        ? `${monthSummary.MissedDays} (${FormatCurrency(monthSummary.MissedDeduction)})`
+                        : "-"}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="kids-admin-summary-label">Bonus approved</span>
+                    <span className="kids-admin-summary-value">
+                      {monthSummary ? FormatCurrency(monthSummary.ApprovedBonusTotal) : "-"}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="kids-admin-summary-label">Bonus pending</span>
+                    <span className="kids-admin-summary-value">
+                      {monthSummary ? FormatCurrency(monthSummary.PendingBonusTotal) : "-"}
+                    </span>
+                  </div>
+                </div>
+                <div className="kids-admin-summary-total">
+                  <span>Projected total</span>
+                  <strong>
+                    {monthSummary ? FormatCurrency(monthSummary.ProjectedPayout) : "-"}
+                  </strong>
+                </div>
+              </section>
+
+              <section className="kids-admin-card kids-admin-calendar-card">
+                <div className="kids-admin-calendar-header">
+                  <h3>Calendar</h3>
+                  <p className="text-muted">Tap a day to edit entries.</p>
+                </div>
+                <div className="kids-admin-calendar-grid">
+                  {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((label) => (
+                    <div key={label} className="kids-admin-calendar-head">
+                      {label}
+                    </div>
+                  ))}
+                  {calendarCells.map((cell) =>
+                    cell.isEmpty ? (
+                      <div key={cell.key} className="kids-admin-day is-empty" />
+                    ) : (
+                      <button
+                        key={cell.key}
+                        type="button"
+                        className={`kids-admin-day${cell.key === todayKey ? " is-today" : ""}${
+                          cell.statusTone ? ` is-${cell.statusTone}` : ""
+                        }`}
+                        onClick={() => openDay(cell.dateKey)}
+                      >
+                        <div className="kids-admin-day-top">
+                          <span className="kids-admin-day-number">{cell.dayNumber}</span>
+                          {cell.pendingCount ? (
+                            <span className="kids-admin-day-pending">!</span>
+                          ) : null}
+                        </div>
+                        {cell.statusText ? (
+                          <span className={`kids-admin-day-status is-${cell.statusTone}`}>
+                            <span className="kids-admin-day-status-text">{cell.statusText}</span>
+                            {cell.statusIcon ? (
+                              <span className="kids-admin-day-status-icon" aria-hidden="true">
+                                <Icon name={cell.statusIcon} className="icon" />
+                              </span>
+                            ) : null}
+                          </span>
+                        ) : null}
+                        {cell.bonusTotal ? (
+                          <span className="kids-admin-day-bonus">
+                            +{FormatCurrency(cell.bonusTotal)}
+                          </span>
+                        ) : null}
+                      </button>
+                    )
                   )}
                 </div>
-              ) : null}
+              </section>
             </div>
-          </header>
+          </section>
+        ) : null}
 
-          {error ? <p className="form-error">{error}</p> : null}
+        {activeTab === "approvals" ? (
+          <section className="kids-admin-card kids-admin-approvals">
+            <div className="kids-admin-card-header">
+              <div>
+                <h2>Approvals</h2>
+                <p className="text-muted">Review backdated chores.</p>
+              </div>
+            </div>
+            <div className="kids-admin-approval-filters">
+              <label>
+                <span>Kid</span>
+                <select
+                  value={approvalFilterKid}
+                  onChange={(event) => setApprovalFilterKid(event.target.value)}
+                >
+                  <option value="all">All kids</option>
+                  {kidOptions.map((kid) => (
+                    <option key={kid.Id} value={String(kid.Id)}>
+                      {kid.Name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                <span>Type</span>
+                <select
+                  value={approvalFilterType}
+                  onChange={(event) => setApprovalFilterType(event.target.value)}
+                >
+                  <option value="all">All types</option>
+                  <option value="Daily">Daily jobs</option>
+                  <option value="Habit">Habits</option>
+                  <option value="Bonus">Bonus tasks</option>
+                </select>
+              </label>
+              <label>
+                <span>Date from</span>
+                <input
+                  type="date"
+                  value={approvalRangeStart}
+                  onChange={(event) => setApprovalRangeStart(event.target.value)}
+                />
+              </label>
+              <label>
+                <span>Date to</span>
+                <input
+                  type="date"
+                  value={approvalRangeEnd}
+                  onChange={(event) => setApprovalRangeEnd(event.target.value)}
+                />
+              </label>
+            </div>
 
-          <div className="kids-admin-layout">
-            <aside className="kids-admin-rail">
-              <section className="kids-admin-card kids-admin-card--balance">
-                <div className="kids-admin-card-header">
-                  <div>
-                    <h3>Balance</h3>
-                    <p className="text-muted">{activeKidName}</p>
-                  </div>
-                  <div className="kids-admin-balance-actions">
-                    <div className="kids-admin-balance">
-                      {activeKidLedger ? FormatCurrency(activeKidLedger.Balance) : "-"}
+            {approvalsDates.length === 0 ? (
+              <p className="text-muted">No pending approvals right now.</p>
+            ) : (
+              <div className="kids-admin-approval-groups">
+                {approvalsDates.map((dateKey) => {
+                  const entries = approvalsByDate[dateKey] || [];
+                  const isOpen = approvalExpanded[dateKey] || false;
+                  return (
+                    <div key={dateKey} className="kids-admin-approval-group">
+                      <div className="kids-admin-approval-group-header">
+                        <button
+                          type="button"
+                          className="kids-admin-approval-toggle"
+                          onClick={() => toggleApprovalGroup(dateKey)}
+                        >
+                          <span>{BuildDayLabel(dateKey)}</span>
+                          <span className="kids-pill kids-pill--muted">{entries.length}</span>
+                          <Icon
+                            name="chevronDown"
+                            className={`icon${isOpen ? " is-up" : ""}`}
+                          />
+                        </button>
+                        <button
+                          type="button"
+                          className="kids-outline-button"
+                          onClick={() => onApproveDateGroup(dateKey)}
+                          disabled={status === "saving"}
+                        >
+                          Approve all for this date
+                        </button>
+                      </div>
+                      {isOpen ? (
+                        <div className="kids-admin-approval-list">
+                          {entries.map((entry) => (
+                            <div key={entry.Id} className="kids-admin-approval-card">
+                              <div>
+                                <div className="kids-admin-approval-title">
+                                  <span>{entry.ChoreLabel}</span>
+                                  <span className="kids-pill">{TypeLabel(entry.ChoreType)}</span>
+                                </div>
+                                <p className="kids-muted">
+                                  {entry.KidName} • {entry.EntryDate} • Logged {BuildDateTimeLabel(entry.CreatedAt)}
+                                  {entry.Amount ? ` • ${FormatCurrency(entry.Amount)}` : ""}
+                                </p>
+                                {entry.Notes ? (
+                                  <p className="kids-admin-approval-notes">{entry.Notes}</p>
+                                ) : null}
+                              </div>
+                              <div className="kids-admin-approval-actions">
+                                <button
+                                  type="button"
+                                  className="kids-outline-button"
+                                  onClick={() => onApprovalAction(entry.Id, "reject")}
+                                  disabled={status === "saving"}
+                                >
+                                  Reject
+                                </button>
+                                <button
+                                  type="button"
+                                  className="kids-primary-button"
+                                  onClick={() => onApprovalAction(entry.Id, "approve")}
+                                  disabled={status === "saving"}
+                                >
+                                  Approve
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
                     </div>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+        ) : null}
+
+        {activeTab === "history" ? (
+          <section className="kids-admin-card kids-admin-history-view">
+            <div className="kids-admin-history-header">
+              <div className="kids-admin-month-picker">
+                <button type="button" className="icon-button" onClick={() => handleMonthChange(-1)}>
+                  <Icon name="chevronLeft" className="icon" />
+                </button>
+                <span className="kids-admin-month-label">{monthTitle}</span>
+                <button
+                  type="button"
+                  className="icon-button"
+                  onClick={() => handleMonthChange(1)}
+                  disabled={isCurrentMonth}
+                >
+                  <Icon name="chevronRight" className="icon" />
+                </button>
+              </div>
+              <div className="kids-admin-history-filters">
+                {[
+                  { key: "all", label: "All" },
+                  { key: "Daily", label: "Daily jobs" },
+                  { key: "Habit", label: "Habits" },
+                  { key: "Bonus", label: "Bonus tasks" },
+                  { key: "Pending", label: "Pending approval" },
+                  { key: "Approved", label: "Approved" },
+                  { key: "Rejected", label: "Rejected" }
+                ].map((filter) => (
+                  <button
+                    key={filter.key}
+                    type="button"
+                    className={`kids-filter-chip${historyFilter === filter.key ? " is-active" : ""}`}
+                    onClick={() => setHistoryFilter(filter.key)}
+                  >
+                    {filter.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {historyDates.length === 0 ? (
+              <p className="text-muted">No history entries for this month.</p>
+            ) : (
+              <div className="kids-admin-history-groups">
+                {historyDates.map((dateKey) => {
+                  const entries = historyByDate[dateKey] || [];
+                  const overview = overviewByDate[dateKey];
+                  const dailyTotal = overview?.DailyTotal || 0;
+                  const dailyDone = overview?.DailyDone || 0;
+                  const dailySummary = dailyTotal
+                    ? `${dailyDone}/${dailyTotal} daily jobs done`
+                    : "No daily jobs";
+                  const bonusTotal = overview?.BonusApprovedTotal || 0;
+                  const pendingCount = overview?.PendingCount || 0;
+                  const isPastOrToday = dateKey <= todayKey;
+                  let dayTone = "";
+                  if (isPastOrToday) {
+                    if (dailyTotal > 0) {
+                      dayTone = dailyDone >= dailyTotal ? "done" : "missed";
+                    } else {
+                      dayTone = "missed";
+                    }
+                  }
+                  const isOpen = historyExpanded[dateKey] || false;
+
+                  return (
+                    <div key={dateKey} className="kids-admin-history-group">
+                      <div
+                        className={`kids-admin-history-day-header${
+                          dayTone ? ` is-${dayTone}` : ""
+                        }`}
+                      >
+                        <button
+                          type="button"
+                          className="kids-admin-history-day-toggle"
+                          onClick={() => toggleHistoryGroup(dateKey)}
+                        >
+                          <div className="kids-admin-history-day-main">
+                            <span className="kids-admin-history-date">
+                              {BuildDayLabel(dateKey)}
+                            </span>
+                            {pendingCount ? (
+                              <span className="kids-admin-day-pending">!</span>
+                            ) : null}
+                          </div>
+                          <span className="kids-admin-history-date-meta">{dailySummary}</span>
+                          {bonusTotal ? (
+                            <span className="kids-admin-history-day-bonus">
+                              +{FormatCurrency(bonusTotal)}
+                            </span>
+                          ) : null}
+                          <Icon
+                            name="chevronDown"
+                            className={`icon${isOpen ? " is-up" : ""}`}
+                          />
+                        </button>
+                        <button
+                          type="button"
+                          className="primary-button"
+                          onClick={() => openEntryModal({ dateValue: dateKey })}
+                        >
+                          Add entry
+                        </button>
+                      </div>
+                      {isOpen ? (
+                        <div className="kids-history-group-list">
+                          {entries.map((entry) => {
+                            const isEntryExpanded = historyEntryExpandedId === entry.Id;
+                            return (
+                              <div key={entry.Id} className="kids-history-item">
+                                <button
+                                  type="button"
+                                  className={`kids-history-row${
+                                    isEntryExpanded ? " is-expanded" : ""
+                                  }`}
+                                  onClick={() =>
+                                    setHistoryEntryExpandedId(isEntryExpanded ? null : entry.Id)
+                                  }
+                                  aria-expanded={isEntryExpanded}
+                                >
+                                  <div className="kids-history-row-main">
+                                    <span className="kids-history-title">{entry.ChoreLabel}</span>
+                                  </div>
+                                  <span
+                                    className={`kids-history-chevron${
+                                      isEntryExpanded ? " is-open" : ""
+                                    }`}
+                                  >
+                                    <Icon name="chevronDown" className="icon" />
+                                  </span>
+                                </button>
+                                {isEntryExpanded ? (
+                                  <div className="kids-history-details">
+                                    <div className="kids-history-detail-row">
+                                      <span className="kids-history-detail-label">Notes</span>
+                                      <span>{entry.Notes || "None"}</span>
+                                    </div>
+                                    <div className="kids-history-detail-row">
+                                      <span className="kids-history-detail-label">Logged</span>
+                                      <span>{BuildDateTimeLabel(entry.CreatedAt)}</span>
+                                    </div>
+                                    <div className="kids-history-detail-row">
+                                      <span className="kids-history-detail-label">Type</span>
+                                      <span>{TypeLabel(entry.ChoreType)}</span>
+                                    </div>
+                                    <div className="kids-history-detail-row">
+                                      <span className="kids-history-detail-label">Status</span>
+                                      <span>{entry.Status || "-"}</span>
+                                    </div>
+                                    {entry.Amount ? (
+                                      <div className="kids-history-detail-row">
+                                        <span className="kids-history-detail-label">Amount</span>
+                                        <span>{FormatCurrency(entry.Amount)}</span>
+                                      </div>
+                                    ) : null}
+                                    <div className="kids-admin-history-actions">
+                                      <button
+                                        type="button"
+                                        className="button-secondary-pill"
+                                        onClick={() => openEntryModal({ entry })}
+                                      >
+                                        Edit
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className="button-secondary-pill"
+                                        onClick={() => onDeleteEntry(entry)}
+                                      >
+                                        Delete
+                                      </button>
+                                    </div>
+                                  </div>
+                                ) : null}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+        ) : null}
+
+        {activeTab === "chores" ? (
+          <section className="kids-admin-card kids-admin-chores-view">
+            <div className="kids-admin-card-header">
+              <div>
+                <h2>Chores</h2>
+                <p className="text-muted">Daily jobs, habits, and bonus tasks.</p>
+              </div>
+              <button type="button" className="primary-button" onClick={() => setShowChoresModal(true)}>
+                Manage chores
+              </button>
+            </div>
+            <div className="kids-admin-chores-summary">
+              <div>
+                <span className="kids-admin-summary-label">Daily jobs</span>
+                <span className="kids-admin-summary-value">{choreCounts.Daily}</span>
+              </div>
+              <div>
+                <span className="kids-admin-summary-label">Habits</span>
+                <span className="kids-admin-summary-value">{choreCounts.Habit}</span>
+              </div>
+              <div>
+                <span className="kids-admin-summary-label">Bonus tasks</span>
+                <span className="kids-admin-summary-value">{choreCounts.Bonus}</span>
+              </div>
+              <div>
+                <span className="kids-admin-summary-label">Disabled</span>
+                <span className="kids-admin-summary-value">{choreCounts.Disabled}</span>
+              </div>
+              <div>
+                <span className="kids-admin-summary-label">Assigned to {activeKidName}</span>
+                <span className="kids-admin-summary-value">{assignedToActiveCount}</span>
+              </div>
+            </div>
+          </section>
+        ) : null}
+      </div>
+
+      {showChoresModal ? (
+        <div className="modal-backdrop" role="dialog" aria-modal="true" onClick={() => setShowChoresModal(false)}>
+          <div className="modal kids-admin-modal" onClick={(event) => event.stopPropagation()}>
+            <div className="modal-header">
+              <div>
+                <h3>Manage chores</h3>
+                <p className="text-muted">Search, filter, and edit chores.</p>
+              </div>
+              <div className="modal-header-actions">
+                <button
+                  type="button"
+                  className="button-secondary-pill"
+                  onClick={() => openChoreForm(null, true)}
+                >
+                  Add chore
+                </button>
+                <button
+                  type="button"
+                  className="icon-button"
+                  onClick={() => setShowChoresModal(false)}
+                  aria-label="Close modal"
+                >
+                  <Icon name="close" className="icon" />
+                </button>
+              </div>
+            </div>
+
+            <div className="kids-admin-chore-controls">
+              <input
+                type="search"
+                placeholder="Search chores"
+                value={choreSearch}
+                onChange={(event) => setChoreSearch(event.target.value)}
+              />
+              <div className="kids-admin-chore-filters">
+                {[
+                  { key: "all", label: "All" },
+                  { key: "Daily", label: "Daily jobs" },
+                  { key: "Habit", label: "Habits" },
+                  { key: "Bonus", label: "Bonus tasks" },
+                  { key: "disabled", label: "Disabled" }
+                ].map((filter) => (
+                  <button
+                    key={filter.key}
+                    type="button"
+                    className={`kids-filter-chip${choreFilter === filter.key ? " is-active" : ""}`}
+                    onClick={() => setChoreFilter(filter.key)}
+                  >
+                    {filter.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="kids-admin-chore-list">
+              {visibleChoreGroups.map(([type, list]) => (
+                <details key={type} open className="kids-admin-chore-group">
+                  <summary className="kids-admin-chore-group-header">
+                    <span>{type === "Disabled" ? "Disabled chores" : TypeLabel(type)}</span>
+                    <span className="kids-pill kids-pill--muted">{list.length}</span>
+                  </summary>
+                  {list.length === 0 ? (
+                    <p className="text-muted">No chores in this section.</p>
+                  ) : (
+                    list.map((chore) => (
+                      <div key={chore.Id} className="kids-admin-chore-row">
+                        <div>
+                          <div className="kids-admin-chore-name">{chore.Label}</div>
+                          <div className="kids-admin-chore-row-meta">
+                            <span className="kids-pill">{TypeLabel(chore.Type)}</span>
+                            {chore.IsActive === false ? (
+                              <span className="kids-pill kids-pill--muted">Disabled</span>
+                            ) : null}
+                            <span className="kids-admin-chore-assignees">
+                              {(chore.AssignedKidIds || []).length
+                                ? kids
+                                    .filter((kid) =>
+                                      (chore.AssignedKidIds || []).includes(kid.KidUserId)
+                                    )
+                                    .map((kid) => kid.FirstName || kid.Username)
+                                    .join(", ")
+                                : "Unassigned"}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="kids-admin-chore-meta">
+                          <span className="kids-admin-chore-amount">
+                            {chore.Type === "Bonus" ? FormatCurrency(chore.Amount) : ""}
+                          </span>
+                          <label className="form-switch">
+                            <input
+                              type="checkbox"
+                              checked={chore.IsActive !== false}
+                              onChange={() => onToggleChoreActive(chore)}
+                            />
+                            <span className="switch-track">
+                              <span className="switch-thumb" />
+                            </span>
+                          </label>
+                          <div className="kids-admin-chore-actions">
+                            <button
+                              type="button"
+                              className="icon-button"
+                              aria-label={`Edit ${chore.Label}`}
+                              onClick={() => openChoreForm(chore, true)}
+                            >
+                              <Icon name="edit" className="icon" />
+                            </button>
+                            <button
+                              type="button"
+                              className="icon-button is-danger"
+                              aria-label={`Disable ${chore.Label}`}
+                              onClick={() => onDeleteChore(chore)}
+                            >
+                              <Icon name="trash" className="icon" />
+                            </button>
+                          </div>
+                          <details className="kids-admin-chore-menu">
+                            <summary className="icon-button" aria-label="More actions">
+                              <Icon name="more" className="icon" />
+                            </summary>
+                            <div className="kids-admin-chore-menu-list">
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  closeChoreMenu(event);
+                                  openChoreForm(chore, true);
+                                }}
+                              >
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  closeChoreMenu(event);
+                                  onDeleteChore(chore);
+                                }}
+                              >
+                                Disable
+                              </button>
+                            </div>
+                          </details>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </details>
+              ))}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {showAllowanceModal ? (
+        <div
+          className="modal-backdrop"
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setShowAllowanceModal(false)}
+        >
+          <div className="modal" onClick={(event) => event.stopPropagation()}>
+            <div className="modal-header">
+              <div>
+                <h3>Monthly allowance</h3>
+              </div>
+              <div className="modal-header-actions">
+                <button
+                  type="button"
+                  className="icon-button"
+                  onClick={() => setShowAllowanceModal(false)}
+                  aria-label="Close modal"
+                >
+                  <Icon name="close" className="icon" />
+                </button>
+              </div>
+            </div>
+            <div className="modal-body">
+              <form className="kids-admin-form" onSubmit={onSaveAllowance}>
+                <label>
+                  <span>Monthly allowance</span>
+                  <input
+                    value={allowanceForm.Amount}
+                    onChange={(event) =>
+                      setAllowanceForm((prev) => ({
+                        ...prev,
+                        Amount: NormalizeAmountInput(event.target.value)
+                      }))
+                    }
+                  />
+                </label>
+                <label>
+                  <span>Start date</span>
+                  <input
+                    type="date"
+                    value={allowanceForm.StartDate}
+                    onChange={(event) =>
+                      setAllowanceForm((prev) => ({
+                        ...prev,
+                        StartDate: event.target.value
+                      }))
+                    }
+                  />
+                </label>
+                <div className="kids-admin-form-wide">
+                  <button type="submit" className="primary-button" disabled={status === "saving"}>
+                    {status === "saving" ? "Saving..." : "Save allowance"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {showChoreForm ? (
+        <div className="modal-backdrop" role="dialog" aria-modal="true" onClick={closeChoreForm}>
+          <div className="modal" onClick={(event) => event.stopPropagation()}>
+            <div className="modal-header">
+              <div>
+                <h3>{editingChore ? "Edit chore" : "New chore"}</h3>
+              </div>
+              <div className="modal-header-actions">
+                <button
+                  type="button"
+                  className="icon-button"
+                  onClick={closeChoreForm}
+                  aria-label="Close modal"
+                >
+                  <Icon name="close" className="icon" />
+                </button>
+              </div>
+            </div>
+            <div className="modal-body">
+              <form className="kids-admin-form" onSubmit={onSaveChore}>
+                <label>
+                  <span>Name</span>
+                  <input name="Label" value={choreForm.Label} onChange={onChoreFormChange} />
+                </label>
+                <label>
+                  <span>Type</span>
+                  <select name="Type" value={choreForm.Type} onChange={onChoreFormChange}>
+                    <option value="Daily">Daily jobs</option>
+                    <option value="Habit">Habits</option>
+                    <option value="Bonus">Bonus tasks</option>
+                  </select>
+                </label>
+                {choreForm.Type === "Bonus" ? (
+                  <label>
+                    <span>Amount</span>
+                    <input
+                      name="Amount"
+                      value={choreForm.Amount}
+                      onChange={(event) =>
+                        setChoreForm((prev) => ({
+                          ...prev,
+                          Amount: NormalizeAmountInput(event.target.value)
+                        }))
+                      }
+                    />
+                  </label>
+                ) : null}
+                <label>
+                  <span>Start date</span>
+                  <input
+                    type="date"
+                    name="StartDate"
+                    value={choreForm.StartDate}
+                    onChange={onChoreFormChange}
+                  />
+                </label>
+                <label>
+                  <span>End date</span>
+                  <input
+                    type="date"
+                    name="EndDate"
+                    value={choreForm.EndDate}
+                    onChange={onChoreFormChange}
+                  />
+                </label>
+                <label>
+                  <span>Display order</span>
+                  <input name="SortOrder" value={choreForm.SortOrder} onChange={onChoreFormChange} />
+                </label>
+                <label className="kids-admin-toggle">
+                  <input
+                    type="checkbox"
+                    name="IsActive"
+                    checked={choreForm.IsActive}
+                    onChange={onChoreFormChange}
+                  />
+                  <span>Enabled</span>
+                </label>
+
+                <div className="kids-admin-assignees">
+                  <span className="kids-admin-hint">Assign to kids</span>
+                  <div className="kids-admin-tags">
+                    {kids.map((kid) => (
+                      <label key={kid.KidUserId} className="kids-admin-tag">
+                        <input
+                          type="checkbox"
+                          checked={choreForm.KidUserIds.includes(kid.KidUserId)}
+                          onChange={() => onToggleKidAssignment(kid.KidUserId)}
+                        />
+                        <span>{kid.FirstName || kid.Username}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="kids-admin-form-wide">
+                  <button type="submit" className="primary-button" disabled={status === "saving"}>
+                    {status === "saving" ? "Saving..." : "Save"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {showDayDrawer ? (
+        <div
+          className="kids-admin-drawer-backdrop"
+          role="dialog"
+          aria-modal="true"
+          onClick={closeDayDrawer}
+        >
+          <div className="kids-admin-drawer" onClick={(event) => event.stopPropagation()}>
+            <div className="kids-admin-drawer-header">
+              <div>
+                <h3>{BuildDayLabel(selectedDay)}</h3>
+                {dayPendingCount ? (
+                  <span className="kids-pill kids-pill--muted">
+                    Pending approvals: {dayPendingCount}
+                  </span>
+                ) : null}
+              </div>
+              <button type="button" className="icon-button" onClick={closeDayDrawer}>
+                <Icon name="close" className="icon" />
+              </button>
+            </div>
+
+            {dayStatus === "loading" ? (
+              <p className="text-muted">Loading day...</p>
+            ) : (
+              <div className="kids-admin-drawer-body">
+                <section className="kids-admin-drawer-section">
+                  <h4>Daily jobs</h4>
+                  {(dayDetail?.DailyJobs || []).length === 0 ? (
+                    <p className="text-muted">No daily jobs for this date.</p>
+                  ) : (
+                    (dayDetail?.DailyJobs || []).map((chore) => {
+                      const entry = entryByChoreId.get(chore.Id);
+                      const isActive = entry && entry.Status !== "Rejected";
+                      return (
+                        <button
+                          key={chore.Id}
+                          type="button"
+                          className="kids-admin-day-row"
+                          onClick={() => onToggleDayChore(chore)}
+                          aria-pressed={isActive}
+                        >
+                          <span>{chore.Label}</span>
+                          <span className={`kids-chore-toggle${isActive ? " is-on" : ""}`} />
+                        </button>
+                      );
+                    })
+                  )}
+                </section>
+
+                <section className="kids-admin-drawer-section">
+                  <h4>Habits</h4>
+                  {(dayDetail?.Habits || []).length === 0 ? (
+                    <p className="text-muted">No habits for this date.</p>
+                  ) : (
+                    (dayDetail?.Habits || []).map((chore) => {
+                      const entry = entryByChoreId.get(chore.Id);
+                      const isActive = entry && entry.Status !== "Rejected";
+                      return (
+                        <button
+                          key={chore.Id}
+                          type="button"
+                          className="kids-admin-day-row"
+                          onClick={() => onToggleDayChore(chore)}
+                          aria-pressed={isActive}
+                        >
+                          <span>{chore.Label}</span>
+                          <span className={`kids-chore-toggle${isActive ? " is-on" : ""}`} />
+                        </button>
+                      );
+                    })
+                  )}
+                </section>
+
+                <section className="kids-admin-drawer-section">
+                  <div className="kids-admin-drawer-section-header">
+                    <h4>Bonus tasks</h4>
                     <button
                       type="button"
                       className="button-secondary-pill"
-                      onClick={() => (activeKid ? setShowTransactionModal(true) : null)}
-                      disabled={!activeKid}
+                      onClick={() => openEntryModal({ type: "Bonus", dateValue: selectedDay })}
                     >
-                      Add update
+                      Add bonus task
                     </button>
                   </div>
-                </div>
-                <div className="kids-admin-meta">
-                  <div className="kids-admin-meta-row">
-                    <span>Last update</span>
-                    <span>{latestEntryLabel}</span>
-                  </div>
-                  <div className="kids-admin-meta-row">
-                    <span>Entered by</span>
-                    <span>{latestEnteredBy}</span>
-                  </div>
-                </div>
-              </section>
-
-              <section className="kids-admin-card">
-                <div className="kids-admin-card-header">
-                  <div>
-                    <h3>Pocket money</h3>
-                    <p className="text-muted">Next run and amount.</p>
-                  </div>
-                  <button
-                    type="button"
-                    className="button-secondary-pill"
-                    onClick={() =>
-                      activeKid ? setShowScheduleModal(true) : null
-                    }
-                    disabled={!activeKid}
-                  >
-                    Edit schedule
-                  </button>
-                </div>
-                <div className="kids-admin-meta">
-                  <div className="kids-admin-meta-row">
-                    <span>Next run</span>
-                    <span>{pocketNextLabel}</span>
-                  </div>
-                  <div className="kids-admin-meta-row">
-                    <span>Amount</span>
-                    <span>{pocketAmountLabel}</span>
-                  </div>
-                </div>
-              </section>
-
-              <section className="kids-admin-card kids-admin-card--chores">
-                <div className="kids-admin-card-header">
-                  <div>
-                    <h3>Chores</h3>
-                    <p className="text-muted">Rates set once per chore.</p>
-                  </div>
-                  <button
-                    type="button"
-                    className="button-secondary-pill"
-                    onClick={() => openChoreModal()}
-                  >
-                    Add chore
-                  </button>
-                </div>
-                {chores.length > 0 ? (
-                  <div className="kids-admin-mini-table">
-                    <div className="kids-admin-mini-row kids-admin-mini-header">
-                      <span>Chore</span>
-                      <span>Rate</span>
-                      <span className="kids-admin-mini-actions">Actions</span>
-                    </div>
-                    {chores.map((chore) => (
-                      <div key={chore.Id} className="kids-admin-mini-row">
-                        <span>{chore.Label}</span>
-                        <span>{FormatCurrency(chore.Amount)}</span>
-                        <span className="kids-admin-mini-actions">
-                          <button
-                            type="button"
-                            className="icon-button"
-                            onClick={() => openChoreModal(chore)}
-                            aria-label={`Edit ${chore.Label}`}
-                          >
-                            <Icon name="edit" className="icon" />
-                          </button>
-                          <button
-                            type="button"
-                            className="icon-button"
-                            onClick={() => onDeleteChore(chore)}
-                            aria-label={`Delete ${chore.Label}`}
-                          >
-                            <Icon name="trash" className="icon" />
-                          </button>
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-muted">No chores created yet.</p>
-                )}
-              </section>
-            </aside>
-
-            <div className="kids-admin-main">
-              <section className="kids-admin-card kids-admin-history" id="kids-history">
-                <div className="kids-admin-card-header">
-                  <div>
-                    <h2>Full history</h2>
-                    <p className="text-muted">Search, filter, and sort every transaction.</p>
-                  </div>
-                </div>
-                <div className="table-shell">
-                  <div className="table-toolbar">
-                    <div className="toolbar-left">
-                      <div className="toolbar-search">
-                        <Icon name="search" className="icon" />
-                        <input
-                          placeholder="Search history"
-                          value={historySearch}
-                          onChange={(event) => setHistorySearch(event.target.value)}
-                        />
-                      </div>
-                    </div>
-                    <div className="toolbar-right">
-                      <div className="toolbar-flyout" ref={historyFilterRef}>
-                        <button
-                          type="button"
-                          className="toolbar-button"
-                          onClick={() => setHistoryFilterOpen((prev) => !prev)}
-                        >
-                          <Icon name="filter" className="icon" />
-                          Filters
-                        </button>
-                        {historyFilterOpen ? (
-                          <div className="dropdown history-filter-dropdown">
-                            <label>
-                              <span>Kid</span>
-                              <select
-                                value={historyFilterKid}
-                                onChange={(event) => {
-                                  setHistoryFilterKid(event.target.value);
-                                  setHistoryFilterOpen(false);
-                                }}
-                              >
-                                <option value="all">All kids</option>
-                                {kidOptions.map((kid) => (
-                                  <option key={kid.Id} value={String(kid.Id)}>
-                                    {kid.Name}
-                                  </option>
-                                ))}
-                              </select>
-                            </label>
-                            <label>
-                              <span>Type</span>
-                              <select
-                                value={historyFilterType}
-                                onChange={(event) => {
-                                  setHistoryFilterType(event.target.value);
-                                  setHistoryFilterOpen(false);
-                                }}
-                              >
-                                <option value="all">All types</option>
-                                {historyTypes.map((type) => (
-                                  <option key={type} value={type}>
-                                    {type}
-                                  </option>
-                                ))}
-                              </select>
-                            </label>
-                            <label className="history-filter-toggle">
-                              <input
-                                type="checkbox"
-                                checked={historyShowDeleted}
-                                onChange={(event) => setHistoryShowDeleted(event.target.checked)}
-                              />
-                              <span>Show deleted</span>
-                            </label>
-                          </div>
-                        ) : null}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="table-wrap">
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>
-                            <button
-                              type="button"
-                              className="th-button"
-                              onClick={() => SetHistorySort("Kid")}
-                            >
-                              <span className="th-content">
-                                Kid
-                                <HistorySortIcon columnKey="Kid" />
-                              </span>
-                            </button>
-                          </th>
-                          <th>
-                            <button
-                              type="button"
-                              className="th-button"
-                              onClick={() => SetHistorySort("Type")}
-                            >
-                              <span className="th-content">
-                                Type
-                                <HistorySortIcon columnKey="Type" />
-                              </span>
-                            </button>
-                          </th>
-                          <th>
-                            <button
-                              type="button"
-                              className="th-button"
-                              onClick={() => SetHistorySort("Narrative")}
-                            >
-                              <span className="th-content">
-                                Note
-                                <HistorySortIcon columnKey="Narrative" />
-                              </span>
-                            </button>
-                          </th>
-                          <th>
-                            <button
-                              type="button"
-                              className="th-button"
-                              onClick={() => SetHistorySort("When")}
-                            >
-                              <span className="th-content">
-                                Date/time
-                                <HistorySortIcon columnKey="When" />
-                              </span>
-                            </button>
-                          </th>
-                          <th>
-                            <button
-                              type="button"
-                              className="th-button"
-                              onClick={() => SetHistorySort("EnteredBy")}
-                            >
-                              <span className="th-content">
-                                Entered by
-                                <HistorySortIcon columnKey="EnteredBy" />
-                              </span>
-                            </button>
-                          </th>
-                          <th className="cell-number">
-                            <button
-                              type="button"
-                              className="th-button"
-                              onClick={() => SetHistorySort("Amount")}
-                            >
-                              <span className="th-content">
-                                Amount
-                                <HistorySortIcon columnKey="Amount" />
-                              </span>
-                            </button>
-                          </th>
-                          <th className="cell-number">
-                            <button
-                              type="button"
-                              className="th-button"
-                              onClick={() => SetHistorySort("Balance")}
-                            >
-                              <span className="th-content">
-                                Balance
-                                <HistorySortIcon columnKey="Balance" />
-                              </span>
-                            </button>
-                          </th>
-                          <th className="cell-center">
-                            <span className="th-content">Actions</span>
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {sortedHistory.length === 0 ? (
-                          <tr>
-                            <td colSpan={8} className="text-muted">
-                              No history entries yet.
-                            </td>
-                          </tr>
-                        ) : (
-                          sortedHistory.map((entry) => (
-                            <tr key={`${entry.KidUserId}-${entry.Id}`}>
-                              <td>{entry.KidName}</td>
-                              <td>{entry.EntryType}</td>
-                              <td>{entry.Narrative || "-"}</td>
-                              <td>
-                                {FormatDate(entry.EntryDate)} · {FormatTime(entry.CreatedAt)}
-                              </td>
-                              <td>{entry.CreatedByName || `User ${entry.CreatedByUserId}`}</td>
-                              <td className="cell-number">{FormatCurrency(entry.Amount)}</td>
-                              <td className="cell-number">
-                                {entry.RunningBalance !== null
-                                  ? FormatCurrency(entry.RunningBalance)
-                                  : "-"}
-                              </td>
-                              <td className="cell-center">
-                                <button
-                                  type="button"
-                                  className="icon-button"
-                                  title={
-                                    entry.Narrative || entry.Notes
-                                      ? `${entry.Narrative || ""}${entry.Notes ? ` · ${entry.Notes}` : ""}`
-                                      : "No details"
-                                  }
-                                  aria-label="View details"
-                                >
-                                  <Icon name="more" className="icon" />
-                                </button>
-                              </td>
-                            </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                  <div className="kids-admin-history-mobile">
-                    {sortedHistory.length === 0 ? (
-                      <p className="text-muted">No history entries yet.</p>
-                    ) : (
-                      sortedHistory.map((entry) => (
-                        <details
-                          key={`mobile-${entry.KidUserId}-${entry.Id}`}
-                          className="history-mobile-row"
-                        >
-                          <summary className="history-mobile-summary">
-                            <div className="history-mobile-main">
-                              <span className="history-mobile-kid">{entry.KidName}</span>
-                              <span className="history-mobile-type">{entry.EntryType}</span>
-                            </div>
-                            <div className="history-mobile-meta">
-                              <span>
-                                {FormatDate(entry.EntryDate)} · {FormatTime(entry.CreatedAt)}
-                              </span>
-                              <span className={entry.Amount < 0 ? "text-negative" : "text-positive"}>
+                  {(dayDetail?.Entries || []).filter((entry) => entry.ChoreType === "Bonus").length === 0 ? (
+                    <p className="text-muted">No bonus tasks logged.</p>
+                  ) : (
+                    (dayDetail?.Entries || [])
+                      .filter((entry) => entry.ChoreType === "Bonus")
+                      .map((entry) => (
+                        <div key={entry.Id} className="kids-admin-bonus-row">
+                          <div>
+                            <span>{entry.ChoreLabel}</span>
+                            <div className="kids-admin-bonus-meta">
+                              <span className="kids-pill">{entry.Status}</span>
+                              <span className="kids-pill kids-pill--muted">
                                 {FormatCurrency(entry.Amount)}
                               </span>
                             </div>
-                            <div className="history-mobile-balance">
-                              Balance{" "}
-                              {entry.RunningBalance !== null ? FormatCurrency(entry.RunningBalance) : "-"}
-                            </div>
-                          </summary>
-                          <div className="history-mobile-details">
-                            <div className="history-mobile-detail-row">
-                              <span className="history-mobile-label">Time</span>
-                              <span>{FormatTime(entry.CreatedAt)}</span>
-                            </div>
-                            <div className="history-mobile-detail-row">
-                              <span className="history-mobile-label">Entered by</span>
-                              <span>{entry.CreatedByName || `User ${entry.CreatedByUserId}`}</span>
-                            </div>
-                            <div className="history-mobile-detail-row">
-                              <span className="history-mobile-label">Note</span>
-                              <span>{entry.Narrative || "-"}</span>
-                            </div>
-                            <div className="history-mobile-detail-row">
-                              <span className="history-mobile-label">Details</span>
-                              <span>{entry.Notes || "-"}</span>
-                            </div>
                           </div>
-                        </details>
+                          <div className="kids-admin-bonus-actions">
+                            <button
+                              type="button"
+                              className="button-secondary-pill"
+                              onClick={() => openEntryModal({ entry })}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              className="button-secondary-pill"
+                              onClick={() => onDeleteEntry(entry)}
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </div>
                       ))
-                    )}
-                  </div>
+                  )}
+                </section>
+
+                <div className="kids-admin-drawer-actions">
+                  <button
+                    type="button"
+                    className="kids-outline-button"
+                    onClick={() => openEntryModal({ dateValue: selectedDay })}
+                  >
+                    Add entry
+                  </button>
+                  <button type="button" className="kids-primary-button" onClick={closeDayDrawer}>
+                    Close
+                  </button>
                 </div>
-              </section>
+              </div>
+            )}
+          </div>
+        </div>
+      ) : null}
+
+      {showEntryModal ? (
+        <div
+          className="modal-backdrop"
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setShowEntryModal(false)}
+        >
+          <div className="modal" onClick={(event) => event.stopPropagation()}>
+            <div className="modal-header">
+              <div>
+                <h3>{entryForm.EntryId ? "Edit entry" : "Add entry"}</h3>
+              </div>
+              <div className="modal-header-actions">
+                <button
+                  type="button"
+                  className="icon-button"
+                  onClick={() => setShowEntryModal(false)}
+                  aria-label="Close modal"
+                >
+                  <Icon name="close" className="icon" />
+                </button>
+              </div>
+            </div>
+            <div className="modal-body">
+              <form className="kids-admin-form" onSubmit={onSaveEntry}>
+                <label>
+                  <span>Date</span>
+                  <input
+                    type="date"
+                    name="EntryDate"
+                    value={entryForm.EntryDate}
+                    onChange={onEntryFormChange}
+                  />
+                </label>
+                <label>
+                  <span>Type</span>
+                  <select
+                    name="Type"
+                    value={entryForm.Type}
+                    onChange={onEntryFormChange}
+                    disabled={Boolean(entryForm.EntryId)}
+                  >
+                    <option value="Daily">Daily jobs</option>
+                    <option value="Habit">Habits</option>
+                    <option value="Bonus">Bonus tasks</option>
+                  </select>
+                </label>
+                <label>
+                  <span>Chore</span>
+                  <select
+                    name="ChoreId"
+                    value={entryForm.ChoreId}
+                    onChange={onEntryFormChange}
+                    disabled={Boolean(entryForm.EntryId)}
+                  >
+                    <option value="" disabled>
+                      Select chore
+                    </option>
+                    {(availableChoresByType[entryForm.Type] || []).map((chore) => (
+                      <option key={chore.Id} value={chore.Id}>
+                        {chore.Label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {entryForm.Type === "Bonus" ? (
+                  <label>
+                    <span>Amount</span>
+                    <input
+                      name="Amount"
+                      value={entryForm.Amount}
+                      onChange={(event) =>
+                        setEntryForm((prev) => ({
+                          ...prev,
+                          Amount: NormalizeAmountInput(event.target.value)
+                        }))
+                      }
+                    />
+                  </label>
+                ) : null}
+                <label className="kids-admin-form-wide">
+                  <span>Note</span>
+                  <input name="Notes" value={entryForm.Notes} onChange={onEntryFormChange} />
+                </label>
+                <div className="kids-admin-form-wide">
+                  <button type="submit" className="primary-button" disabled={status === "saving"}>
+                    {status === "saving" ? "Saving..." : "Save entry"}
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
-
-          {showTransactionModal ? (
-            <div
-              className="modal-backdrop"
-              role="dialog"
-              aria-modal="true"
-              onClick={() => setShowTransactionModal(false)}
-            >
-              <div className="modal" onClick={(event) => event.stopPropagation()}>
-                <div className="modal-header">
-                  <div>
-                    <h3>Add update</h3>
-                    <p>Deposits, withdrawals, and balance adjustments.</p>
-                  </div>
-                  <div className="modal-header-actions">
-                    <button
-                      type="button"
-                      className="icon-button"
-                      onClick={() => setShowTransactionModal(false)}
-                      aria-label="Close modal"
-                    >
-                      <Icon name="close" className="icon" />
-                    </button>
-                  </div>
-                </div>
-                <div className="modal-body">
-                  {activeKid ? (
-                    <div className="kids-admin-form">
-                      <label>
-                        <span>Type</span>
-                        <select
-                          name="Type"
-                          value={activeForm.Type}
-                          onChange={(event) => onTransactionChange(activeKid.KidUserId, event)}
-                        >
-                          <option value="Deposit">Deposit</option>
-                          <option value="Withdrawal">Withdrawal</option>
-                          <option value="StartingBalance">Balance adjustment</option>
-                        </select>
-                      </label>
-                      <label>
-                        <span>{isBalanceAdjustment ? "Set balance to" : "Amount"}</span>
-                        {isBalanceAdjustment ? (
-                          <span className="text-muted kids-admin-hint">
-                            We will calculate the change to reach this balance.
-                          </span>
-                        ) : null}
-                        <input
-                          name="Amount"
-                          value={activeForm.Amount}
-                          onChange={(event) => onTransactionChange(activeKid.KidUserId, event)}
-                          placeholder={isBalanceAdjustment ? "50.00" : "0.00"}
-                        />
-                      </label>
-                      <label>
-                        <span>Date</span>
-                        <input
-                          type="date"
-                          name="EntryDate"
-                          value={activeForm.EntryDate}
-                          onChange={(event) => onTransactionChange(activeKid.KidUserId, event)}
-                        />
-                      </label>
-                      <label className="kids-admin-form-wide">
-                        <span>Note</span>
-                        <input
-                          name="Narrative"
-                          value={activeForm.Narrative}
-                          onChange={(event) => onTransactionChange(activeKid.KidUserId, event)}
-                          placeholder="Example: Robux, birthday cash"
-                        />
-                      </label>
-                      <label className="kids-admin-form-wide">
-                        <span>Details (optional)</span>
-                        <input
-                          name="Notes"
-                          value={activeForm.Notes}
-                          onChange={(event) => onTransactionChange(activeKid.KidUserId, event)}
-                        />
-                      </label>
-                      <button
-                        type="button"
-                        className="primary-button"
-                        onClick={() => submitTransaction(activeKid.KidUserId)}
-                        disabled={status === "saving"}
-                      >
-                        Add update
-                      </button>
-                    </div>
-                  ) : (
-                    <p className="text-muted">Create a kid profile to start tracking money.</p>
-                  )}
-                </div>
-              </div>
-            </div>
-          ) : null}
-
-          {showScheduleModal ? (
-            <div
-              className="modal-backdrop"
-              role="dialog"
-              aria-modal="true"
-              onClick={() => setShowScheduleModal(false)}
-            >
-              <div className="modal" onClick={(event) => event.stopPropagation()}>
-                <div className="modal-header">
-                  <div>
-                    <h3>Pocket money schedule</h3>
-                    <p>Control cadence and auto credits.</p>
-                  </div>
-                  <div className="modal-header-actions">
-                    <button
-                      type="button"
-                      className="icon-button"
-                      onClick={() => setShowScheduleModal(false)}
-                      aria-label="Close modal"
-                    >
-                      <Icon name="close" className="icon" />
-                    </button>
-                  </div>
-                </div>
-                <div className="modal-body">
-                  {activeKid ? (
-                    <div className="kids-admin-form">
-                      <label>
-                        <span>Amount</span>
-                        <input
-                          name="Amount"
-                          value={activeRule.Amount}
-                          onChange={(event) => onRuleChange(activeKid.KidUserId, event)}
-                          placeholder="0.00"
-                        />
-                      </label>
-                      <label>
-                        <span>Frequency</span>
-                        <select
-                          name="Frequency"
-                          value={activeRule.Frequency}
-                          onChange={(event) => onRuleChange(activeKid.KidUserId, event)}
-                        >
-                          <option value="weekly">Weekly</option>
-                          <option value="fortnightly">Fortnightly</option>
-                          <option value="monthly">Monthly</option>
-                        </select>
-                      </label>
-                      {activeRule.Frequency === "monthly" ? (
-                        <label>
-                          <span>Day of month</span>
-                          <input
-                            name="DayOfMonth"
-                            value={activeRule.DayOfMonth}
-                            onChange={(event) => onRuleChange(activeKid.KidUserId, event)}
-                          />
-                        </label>
-                      ) : (
-                        <label>
-                          <span>Day of week</span>
-                          <select
-                            name="DayOfWeek"
-                            value={activeRule.DayOfWeek}
-                            onChange={(event) => onRuleChange(activeKid.KidUserId, event)}
-                          >
-                            <option value="0">Monday</option>
-                            <option value="1">Tuesday</option>
-                            <option value="2">Wednesday</option>
-                            <option value="3">Thursday</option>
-                            <option value="4">Friday</option>
-                            <option value="5">Saturday</option>
-                            <option value="6">Sunday</option>
-                          </select>
-                        </label>
-                      )}
-                      <label>
-                        <span>Start date</span>
-                        <input
-                          type="date"
-                          name="StartDate"
-                          value={activeRule.StartDate}
-                          onChange={(event) => onRuleChange(activeKid.KidUserId, event)}
-                        />
-                      </label>
-                      <label className="kids-admin-toggle">
-                        <input
-                          type="checkbox"
-                          name="IsActive"
-                          checked={activeRule.IsActive}
-                          onChange={(event) => onRuleChange(activeKid.KidUserId, event)}
-                        />
-                        <span>Active</span>
-                      </label>
-                      <button
-                        type="button"
-                        className="primary-button"
-                        onClick={() => saveRule(activeKid.KidUserId)}
-                        disabled={status === "saving"}
-                      >
-                        Save schedule
-                      </button>
-                    </div>
-                  ) : (
-                    <p className="text-muted">Create a kid profile to set a schedule.</p>
-                  )}
-                </div>
-              </div>
-            </div>
-          ) : null}
-
-          {showChoreModal ? (
-            <div
-              className="modal-backdrop"
-              role="dialog"
-              aria-modal="true"
-              onClick={closeChoreModal}
-            >
-              <div className="modal" onClick={(event) => event.stopPropagation()}>
-                <div className="modal-header">
-                  <div>
-                    <h3>{isEditingChore ? "Edit chore" : "Add chore"}</h3>
-                    <p>{isEditingChore ? "Update the chore details." : "Create a new chore."}</p>
-                  </div>
-                  <div className="modal-header-actions">
-                    <button
-                      type="button"
-                      className="icon-button"
-                      onClick={closeChoreModal}
-                      aria-label="Close modal"
-                    >
-                      <Icon name="close" className="icon" />
-                    </button>
-                  </div>
-                </div>
-                <div className="modal-body">
-                  <form className="kids-admin-form" onSubmit={onSaveChore}>
-                    <label>
-                      <span>Chore name</span>
-                      <input name="Label" value={choreForm.Label} onChange={onChoreChange} />
-                    </label>
-                    <label>
-                      <span>Amount</span>
-                      <input name="Amount" value={choreForm.Amount} onChange={onChoreChange} />
-                    </label>
-                    <div className="kids-admin-assignees">
-                      <span>Assign to</span>
-                      <div className="kids-admin-tags">
-                        {kidOptions.map((kid) => (
-                          <label key={kid.Id} className="kids-admin-tag">
-                            <input
-                              type="checkbox"
-                              checked={choreForm.KidUserIds.includes(kid.Id)}
-                              onChange={() => onChoreKidToggle(kid.Id)}
-                            />
-                            <span>{kid.Name}</span>
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-                    <button type="submit" className="primary-button" disabled={status === "saving"}>
-                      {isEditingChore ? "Save chore" : "Create chore"}
-                    </button>
-                  </form>
-                </div>
-              </div>
-            </div>
-          ) : null}
         </div>
-      </div>
+      ) : null}
     </div>
   );
 };

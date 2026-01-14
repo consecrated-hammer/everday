@@ -1,86 +1,121 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 
-import { FetchKidsLedger } from "../../lib/kidsApi.js";
-import { FormatCurrency, FormatDate, FormatTime } from "../../lib/formatters.js";
+import {
+  CreateKidsChoreEntry,
+  FetchKidsChoreEntries,
+  FetchKidsOverview
+} from "../../lib/kidsApi.js";
+import { FormatDate, FormatTime } from "../../lib/formatters.js";
 import Icon from "../../components/Icon.jsx";
+import { GetChoreEmoji, GetKidsHeaderEmoji } from "../../lib/kidsEmoji.js";
 
-const DisplayType = (entryType) => {
-  switch (entryType) {
-    case "Chore":
-      return "Chore";
-    case "Withdrawal":
-      return "Spent";
-    case "StartingBalance":
-      return "Adjustment";
-    case "Deposit":
-    case "PocketMoney":
-      return "Parent added";
+const TypeLabel = (value) => {
+  switch (value) {
+    case "Daily":
+      return "Daily job";
+    case "Habit":
+      return "Habit";
+    case "Bonus":
+      return "Bonus task";
     default:
-      return "Update";
+      return "Task";
   }
 };
 
-const BuildEntryDateTime = (entry) => {
-  const created = entry.CreatedAt ? new Date(entry.CreatedAt) : null;
-  if (created && !Number.isNaN(created.getTime())) {
-    return created;
+const StatusLabel = (value) => {
+  switch (value) {
+    case "Pending":
+      return "Pending approval";
+    case "Rejected":
+      return "Rejected";
+    case "Approved":
+      return "Approved";
+    default:
+      return "";
   }
-  const entryDate = entry.EntryDate ? new Date(entry.EntryDate) : null;
-  if (entryDate && !Number.isNaN(entryDate.getTime())) {
-    return entryDate;
-  }
-  return new Date();
 };
 
-const BuildDateLabel = (value) => {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
+const Filters = [
+  { Key: "all", Label: "All" },
+  { Key: "Daily", Label: "Daily jobs" },
+  { Key: "Habit", Label: "Habits" },
+  { Key: "Bonus", Label: "Bonus tasks" },
+  { Key: "pending", Label: "Pending approval" }
+];
+
+const ParseDateValue = (value) => {
+  if (!value) {
+    return null;
+  }
+  const parts = value.split("-");
+  if (parts.length !== 3) {
+    return null;
+  }
+  const [year, month, day] = parts.map((part) => Number.parseInt(part, 10));
+  if (!year || !month || !day) {
+    return null;
+  }
+  return new Date(year, month - 1, day);
+};
+
+const FormatDateValue = (dateValue) => {
+  if (!dateValue) {
     return "";
   }
-  const today = new Date();
-  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-  const yesterdayStart = new Date(todayStart);
-  yesterdayStart.setDate(todayStart.getDate() - 1);
-  const dateStart = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-  if (dateStart.getTime() === todayStart.getTime()) {
-    return "Today";
-  }
-  if (dateStart.getTime() === yesterdayStart.getTime()) {
-    return "Yesterday";
-  }
-  return date.toLocaleDateString("en-AU", {
-    weekday: "short",
-    day: "numeric",
-    month: "short"
-  });
+  const year = dateValue.getFullYear();
+  const month = String(dateValue.getMonth() + 1).padStart(2, "0");
+  const day = String(dateValue.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 };
 
-const DefaultFilters = {
-  From: "",
-  To: "",
-  Type: "all",
-  Sort: "desc"
+const ShiftDateValue = (value, days) => {
+  const dateValue = ParseDateValue(value);
+  if (!dateValue) {
+    return "";
+  }
+  const next = new Date(dateValue);
+  next.setDate(next.getDate() + days);
+  return FormatDateValue(next);
+};
+
+const IsBeforeDate = (value, compareTo) => {
+  const dateValue = ParseDateValue(value);
+  const compareValue = ParseDateValue(compareTo);
+  if (!dateValue || !compareValue) {
+    return false;
+  }
+  return dateValue.getTime() < compareValue.getTime();
 };
 
 const KidsHistory = () => {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const initFromParams = useRef(false);
   const [status, setStatus] = useState("idle");
   const [error, setError] = useState("");
   const [entries, setEntries] = useState([]);
-  const [filters, setFilters] = useState(DefaultFilters);
-  const [draftFilters, setDraftFilters] = useState(DefaultFilters);
-  const [showFilters, setShowFilters] = useState(false);
+  const [activeFilter, setActiveFilter] = useState("all");
   const [expandedId, setExpandedId] = useState(null);
+  const [chores, setChores] = useState([]);
+  const [today, setToday] = useState("");
+  const [allowedStart, setAllowedStart] = useState("");
+  const [maxPastDate, setMaxPastDate] = useState("");
+  const [showLogModal, setShowLogModal] = useState(false);
+  const [logForm, setLogForm] = useState({ ChoreId: "", EntryDate: "", Notes: "" });
+  const [logStatus, setLogStatus] = useState("idle");
+  const [logError, setLogError] = useState("");
+  const [choreSearch, setChoreSearch] = useState("");
+  const [showNotes, setShowNotes] = useState(false);
+  const [toast, setToast] = useState("");
+  const [dailySummaryByDate, setDailySummaryByDate] = useState({});
+  const [expandedDates, setExpandedDates] = useState(new Set());
+  const summaryLoadedRef = useRef(new Set());
 
-  const loadLedger = async () => {
+  const loadHistory = async () => {
     setStatus("loading");
     setError("");
     try {
-      const data = await FetchKidsLedger(200);
-      setEntries(data?.Entries || []);
+      const data = await FetchKidsChoreEntries(50, false);
+      setEntries(data || []);
       setStatus("ready");
     } catch (err) {
       setStatus("error");
@@ -88,163 +123,252 @@ const KidsHistory = () => {
     }
   };
 
+  const loadMeta = async () => {
+    try {
+      const data = await FetchKidsOverview();
+      setChores(data?.Chores || []);
+      const nextToday = data?.Today || data?.SelectedDate || "";
+      setToday(nextToday);
+      setAllowedStart(data?.AllowedStartDate || "");
+      setMaxPastDate(nextToday ? ShiftDateValue(nextToday, -1) : "");
+    } catch (err) {
+      setChores([]);
+    }
+  };
+
   useEffect(() => {
-    loadLedger();
+    loadHistory();
+    loadMeta();
   }, []);
 
   useEffect(() => {
-    if (initFromParams.current) {
+    if (!entries.length) {
       return;
     }
-    const range = searchParams.get("range");
-    const type = searchParams.get("type");
-    const nextFilters = { ...DefaultFilters };
-    const ranges = { "7d": 7, "30d": 30, "90d": 90 };
-    if (range && ranges[range]) {
-      const days = ranges[range];
-      const now = new Date();
-      const end = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      const start = new Date(end);
-      start.setDate(end.getDate() - (days - 1));
-      nextFilters.From = start.toISOString().slice(0, 10);
-      nextFilters.To = end.toISOString().slice(0, 10);
-    }
-    if (type) {
-      nextFilters.Type = type;
-    }
-    if (nextFilters.From || nextFilters.To || nextFilters.Type !== "all") {
-      setFilters(nextFilters);
-      setDraftFilters(nextFilters);
-    }
-    initFromParams.current = true;
-  }, [searchParams]);
-
-  useEffect(() => {
-    if (!showFilters) {
+    const uniqueDates = Array.from(
+      new Set(entries.map((entry) => entry.EntryDate).filter(Boolean))
+    );
+    const pending = uniqueDates.filter((date) => !summaryLoadedRef.current.has(date));
+    if (!pending.length) {
       return;
     }
-    setDraftFilters(filters);
-  }, [showFilters, filters]);
+    let cancelled = false;
+    const loadSummaries = async () => {
+      const results = await Promise.all(
+        pending.map(async (dateValue) => {
+          summaryLoadedRef.current.add(dateValue);
+          try {
+            const data = await FetchKidsOverview(dateValue);
+            const choresForDate = data?.Chores || [];
+            const entriesForDate = data?.Entries || [];
+            const dailyChoreIds = new Set(
+              choresForDate.filter((chore) => chore.Type === "Daily").map((chore) => chore.Id)
+            );
+            const total = dailyChoreIds.size;
+            const done = entriesForDate.filter(
+              (entry) => entry.Status === "Approved" && dailyChoreIds.has(entry.ChoreId)
+            ).length;
+            return [dateValue, { done, total }];
+          } catch (err) {
+            return null;
+          }
+        })
+      );
+      if (cancelled) {
+        return;
+      }
+      const next = {};
+      results.forEach((result) => {
+        if (!result) {
+          return;
+        }
+        const [dateValue, summary] = result;
+        next[dateValue] = summary;
+      });
+      if (Object.keys(next).length) {
+        setDailySummaryByDate((prev) => ({ ...prev, ...next }));
+      }
+    };
+    loadSummaries();
+    return () => {
+      cancelled = true;
+    };
+  }, [entries]);
 
   useEffect(() => {
-    setExpandedId(null);
-  }, [filters, entries]);
-
-  const filtersActive =
-    filters.From || filters.To || filters.Type !== "all" || filters.Sort !== "desc";
-
-  const typeOptions = useMemo(() => {
-    const order = ["Chore", "Parent added", "Spent", "Adjustment", "Update"];
-    const available = new Set(entries.map((entry) => DisplayType(entry.EntryType)));
-    const options = order.filter((type) => available.has(type));
-    if (filters.Type !== "all" && !options.includes(filters.Type)) {
-      options.unshift(filters.Type);
+    if (!showLogModal) {
+      return;
     }
-    return options;
-  }, [entries, filters.Type]);
+    setLogError("");
+    setShowNotes(false);
+    setChoreSearch("");
+  }, [showLogModal]);
+
+  useEffect(() => {
+    if (!toast) {
+      return;
+    }
+    const timeout = window.setTimeout(() => setToast(""), 2600);
+    return () => window.clearTimeout(timeout);
+  }, [toast]);
 
   const filteredEntries = useMemo(() => {
-    const fromDate = filters.From ? new Date(filters.From) : null;
-    const toDate = filters.To ? new Date(filters.To) : null;
-    if (fromDate) {
-      fromDate.setHours(0, 0, 0, 0);
-    }
-    if (toDate) {
-      toDate.setHours(23, 59, 59, 999);
-    }
     return entries.filter((entry) => {
-      if (filters.Type !== "all" && DisplayType(entry.EntryType) !== filters.Type) {
-        return false;
+      if (activeFilter === "pending") {
+        return entry.Status === "Pending";
       }
-      const entryDate = BuildEntryDateTime(entry);
-      if (fromDate && entryDate < fromDate) {
-        return false;
+      if (activeFilter === "all") {
+        return true;
       }
-      if (toDate && entryDate > toDate) {
-        return false;
-      }
-      return true;
+      return entry.ChoreType === activeFilter;
     });
-  }, [entries, filters]);
+  }, [entries, activeFilter]);
 
   const sortedEntries = useMemo(() => {
     const sorted = [...filteredEntries];
     sorted.sort((a, b) => {
-      const aTime = BuildEntryDateTime(a).getTime();
-      const bTime = BuildEntryDateTime(b).getTime();
-      return filters.Sort === "asc" ? aTime - bTime : bTime - aTime;
+      const aDate = ParseDateValue(a.EntryDate)?.getTime() ?? 0;
+      const bDate = ParseDateValue(b.EntryDate)?.getTime() ?? 0;
+      if (aDate !== bDate) {
+        return bDate - aDate;
+      }
+      const aTime = new Date(a.CreatedAt).getTime();
+      const bTime = new Date(b.CreatedAt).getTime();
+      return bTime - aTime;
     });
     return sorted;
-  }, [filteredEntries, filters.Sort]);
+  }, [filteredEntries]);
 
   const groupedEntries = useMemo(() => {
     const groups = [];
     sortedEntries.forEach((entry) => {
-      const date = BuildEntryDateTime(entry);
-      const label = BuildDateLabel(date) || FormatDate(date);
-      const existing = groups.find((group) => group.Label === label);
+      const dateKey = entry.EntryDate || "";
+      const label = dateKey ? FormatDate(dateKey) : "";
+      const existing = groups.find((group) => group.DateKey === dateKey);
       if (existing) {
         existing.Items.push(entry);
       } else {
-        groups.push({ Label: label, Items: [entry] });
+        groups.push({ Label: label, DateKey: dateKey, Items: [entry] });
       }
     });
     return groups;
   }, [sortedEntries]);
 
-  const onDraftChange = (event) => {
-    const { name, value } = event.target;
-    setDraftFilters((prev) => ({ ...prev, [name]: value }));
-  };
-
-  const onApplyFilters = () => {
-    setFilters(draftFilters);
-    setShowFilters(false);
-  };
-
-  const onClearFilters = () => {
-    setFilters(DefaultFilters);
-    setDraftFilters(DefaultFilters);
-  };
-
-  const amountLabel = (amount) => {
-    if (amount === 0) {
-      return FormatCurrency(0);
+  const filteredChores = useMemo(() => {
+    const query = choreSearch.trim().toLowerCase();
+    if (!query) {
+      return chores;
     }
-    const formatted = FormatCurrency(Math.abs(amount));
-    return amount > 0 ? `+${formatted}` : `-${formatted}`;
+    return chores.filter((chore) => chore.Label.toLowerCase().includes(query));
+  }, [choreSearch, chores]);
+
+  const useSearchPicker = chores.length > 8;
+  const isSaving = logStatus === "saving";
+  const canLogPast = Boolean(maxPastDate);
+
+  const onOpenLogModal = () => {
+    const defaultDate = maxPastDate || allowedStart || "";
+    setLogForm({ ChoreId: "", EntryDate: defaultDate, Notes: "" });
+    setShowLogModal(true);
+  };
+
+  const onFormChange = (event) => {
+    const { name, value } = event.target;
+    setLogForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const onSelectChore = (choreId) => {
+    setLogForm((prev) => ({ ...prev, ChoreId: String(choreId) }));
+  };
+
+  const onToggleDate = (dateKey) => {
+    if (!dateKey) {
+      return;
+    }
+    setExpandedDates((prev) => {
+      const next = new Set(prev);
+      if (next.has(dateKey)) {
+        next.delete(dateKey);
+      } else {
+        next.add(dateKey);
+      }
+      return next;
+    });
+  };
+
+  const isBackdated =
+    logForm.EntryDate && today && IsBeforeDate(logForm.EntryDate, today);
+
+  const onSubmitLog = async (event) => {
+    event.preventDefault();
+    if (!logForm.ChoreId || !logForm.EntryDate) {
+      setLogError("Pick a chore and date.");
+      return;
+    }
+    if (today && !IsBeforeDate(logForm.EntryDate, today)) {
+      setLogError("Pick a past date.");
+      return;
+    }
+    setLogStatus("saving");
+    setLogError("");
+    try {
+      await CreateKidsChoreEntry({
+        ChoreId: Number(logForm.ChoreId),
+        EntryDate: logForm.EntryDate,
+        Notes: logForm.Notes || null
+      });
+      setShowLogModal(false);
+      setToast("Sent for approval");
+      await loadHistory();
+    } catch (err) {
+      setLogError(err?.message || "Unable to save chore entry.");
+    } finally {
+      setLogStatus("ready");
+    }
   };
 
   return (
     <div className="kids-history-page">
       <header className="kids-history-appbar">
+        <h2>{GetKidsHeaderEmoji("History")} History</h2>
         <button
           type="button"
-          className="kids-appbar-button"
+          className="kids-appbar-button kids-appbar-pill"
           onClick={() => navigate("/kids")}
         >
           <Icon name="chevronLeft" className="icon" />
           Back
         </button>
-        <h2>History</h2>
-        <button
-          type="button"
-          className="kids-appbar-button is-primary"
-          onClick={() => setShowFilters(true)}
-        >
-          <Icon name="filter" className="icon" />
-          Filter
-        </button>
       </header>
 
-      {filtersActive ? (
-        <div className="kids-filter-pill">
-          <span>Filters active</span>
-          <button type="button" onClick={onClearFilters}>
-            Clear
-          </button>
+      {toast ? (
+        <div className="kids-toast" role="status" aria-live="polite">
+          <span>{toast}</span>
         </div>
       ) : null}
+
+      <div className="kids-history-toolbar">
+        <div className="kids-filter-row">
+          {Filters.map((filter) => (
+            <button
+              key={filter.Key}
+              type="button"
+              className={`kids-pill${activeFilter === filter.Key ? " is-active" : ""}`}
+              onClick={() => setActiveFilter(filter.Key)}
+            >
+              {filter.Label}
+            </button>
+          ))}
+        </div>
+        <button
+          type="button"
+          className="kids-primary-button kids-history-log-button"
+          onClick={onOpenLogModal}
+          disabled={!canLogPast}
+        >
+          Log past day
+        </button>
+      </div>
 
       {status === "loading" ? (
         <div className="kids-history-skeleton">
@@ -258,25 +382,47 @@ const KidsHistory = () => {
 
       {status !== "loading" && !error && sortedEntries.length === 0 ? (
         <div className="kids-history-empty">
-          <p className="kids-muted">
-            {filtersActive ? "No entries match your filters." : "No history entries yet."}
-          </p>
-          {filtersActive ? (
-            <button type="button" className="kids-outline-button" onClick={onClearFilters}>
-              Clear filters
-            </button>
-          ) : null}
+          <p className="kids-muted">No history entries yet.</p>
         </div>
       ) : null}
 
       <div className="kids-history-list">
-        {groupedEntries.map((group) => (
-          <div key={group.Label || "Unknown"} className="kids-history-group">
-            <div className="kids-history-date">{group.Label}</div>
-            <div className="kids-history-group-list">
-              {group.Items.map((entry) => {
+        {groupedEntries.map((group) => {
+          const summary = group.DateKey ? dailySummaryByDate[group.DateKey] : null;
+          const summaryText = summary
+            ? summary.total > 0
+              ? `${summary.done}/${summary.total} daily jobs done`
+              : "No daily jobs"
+            : "";
+          const isComplete = summary && summary.total > 0 && summary.done === summary.total;
+          const isIncomplete =
+            summary && (summary.total === 0 || summary.done < summary.total);
+          const isExpanded = group.DateKey ? expandedDates.has(group.DateKey) : true;
+          return (
+          <div key={group.DateKey || group.Label || "Unknown"} className="kids-history-group">
+            <button
+              type="button"
+              className={`kids-history-date-row${
+                isComplete ? " is-complete" : isIncomplete ? " is-incomplete" : ""
+              }`}
+              onClick={() => onToggleDate(group.DateKey)}
+              aria-expanded={isExpanded}
+            >
+              <span className="kids-history-date">{group.Label}</span>
+              {summaryText ? (
+                <span className="kids-history-date-meta">{summaryText}</span>
+              ) : null}
+              <span className={`kids-history-date-chevron${isExpanded ? " is-open" : ""}`}>
+                <Icon name="chevronDown" className="icon" />
+              </span>
+            </button>
+            {isExpanded ? (
+              <div className="kids-history-group-list">
+                {group.Items.map((entry) => {
                 const isExpanded = expandedId === entry.Id;
                 const timeLabel = entry.CreatedAt ? FormatTime(entry.CreatedAt) : "-";
+                const statusLabel = StatusLabel(entry.Status);
+                const typeLabel = TypeLabel(entry.ChoreType);
                 return (
                   <div key={entry.Id} className="kids-history-item">
                     <button
@@ -287,15 +433,9 @@ const KidsHistory = () => {
                     >
                       <div className="kids-history-row-main">
                         <span className="kids-history-title">
-                          {entry.Narrative || DisplayType(entry.EntryType)}
+                          {GetChoreEmoji({ Id: entry.ChoreId, Type: entry.ChoreType })}{" "}
+                          {entry.ChoreLabel}
                         </span>
-                        <span className="kids-history-time">{timeLabel}</span>
-                      </div>
-                      <div className="kids-history-row-meta">
-                        <span className={`kids-history-amount${entry.Amount < 0 ? " is-negative" : ""}`}>
-                          {amountLabel(entry.Amount)}
-                        </span>
-                        <span className="kids-history-chip">{DisplayType(entry.EntryType)}</span>
                       </div>
                       <span className={`kids-history-chevron${isExpanded ? " is-open" : ""}`}>
                         <Icon name="chevronDown" className="icon" />
@@ -308,73 +448,160 @@ const KidsHistory = () => {
                           <span>{entry.Notes || "None"}</span>
                         </div>
                         <div className="kids-history-detail-row">
+                          <span className="kids-history-detail-label">Logged</span>
+                          <span>
+                            {entry.CreatedAt
+                              ? `${FormatDate(entry.CreatedAt)} ${timeLabel}`
+                              : timeLabel}
+                          </span>
+                        </div>
+                        <div className="kids-history-detail-row">
                           <span className="kids-history-detail-label">Type</span>
-                          <span>{DisplayType(entry.EntryType)}</span>
+                          <span>{typeLabel}</span>
+                        </div>
+                        <div className="kids-history-detail-row">
+                          <span className="kids-history-detail-label">Status</span>
+                          <span>{statusLabel || "-"}</span>
                         </div>
                       </div>
                     ) : null}
                   </div>
                 );
               })}
-            </div>
+              </div>
+            ) : null}
           </div>
-        ))}
+        );})}
       </div>
 
-      {showFilters ? (
+      {showLogModal ? (
         <div
-          className="kids-sheet-backdrop"
+          className="modal-backdrop"
           role="dialog"
           aria-modal="true"
-          onClick={() => setShowFilters(false)}
+          onClick={() => setShowLogModal(false)}
         >
-          <div className="kids-sheet" onClick={(event) => event.stopPropagation()}>
-            <div className="kids-sheet-header">
-              <h3>Filter history</h3>
-              <button
-                type="button"
-                className="icon-button"
-                onClick={() => setShowFilters(false)}
-                aria-label="Close filters"
-              >
-                <Icon name="close" className="icon" />
-              </button>
+          <div className="modal" onClick={(event) => event.stopPropagation()}>
+            <div className="modal-header">
+              <div>
+                <h3>Log a chore</h3>
+              </div>
+              <div className="modal-header-actions">
+                <button
+                  type="button"
+                  className="icon-button"
+                  onClick={() => setShowLogModal(false)}
+                  aria-label="Close modal"
+                >
+                  <Icon name="close" className="icon" />
+                </button>
+              </div>
             </div>
-            <div className="kids-sheet-body">
-              <label>
-                <span>From</span>
-                <input type="date" name="From" value={draftFilters.From} onChange={onDraftChange} />
-              </label>
-              <label>
-                <span>To</span>
-                <input type="date" name="To" value={draftFilters.To} onChange={onDraftChange} />
-              </label>
-              <label>
-                <span>Type</span>
-                <select name="Type" value={draftFilters.Type} onChange={onDraftChange}>
-                  <option value="all">All types</option>
-                  {typeOptions.map((type) => (
-                    <option key={type} value={type}>
-                      {type}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                <span>Sort</span>
-                <select name="Sort" value={draftFilters.Sort} onChange={onDraftChange}>
-                  <option value="desc">Newest first</option>
-                  <option value="asc">Oldest first</option>
-                </select>
-              </label>
-            </div>
-            <div className="kids-sheet-actions">
-              <button type="button" className="kids-outline-button" onClick={onClearFilters}>
-                Clear
-              </button>
-              <button type="button" className="kids-primary-button" onClick={onApplyFilters}>
-                Apply
-              </button>
+            <div className="modal-body">
+              <form className="kids-log-form" onSubmit={onSubmitLog}>
+                <div className="kids-log-section">
+                  <span className="kids-log-label">Chore</span>
+                  {useSearchPicker ? (
+                    <div className="kids-chore-picker">
+                      <label className="kids-chore-search">
+                        <Icon name="search" className="icon" />
+                        <input
+                          type="text"
+                          placeholder="Search chores"
+                          value={choreSearch}
+                          onChange={(event) => setChoreSearch(event.target.value)}
+                          aria-label="Search chores"
+                        />
+                      </label>
+                      <div className="kids-chore-list">
+                        {filteredChores.length === 0 ? (
+                          <p className="kids-muted">No chores match your search.</p>
+                        ) : (
+                          filteredChores.map((chore) => (
+                            <button
+                              key={chore.Id}
+                              type="button"
+                              className={`kids-chore-row${
+                                logForm.ChoreId === String(chore.Id) ? " is-selected" : ""
+                              }`}
+                              onClick={() => onSelectChore(chore.Id)}
+                              aria-pressed={logForm.ChoreId === String(chore.Id)}
+                            >
+                              <span>{chore.Label}</span>
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="kids-chore-grid">
+                      {chores.length === 0 ? (
+                        <p className="kids-muted">No chores assigned yet.</p>
+                      ) : (
+                        chores.map((chore) => (
+                          <button
+                            key={chore.Id}
+                            type="button"
+                            className={`kids-chore-button${
+                              logForm.ChoreId === String(chore.Id) ? " is-selected" : ""
+                            }`}
+                            onClick={() => onSelectChore(chore.Id)}
+                            aria-pressed={logForm.ChoreId === String(chore.Id)}
+                          >
+                            <span>{chore.Label}</span>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <div className="kids-log-section">
+                  <label className="kids-log-label">
+                    <span>Date</span>
+                    <input
+                      type="date"
+                      name="EntryDate"
+                      value={logForm.EntryDate}
+                      min={allowedStart}
+                      max={maxPastDate}
+                      onChange={onFormChange}
+                    />
+                  </label>
+                  {isBackdated ? (
+                    <span className="kids-pill kids-pill--muted">Needs parent approval</span>
+                  ) : null}
+                </div>
+
+                <div className="kids-log-section">
+                  {!showNotes ? (
+                    <button
+                      type="button"
+                      className="kids-note-toggle"
+                      onClick={() => setShowNotes(true)}
+                    >
+                      Add a note
+                    </button>
+                  ) : (
+                    <label className="kids-log-label">
+                      Notes
+                      <textarea
+                        name="Notes"
+                        rows={3}
+                        value={logForm.Notes}
+                        onChange={onFormChange}
+                      />
+                    </label>
+                  )}
+                </div>
+
+                <div className="kids-log-actions">
+                  <button type="submit" disabled={!logForm.ChoreId || isSaving}>
+                    {isSaving ? "Saving..." : "Save"}
+                  </button>
+                </div>
+              </form>
+              {logError ? <p className="kids-error">{logError}</p> : null}
             </div>
           </div>
         </div>
