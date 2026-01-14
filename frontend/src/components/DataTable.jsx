@@ -33,62 +33,73 @@ const DataTable = ({
   const [columnWidths, setColumnWidths] = useState(() =>
     Object.fromEntries(columns.map((column) => [column.key, column.width || 180]))
   );
+  const [hydratedKey, setHydratedKey] = useState(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [columnsOpen, setColumnsOpen] = useState(false);
   const [filterOpenFor, setFilterOpenFor] = useState(null);
   const resizing = useRef(null);
+  const columnsSignature = useMemo(() => columns.map((column) => column.key).join("|"), [columns]);
+  const storageKey = useMemo(() => BuildStorageKey(tableKey), [tableKey]);
 
   useEffect(() => {
     setVisibleColumns((prev) => {
-      const next = Object.fromEntries(
-        columns.map((column) => [column.key, prev?.[column.key] ?? true])
-      );
-      const prevKeys = Object.keys(prev || {});
-      const nextKeys = Object.keys(next);
-      if (prevKeys.length === nextKeys.length && prevKeys.every((key) => prev[key] === next[key])) {
-        return prev;
-      }
-      return next;
+      const next = { ...(prev || {}) };
+      let changed = false;
+      columns.forEach((column) => {
+        if (next[column.key] === undefined) {
+          next[column.key] = true;
+          changed = true;
+        }
+      });
+      return changed ? next : prev;
     });
     setColumnWidths((prev) => {
-      const next = Object.fromEntries(
-        columns.map((column) => [column.key, prev?.[column.key] ?? (column.width || 180)])
-      );
-      const prevKeys = Object.keys(prev || {});
-      const nextKeys = Object.keys(next);
-      if (prevKeys.length === nextKeys.length && prevKeys.every((key) => prev[key] === next[key])) {
-        return prev;
-      }
-      return next;
+      const next = { ...(prev || {}) };
+      let changed = false;
+      columns.forEach((column) => {
+        if (next[column.key] === undefined) {
+          next[column.key] = column.width || 180;
+          changed = true;
+        }
+      });
+      return changed ? next : prev;
     });
   }, [columns]);
 
   useEffect(() => {
-    const stored = localStorage.getItem(BuildStorageKey(tableKey));
+    const defaultsVisible = Object.fromEntries(columns.map((column) => [column.key, true]));
+    const defaultsWidths = Object.fromEntries(columns.map((column) => [column.key, column.width || 180]));
+    const stored = localStorage.getItem(storageKey);
     if (!stored) {
+      setSort(DefaultSort);
+      setFilters({});
+      setVisibleColumns(defaultsVisible);
+      setColumnWidths(defaultsWidths);
+      setHydratedKey(storageKey);
       return;
     }
     try {
       const data = JSON.parse(stored);
-      if (data.sort) setSort(data.sort);
-      if (data.filters) setFilters(data.filters);
-      if (data.visibleColumns) {
-        const defaults = Object.fromEntries(columns.map((column) => [column.key, true]));
-        setVisibleColumns({ ...defaults, ...data.visibleColumns });
-      }
-      if (data.columnWidths) {
-        const defaults = Object.fromEntries(columns.map((column) => [column.key, column.width || 180]));
-        setColumnWidths({ ...defaults, ...data.columnWidths });
-      }
+      setSort(data.sort || DefaultSort);
+      setFilters(data.filters || {});
+      setVisibleColumns({ ...defaultsVisible, ...(data.visibleColumns || {}) });
+      setColumnWidths({ ...defaultsWidths, ...(data.columnWidths || {}) });
     } catch (error) {
-      // Ignore corrupt storage.
+      setSort(DefaultSort);
+      setFilters({});
+      setVisibleColumns(defaultsVisible);
+      setColumnWidths(defaultsWidths);
     }
-  }, [tableKey]);
+    setHydratedKey(storageKey);
+  }, [storageKey, columnsSignature]);
 
   useEffect(() => {
+    if (hydratedKey !== storageKey) {
+      return;
+    }
     const payload = { sort, filters, visibleColumns, columnWidths };
-    localStorage.setItem(BuildStorageKey(tableKey), JSON.stringify(payload));
-  }, [sort, filters, visibleColumns, columnWidths, tableKey]);
+    localStorage.setItem(storageKey, JSON.stringify(payload));
+  }, [sort, filters, visibleColumns, columnWidths, storageKey, hydratedKey]);
 
   useEffect(() => {
     const onMouseMove = (event) => {
