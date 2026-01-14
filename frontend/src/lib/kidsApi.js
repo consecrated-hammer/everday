@@ -2,6 +2,11 @@ import { RequestJson, RequestWithAuth } from "./apiClient.js";
 
 export const FetchKidsSummary = async () => RequestJson("/kids/me/summary");
 
+export const FetchKidsOverview = async (selectedDate = "") => {
+  const query = selectedDate ? `?selected_date=${encodeURIComponent(selectedDate)}` : "";
+  return RequestJson(`/kids/me/overview${query}`);
+};
+
 export const FetchKidsLedger = async (limit = 50) =>
   RequestJson(`/kids/me/ledger?limit=${limit}`);
 
@@ -57,6 +62,27 @@ export const FetchKidChoreEntries = async (kidId, limit = 200, includeDeleted = 
 
 export const FetchKidChoreEntryAudit = async (kidId, entryId) =>
   RequestJson(`/kids/parents/children/${kidId}/chore-entries/${entryId}/audit`);
+
+export const FetchKidMonthSummary = async (kidId) =>
+  RequestJson(`/kids/parents/children/${kidId}/month-summary`);
+
+export const FetchKidsPendingApprovals = async ({ kidId = "", choreType = "" } = {}) => {
+  const params = new URLSearchParams();
+  if (kidId) {
+    params.set("kid_id", String(kidId));
+  }
+  if (choreType) {
+    params.set("chore_type", choreType);
+  }
+  const query = params.toString();
+  return RequestJson(`/kids/parents/approvals${query ? `?${query}` : ""}`);
+};
+
+export const ApproveKidsChoreEntry = async (entryId) =>
+  RequestJson(`/kids/parents/approvals/${entryId}/approve`, { method: "POST" });
+
+export const RejectKidsChoreEntry = async (entryId) =>
+  RequestJson(`/kids/parents/approvals/${entryId}/reject`, { method: "POST" });
 
 export const CreateKidDeposit = async (kidId, payload) =>
   RequestJson(`/kids/parents/children/${kidId}/ledger/deposit`, {

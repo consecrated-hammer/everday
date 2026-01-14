@@ -58,7 +58,12 @@ export const IsAccessTokenExpired = (skewSeconds = 30) => {
 export const SetTokens = (tokens) => {
   const existing = GetTokens() || {};
   const merged = { ...existing, ...tokens };
-  localStorage.setItem(StorageKey, JSON.stringify(merged));
+  const existingSerialized = JSON.stringify(existing);
+  const mergedSerialized = JSON.stringify(merged);
+  if (existingSerialized === mergedSerialized) {
+    return;
+  }
+  localStorage.setItem(StorageKey, mergedSerialized);
   NotifyAuthChange();
 };
 

@@ -30,7 +30,10 @@ from app.modules.kids.schemas import (
     ChoreEntryUpdate,
     ChoreOut,
     ChoreUpdate,
+    KidsApprovalOut,
     KidsLedgerResponse,
+    KidsMonthSummaryResponse,
+    KidsOverviewResponse,
     KidsSummaryResponse,
     KidLinkCreate,
     KidLinkOut,
@@ -38,6 +41,23 @@ from app.modules.kids.schemas import (
     LedgerEntryOut,
     PocketMoneyRuleOut,
     PocketMoneyRuleUpsert,
+)
+from app.modules.kids.services.chores_v2_service import (
+    AllowedDateRange,
+    BuildMonthProjection,
+    CHORE_TYPE_BONUS,
+    CHORE_TYPE_DAILY,
+    CHORE_TYPE_HABIT,
+    CentsToAmount,
+    IsAssignmentActiveOnDate,
+    IsChoreActiveOnDate,
+    MonthRange,
+    MonthlyAllowanceCents,
+    RoundDailySlice,
+    STATUS_APPROVED,
+    STATUS_PENDING,
+    STATUS_REJECTED,
+    TodayAdelaide,
 )
 from app.modules.kids.services.pocket_money_service import EnsurePocketMoneyCredits
 from app.modules.kids.utils.rbac import RequireKidsManager, RequireKidsMember
@@ -179,8 +199,10 @@ def _BuildChoreOut(chore: Chore, assigned_kid_ids: list[int] | None = None) -> C
     return ChoreOut(
         Id=chore.Id,
         Label=chore.Label,
+        Type=chore.Type,
         Amount=float(chore.Amount),
         IsActive=chore.IsActive,
+        SortOrder=chore.SortOrder,
         AssignedKidIds=assigned_kid_ids,
     )
 
@@ -191,15 +213,47 @@ def _BuildChoreEntryOut(entry: ChoreEntry, chore: Chore) -> ChoreEntryOut:
         KidUserId=entry.KidUserId,
         ChoreId=entry.ChoreId,
         ChoreLabel=chore.Label,
+        ChoreType=entry.ChoreType or chore.Type,
+        Status=entry.Status,
         Amount=float(entry.Amount),
         EntryDate=entry.EntryDate,
         Notes=entry.Notes,
         IsDeleted=entry.IsDeleted,
         CreatedByUserId=entry.CreatedByUserId,
         UpdatedByUserId=entry.UpdatedByUserId,
+        ReviewedByUserId=entry.ReviewedByUserId,
+        ReviewedAt=entry.ReviewedAt,
         CreatedAt=entry.CreatedAt,
         UpdatedAt=entry.UpdatedAt,
     )
+
+
+def _LoadAssignedChoresForDate(db: Session, kid_id: int, on_date: date) -> list[Chore]:
+    assignments = (
+        db.query(ChoreAssignment)
+        .filter(ChoreAssignment.KidUserId == kid_id)
+        .order_by(ChoreAssignment.CreatedAt.asc())
+        .all()
+    )
+    chore_ids = [assignment.ChoreId for assignment in assignments]
+    chores = (
+        db.query(Chore).filter(Chore.Id.in_(chore_ids)).all()
+        if chore_ids
+        else []
+    )
+    chore_map = {chore.Id: chore for chore in chores}
+    active = []
+    for assignment in assignments:
+        chore = chore_map.get(assignment.ChoreId)
+        if not chore:
+            continue
+        if not IsChoreActiveOnDate(chore, on_date):
+            continue
+        if not IsAssignmentActiveOnDate(assignment, on_date):
+            continue
+        active.append(chore)
+    active.sort(key=lambda chore: (chore.SortOrder, chore.Label.lower()))
+    return active
 
 
 def _SerializeEntry(entry: ChoreEntry, chore: Chore) -> dict:
@@ -208,11 +262,29 @@ def _SerializeEntry(entry: ChoreEntry, chore: Chore) -> dict:
         "KidUserId": entry.KidUserId,
         "ChoreId": entry.ChoreId,
         "ChoreLabel": chore.Label,
+        "ChoreType": entry.ChoreType or chore.Type,
+        "Status": entry.Status,
         "Amount": float(entry.Amount),
         "EntryDate": entry.EntryDate.isoformat(),
         "Notes": entry.Notes,
         "IsDeleted": entry.IsDeleted,
     }
+
+
+def _BuildApprovalOut(entry: ChoreEntry, chore: Chore, kid_name: str) -> KidsApprovalOut:
+    return KidsApprovalOut(
+        Id=entry.Id,
+        KidUserId=entry.KidUserId,
+        KidName=kid_name,
+        ChoreId=entry.ChoreId,
+        ChoreLabel=chore.Label,
+        ChoreType=entry.ChoreType or chore.Type,
+        EntryDate=entry.EntryDate,
+        Amount=float(entry.Amount),
+        Notes=entry.Notes,
+        Status=entry.Status,
+        CreatedAt=entry.CreatedAt,
+    )
 
 
 def _LogAuditEvent(
@@ -237,8 +309,10 @@ def _LogAuditEvent(
     db.add(audit)
 
 
-def _EnsureKidHasChore(db: Session, kid_id: int, chore_id: int) -> Chore:
-    chore = db.query(Chore).filter(Chore.Id == chore_id, Chore.IsActive == True).first()
+def _EnsureKidHasChore(
+    db: Session, kid_id: int, chore_id: int, entry_date: date
+) -> tuple[Chore, ChoreAssignment]:
+    chore = db.query(Chore).filter(Chore.Id == chore_id).first()
     if not chore:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Chore not found")
 
@@ -249,7 +323,13 @@ def _EnsureKidHasChore(db: Session, kid_id: int, chore_id: int) -> Chore:
     )
     if not assignment:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Chore not assigned")
-    return chore
+
+    if not IsChoreActiveOnDate(chore, entry_date) or not IsAssignmentActiveOnDate(assignment, entry_date):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Chore not available for selected date",
+        )
+    return chore, assignment
 
 
 def _KidBalance(db: Session, kid_user_id: int) -> float:
@@ -277,13 +357,7 @@ def GetKidsSummary(
             .all()
         )
         creator_map = _LoadUserNames(db, {entry.CreatedByUserId for entry in entries})
-        chores = (
-            db.query(Chore)
-            .join(ChoreAssignment, ChoreAssignment.ChoreId == Chore.Id)
-            .filter(ChoreAssignment.KidUserId == user.Id, Chore.IsActive == True)
-            .order_by(Chore.Label.asc())
-            .all()
-        )
+        chores = _LoadAssignedChoresForDate(db, user.Id, TodayAdelaide())
         return KidsSummaryResponse(
             Balance=balance,
             RecentLedger=[
@@ -325,14 +399,119 @@ def GetAssignedChores(
     user: UserContext = Depends(RequireKidsMember()),
 ) -> list[ChoreOut]:
     try:
-        chores = (
-            db.query(Chore)
-            .join(ChoreAssignment, ChoreAssignment.ChoreId == Chore.Id)
-            .filter(ChoreAssignment.KidUserId == user.Id, Chore.IsActive == True)
-            .order_by(Chore.Label.asc())
+        chores = _LoadAssignedChoresForDate(db, user.Id, TodayAdelaide())
+        return [_BuildChoreOut(chore) for chore in chores]
+    except ProgrammingError as exc:
+        _handle_db_error(exc)
+
+
+@router.get("/me/overview", response_model=KidsOverviewResponse)
+def GetKidsOverview(
+    selected_date: date | None = None,
+    db: Session = Depends(GetDb),
+    user: UserContext = Depends(RequireKidsMember()),
+) -> KidsOverviewResponse:
+    try:
+        today = TodayAdelaide()
+        allowed_start, allowed_end = AllowedDateRange(today)
+        if selected_date is None:
+            selected_date = today
+        if selected_date < allowed_start or selected_date > allowed_end:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Date is out of range")
+
+        assignments = (
+            db.query(ChoreAssignment)
+            .filter(ChoreAssignment.KidUserId == user.Id)
+            .order_by(ChoreAssignment.CreatedAt.asc())
             .all()
         )
-        return [_BuildChoreOut(chore) for chore in chores]
+        chore_ids = [assignment.ChoreId for assignment in assignments]
+        chores = db.query(Chore).filter(Chore.Id.in_(chore_ids)).all() if chore_ids else []
+        chore_map = {chore.Id: chore for chore in chores}
+
+        chores_for_date = []
+        for assignment in assignments:
+            chore = chore_map.get(assignment.ChoreId)
+            if not chore:
+                continue
+            if not IsChoreActiveOnDate(chore, selected_date):
+                continue
+            if not IsAssignmentActiveOnDate(assignment, selected_date):
+                continue
+            chores_for_date.append(chore)
+        chores_for_date.sort(key=lambda chore: (chore.SortOrder, chore.Label.lower()))
+
+        entries_for_date = (
+            db.query(ChoreEntry)
+            .filter(
+                ChoreEntry.KidUserId == user.Id,
+                ChoreEntry.EntryDate == selected_date,
+                ChoreEntry.IsDeleted == False,
+            )
+            .order_by(ChoreEntry.CreatedAt.desc())
+            .all()
+        )
+
+        month_start, month_end = MonthRange(today)
+        month_entries = (
+            db.query(ChoreEntry)
+            .filter(
+                ChoreEntry.KidUserId == user.Id,
+                ChoreEntry.EntryDate >= month_start,
+                ChoreEntry.EntryDate <= month_end,
+                ChoreEntry.IsDeleted == False,
+            )
+            .all()
+        )
+
+        rule = db.query(PocketMoneyRule).filter(PocketMoneyRule.KidUserId == user.Id).first()
+        monthly_allowance_cents = MonthlyAllowanceCents(rule.Amount if rule and rule.IsActive else None)
+        days_in_month = (month_end - month_start).days + 1
+        daily_slice_cents = RoundDailySlice(monthly_allowance_cents, days_in_month)
+
+        projection_points, _summary, protected_by_date = BuildMonthProjection(
+            today=today,
+            month_start=month_start,
+            month_end=month_end,
+            daily_slice_cents=daily_slice_cents,
+            chores=chores,
+            assignments=assignments,
+            entries=month_entries,
+        )
+
+        if selected_date in protected_by_date:
+            day_protected = protected_by_date[selected_date]
+        else:
+            required_daily = {chore.Id for chore in chores_for_date if chore.Type == CHORE_TYPE_DAILY}
+            approved_ids = {
+                entry.ChoreId for entry in entries_for_date if entry.Status == STATUS_APPROVED
+            }
+            day_protected = required_daily.issubset(approved_ids) if required_daily else True
+
+        entries_out = [
+            _BuildChoreEntryOut(entry, chore_map.get(entry.ChoreId))
+            for entry in entries_for_date
+            if entry.ChoreId in chore_map
+        ]
+        projection_out = [
+            {"Date": point.Date, "Amount": CentsToAmount(point.AmountCents)}
+            for point in projection_points
+        ]
+
+        return KidsOverviewResponse(
+            Today=today,
+            SelectedDate=selected_date,
+            AllowedStartDate=allowed_start,
+            AllowedEndDate=allowed_end,
+            MonthStart=month_start,
+            MonthEnd=month_end,
+            MonthlyAllowance=CentsToAmount(monthly_allowance_cents),
+            DailySlice=CentsToAmount(daily_slice_cents),
+            DayProtected=day_protected,
+            Chores=[_BuildChoreOut(chore) for chore in chores_for_date],
+            Entries=entries_out,
+            Projection=projection_out,
+        )
     except ProgrammingError as exc:
         _handle_db_error(exc)
 
@@ -370,33 +549,56 @@ def CreateChoreEntry(
     user: UserContext = Depends(RequireKidsMember()),
 ) -> ChoreEntryOut:
     try:
-        chore = _EnsureKidHasChore(db, user.Id, payload.ChoreId)
-        entry = ChoreEntry(
-            KidUserId=user.Id,
-            ChoreId=chore.Id,
-            EntryDate=payload.EntryDate,
-            Amount=chore.Amount,
-            Notes=payload.Notes,
-            IsDeleted=False,
-            CreatedByUserId=user.Id,
-            UpdatedByUserId=user.Id,
+        today = TodayAdelaide()
+        allowed_start, allowed_end = AllowedDateRange(today)
+        if payload.EntryDate < allowed_start or payload.EntryDate > allowed_end:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Date is out of range")
+
+        chore, _assignment = _EnsureKidHasChore(db, user.Id, payload.ChoreId, payload.EntryDate)
+        status_value = STATUS_PENDING if payload.EntryDate < today else STATUS_APPROVED
+        amount_value = chore.Amount if chore.Type == CHORE_TYPE_BONUS else 0
+
+        entry = (
+            db.query(ChoreEntry)
+            .filter(
+                ChoreEntry.KidUserId == user.Id,
+                ChoreEntry.ChoreId == chore.Id,
+                ChoreEntry.EntryDate == payload.EntryDate,
+            )
+            .order_by(ChoreEntry.CreatedAt.desc())
+            .first()
         )
+
+        now = datetime.utcnow()
+        if entry and not entry.IsDeleted:
+            return _BuildChoreEntryOut(entry, chore)
+
+        if entry:
+            entry.Amount = amount_value
+            entry.Notes = payload.Notes
+            entry.Status = status_value
+            entry.ChoreType = chore.Type
+            entry.IsDeleted = False
+            entry.UpdatedByUserId = user.Id
+            entry.UpdatedAt = now
+        else:
+            entry = ChoreEntry(
+                KidUserId=user.Id,
+                ChoreId=chore.Id,
+                EntryDate=payload.EntryDate,
+                Amount=amount_value,
+                Notes=payload.Notes,
+                Status=status_value,
+                ChoreType=chore.Type,
+                IsDeleted=False,
+                CreatedByUserId=user.Id,
+                UpdatedByUserId=user.Id,
+                CreatedAt=now,
+                UpdatedAt=now,
+            )
         db.add(entry)
         db.flush()
 
-        ledger_entry = LedgerEntry(
-            KidUserId=user.Id,
-            EntryType="Chore",
-            Amount=entry.Amount,
-            EntryDate=entry.EntryDate,
-            Narrative=chore.Label,
-            Notes=payload.Notes,
-            CreatedByUserId=user.Id,
-            SourceType="ChoreEntry",
-            SourceId=entry.Id,
-            IsDeleted=False,
-        )
-        db.add(ledger_entry)
         _LogAuditEvent(
             db,
             entry,
@@ -430,32 +632,23 @@ def UpdateChoreEntry(
         if not entry or entry.IsDeleted:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Chore entry not found")
 
-        chore = _EnsureKidHasChore(db, user.Id, payload.ChoreId or entry.ChoreId)
+        next_date = payload.EntryDate or entry.EntryDate
+        today = TodayAdelaide()
+        allowed_start, allowed_end = AllowedDateRange(today)
+        if next_date < allowed_start or next_date > allowed_end:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Date is out of range")
+
+        chore, _assignment = _EnsureKidHasChore(db, user.Id, payload.ChoreId or entry.ChoreId, next_date)
         before = _SerializeEntry(entry, chore)
         entry.ChoreId = chore.Id
-        entry.EntryDate = payload.EntryDate or entry.EntryDate
+        entry.EntryDate = next_date
         entry.Notes = payload.Notes
-        entry.Amount = chore.Amount
+        entry.Amount = chore.Amount if chore.Type == CHORE_TYPE_BONUS else 0
+        entry.Status = STATUS_PENDING if next_date < today else STATUS_APPROVED
+        entry.ChoreType = chore.Type
         entry.UpdatedByUserId = user.Id
         entry.UpdatedAt = datetime.utcnow()
         db.add(entry)
-
-        ledger = (
-            db.query(LedgerEntry)
-            .filter(
-                LedgerEntry.KidUserId == user.Id,
-                LedgerEntry.SourceType == "ChoreEntry",
-                LedgerEntry.SourceId == entry.Id,
-            )
-            .first()
-        )
-        if ledger:
-            ledger.EntryDate = entry.EntryDate
-            ledger.Amount = entry.Amount
-            ledger.Narrative = chore.Label
-            ledger.Notes = entry.Notes
-            ledger.UpdatedAt = datetime.utcnow()
-            db.add(ledger)
 
         _LogAuditEvent(
             db,
@@ -498,20 +691,6 @@ def DeleteChoreEntry(
         entry.UpdatedByUserId = user.Id
         entry.UpdatedAt = datetime.utcnow()
         db.add(entry)
-
-        ledger = (
-            db.query(LedgerEntry)
-            .filter(
-                LedgerEntry.KidUserId == user.Id,
-                LedgerEntry.SourceType == "ChoreEntry",
-                LedgerEntry.SourceId == entry.Id,
-            )
-            .first()
-        )
-        if ledger:
-            ledger.IsDeleted = True
-            ledger.UpdatedAt = datetime.utcnow()
-            db.add(ledger)
 
         _LogAuditEvent(
             db,
@@ -723,6 +902,215 @@ def GetKidChoreEntryAudit(
         _handle_db_error(exc)
 
 
+@router.get("/parents/approvals", response_model=list[KidsApprovalOut])
+def ListPendingApprovals(
+    kid_id: int | None = None,
+    chore_type: str | None = None,
+    db: Session = Depends(GetDb),
+    user: UserContext = Depends(RequireKidsManager()),
+) -> list[KidsApprovalOut]:
+    try:
+        if chore_type and chore_type not in {CHORE_TYPE_DAILY, CHORE_TYPE_HABIT, CHORE_TYPE_BONUS}:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid chore type")
+        kid_ids = [
+            entry[0]
+            for entry in db.query(KidLink.KidUserId)
+            .order_by(KidLink.KidUserId.asc())
+            .distinct()
+            .all()
+        ]
+        if kid_id is not None:
+            if kid_id not in kid_ids:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Kid not linked")
+            kid_ids = [kid_id]
+        if not kid_ids:
+            return []
+
+        entries = (
+            db.query(ChoreEntry)
+            .filter(
+                ChoreEntry.KidUserId.in_(kid_ids),
+                ChoreEntry.IsDeleted == False,
+                ChoreEntry.Status == STATUS_PENDING,
+            )
+            .order_by(ChoreEntry.EntryDate.desc(), ChoreEntry.CreatedAt.desc())
+            .all()
+        )
+        chore_ids = {entry.ChoreId for entry in entries}
+        chore_map = (
+            {chore.Id: chore for chore in db.query(Chore).filter(Chore.Id.in_(chore_ids)).all()}
+            if chore_ids
+            else {}
+        )
+        kid_name_map = _LoadUserNames(db, set(kid_ids))
+        results = []
+        for entry in entries:
+            chore = chore_map.get(entry.ChoreId)
+            if not chore:
+                continue
+            effective_type = entry.ChoreType or chore.Type
+            if chore_type and chore_type != effective_type:
+                continue
+            kid_name = kid_name_map.get(entry.KidUserId, f"Kid {entry.KidUserId}")
+            results.append(_BuildApprovalOut(entry, chore, kid_name))
+        return results
+    except ProgrammingError as exc:
+        _handle_db_error(exc)
+
+
+@router.post("/parents/approvals/{entry_id}/approve", response_model=ChoreEntryOut)
+def ApproveChoreEntry(
+    entry_id: int,
+    db: Session = Depends(GetDb),
+    user: UserContext = Depends(RequireKidsManager()),
+) -> ChoreEntryOut:
+    try:
+        entry = (
+            db.query(ChoreEntry)
+            .filter(ChoreEntry.Id == entry_id, ChoreEntry.IsDeleted == False)
+            .first()
+        )
+        if not entry:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Chore entry not found")
+        _EnsureParentKidAccess(db, user.Id, entry.KidUserId)
+        if entry.Status != STATUS_PENDING:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Entry is not pending")
+
+        chore = db.query(Chore).filter(Chore.Id == entry.ChoreId).first()
+        if not chore:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Chore not found")
+
+        entry.Status = STATUS_APPROVED
+        entry.ReviewedByUserId = user.Id
+        entry.ReviewedAt = datetime.utcnow()
+        entry.UpdatedByUserId = user.Id
+        entry.UpdatedAt = datetime.utcnow()
+        db.add(entry)
+        _LogAuditEvent(
+            db,
+            entry,
+            chore,
+            action="Approved",
+            actor_user_id=user.Id,
+            before=None,
+            after=_SerializeEntry(entry, chore),
+            summary="Approved chore entry",
+        )
+        db.commit()
+        db.refresh(entry)
+        return _BuildChoreEntryOut(entry, chore)
+    except ProgrammingError as exc:
+        _handle_db_error(exc)
+
+
+@router.post("/parents/approvals/{entry_id}/reject", response_model=ChoreEntryOut)
+def RejectChoreEntry(
+    entry_id: int,
+    db: Session = Depends(GetDb),
+    user: UserContext = Depends(RequireKidsManager()),
+) -> ChoreEntryOut:
+    try:
+        entry = (
+            db.query(ChoreEntry)
+            .filter(ChoreEntry.Id == entry_id, ChoreEntry.IsDeleted == False)
+            .first()
+        )
+        if not entry:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Chore entry not found")
+        _EnsureParentKidAccess(db, user.Id, entry.KidUserId)
+        if entry.Status != STATUS_PENDING:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Entry is not pending")
+
+        chore = db.query(Chore).filter(Chore.Id == entry.ChoreId).first()
+        if not chore:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Chore not found")
+
+        entry.Status = STATUS_REJECTED
+        entry.ReviewedByUserId = user.Id
+        entry.ReviewedAt = datetime.utcnow()
+        entry.UpdatedByUserId = user.Id
+        entry.UpdatedAt = datetime.utcnow()
+        db.add(entry)
+        _LogAuditEvent(
+            db,
+            entry,
+            chore,
+            action="Rejected",
+            actor_user_id=user.Id,
+            before=None,
+            after=_SerializeEntry(entry, chore),
+            summary="Rejected chore entry",
+        )
+        db.commit()
+        db.refresh(entry)
+        return _BuildChoreEntryOut(entry, chore)
+    except ProgrammingError as exc:
+        _handle_db_error(exc)
+
+
+@router.get("/parents/children/{kid_id}/month-summary", response_model=KidsMonthSummaryResponse)
+def GetKidMonthSummary(
+    kid_id: int,
+    db: Session = Depends(GetDb),
+    user: UserContext = Depends(RequireKidsManager()),
+) -> KidsMonthSummaryResponse:
+    try:
+        _EnsureParentKidAccess(db, user.Id, kid_id)
+        today = TodayAdelaide()
+        month_start, month_end = MonthRange(today)
+
+        assignments = (
+            db.query(ChoreAssignment)
+            .filter(ChoreAssignment.KidUserId == kid_id)
+            .order_by(ChoreAssignment.CreatedAt.asc())
+            .all()
+        )
+        chore_ids = [assignment.ChoreId for assignment in assignments]
+        chores = db.query(Chore).filter(Chore.Id.in_(chore_ids)).all() if chore_ids else []
+
+        entries = (
+            db.query(ChoreEntry)
+            .filter(
+                ChoreEntry.KidUserId == kid_id,
+                ChoreEntry.EntryDate >= month_start,
+                ChoreEntry.EntryDate <= month_end,
+                ChoreEntry.IsDeleted == False,
+            )
+            .all()
+        )
+
+        rule = db.query(PocketMoneyRule).filter(PocketMoneyRule.KidUserId == kid_id).first()
+        monthly_allowance_cents = MonthlyAllowanceCents(rule.Amount if rule and rule.IsActive else None)
+        days_in_month = (month_end - month_start).days + 1
+        daily_slice_cents = RoundDailySlice(monthly_allowance_cents, days_in_month)
+
+        _projection, summary, _protected_by_date = BuildMonthProjection(
+            today=today,
+            month_start=month_start,
+            month_end=month_end,
+            daily_slice_cents=daily_slice_cents,
+            chores=chores,
+            assignments=assignments,
+            entries=entries,
+        )
+
+        missed_deduction_cents = summary.MissedDays * daily_slice_cents
+
+        return KidsMonthSummaryResponse(
+            MonthStart=month_start,
+            MonthEnd=month_end,
+            MonthlyAllowance=CentsToAmount(monthly_allowance_cents),
+            DailySlice=CentsToAmount(daily_slice_cents),
+            MissedDays=summary.MissedDays,
+            MissedDeduction=CentsToAmount(missed_deduction_cents),
+            ApprovedBonusTotal=CentsToAmount(summary.ApprovedBonusCents),
+            PendingBonusTotal=CentsToAmount(summary.PendingBonusCents),
+            ProjectedPayout=CentsToAmount(summary.ProjectedPayoutCents),
+        )
+    except ProgrammingError as exc:
+        _handle_db_error(exc)
+
+
 @router.post("/parents/children/{kid_id}/ledger/deposit", response_model=LedgerEntryOut)
 def AddDeposit(
     kid_id: int,
@@ -914,8 +1302,8 @@ def ListChores(
     try:
         chores = (
             db.query(Chore)
-            .filter(Chore.OwnerUserId == user.Id, Chore.IsActive == True)
-            .order_by(Chore.Label.asc())
+            .filter(Chore.OwnerUserId == user.Id)
+            .order_by(Chore.SortOrder.asc(), Chore.Label.asc())
             .all()
         )
         chore_ids = [chore.Id for chore in chores]
@@ -944,12 +1332,26 @@ def CreateChore(
     user: UserContext = Depends(RequireKidsManager()),
 ) -> ChoreOut:
     try:
+        if payload.Type not in {CHORE_TYPE_DAILY, CHORE_TYPE_HABIT, CHORE_TYPE_BONUS}:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid chore type")
+
+        amount_value = payload.Amount or 0
+        if payload.Type != CHORE_TYPE_BONUS:
+            amount_value = 0
+        if payload.Type == CHORE_TYPE_BONUS and amount_value <= 0:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Bonus amount required")
+
         now = datetime.utcnow()
+        today = TodayAdelaide()
         chore = Chore(
             OwnerUserId=user.Id,
             Label=payload.Label,
-            Amount=payload.Amount,
+            Type=payload.Type,
+            Amount=amount_value,
             IsActive=payload.IsActive,
+            SortOrder=payload.SortOrder,
+            StartsOn=today,
+            DisabledOn=None,
             CreatedAt=now,
             UpdatedAt=now,
         )
@@ -979,10 +1381,26 @@ def UpdateChore(
 
         if payload.Label is not None:
             chore.Label = payload.Label
+        if payload.Type is not None:
+            if payload.Type not in {CHORE_TYPE_DAILY, CHORE_TYPE_HABIT, CHORE_TYPE_BONUS}:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid chore type")
+            chore.Type = payload.Type
         if payload.Amount is not None:
             chore.Amount = payload.Amount
         if payload.IsActive is not None:
+            if payload.IsActive and not chore.IsActive:
+                chore.StartsOn = TodayAdelaide()
+                chore.DisabledOn = None
+            if not payload.IsActive and chore.IsActive:
+                chore.DisabledOn = TodayAdelaide()
             chore.IsActive = payload.IsActive
+        if payload.SortOrder is not None:
+            chore.SortOrder = payload.SortOrder
+
+        if chore.Type != CHORE_TYPE_BONUS:
+            chore.Amount = 0
+        if chore.Type == CHORE_TYPE_BONUS and chore.Amount <= 0:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Bonus amount required")
         chore.UpdatedAt = datetime.utcnow()
         db.commit()
         db.refresh(chore)
@@ -1007,6 +1425,7 @@ def ArchiveChore(
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Chore not found")
 
         chore.IsActive = False
+        chore.DisabledOn = TodayAdelaide()
         chore.UpdatedAt = datetime.utcnow()
         db.commit()
     except ProgrammingError as exc:
@@ -1033,6 +1452,9 @@ def AssignChore(
         if not kid_ids:
             return
 
+        today = TodayAdelaide()
+        now = datetime.utcnow()
+
         links = (
             db.query(KidLink)
             .filter(KidLink.KidUserId.in_(kid_ids))
@@ -1051,11 +1473,28 @@ def AssignChore(
             .filter(ChoreAssignment.ChoreId == chore_id, ChoreAssignment.KidUserId.in_(kid_ids))
             .all()
         )
-        existing_ids = {entry.KidUserId for entry in existing}
+        existing_map = {entry.KidUserId: entry for entry in existing}
         for kid_id in kid_ids:
-            if kid_id in existing_ids:
+            if kid_id in existing_map:
+                assignment = existing_map[kid_id]
+                if not assignment.IsEnabled:
+                    assignment.IsEnabled = True
+                    assignment.StartsOn = today
+                    assignment.DisabledOn = None
+                assignment.UpdatedAt = now
+                db.add(assignment)
                 continue
-            db.add(ChoreAssignment(ChoreId=chore_id, KidUserId=kid_id))
+            db.add(
+                ChoreAssignment(
+                    ChoreId=chore_id,
+                    KidUserId=kid_id,
+                    IsEnabled=True,
+                    StartsOn=today,
+                    DisabledOn=None,
+                    CreatedAt=now,
+                    UpdatedAt=now,
+                )
+            )
         db.commit()
     except ProgrammingError as exc:
         _handle_db_error(exc)
@@ -1098,15 +1537,39 @@ def SetChoreAssignments(
             .all()
         )
         existing_ids = {entry.KidUserId for entry in existing}
+        existing_map = {entry.KidUserId: entry for entry in existing}
+        today = TodayAdelaide()
+        now = datetime.utcnow()
 
         for entry in existing:
             if entry.KidUserId not in kid_ids:
-                db.delete(entry)
+                if entry.IsEnabled:
+                    entry.IsEnabled = False
+                    entry.DisabledOn = today
+                entry.UpdatedAt = now
+                db.add(entry)
 
         for kid_id in kid_ids:
             if kid_id in existing_ids:
+                assignment = existing_map[kid_id]
+                if not assignment.IsEnabled:
+                    assignment.IsEnabled = True
+                    assignment.StartsOn = today
+                    assignment.DisabledOn = None
+                assignment.UpdatedAt = now
+                db.add(assignment)
                 continue
-            db.add(ChoreAssignment(ChoreId=chore_id, KidUserId=kid_id))
+            db.add(
+                ChoreAssignment(
+                    ChoreId=chore_id,
+                    KidUserId=kid_id,
+                    IsEnabled=True,
+                    StartsOn=today,
+                    DisabledOn=None,
+                    CreatedAt=now,
+                    UpdatedAt=now,
+                )
+            )
         db.commit()
     except ProgrammingError as exc:
         _handle_db_error(exc)
