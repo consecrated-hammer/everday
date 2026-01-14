@@ -645,6 +645,24 @@ const KidsAdmin = () => {
     return Math.max(total, 0);
   }, [monthSummary, monthOverview, isCurrentMonth, todayKey]);
 
+  const currentTotalDisplay = useMemo(() => {
+    if (ledgerBalance !== null && ledgerBalance !== undefined) {
+      return Number(ledgerBalance) || 0;
+    }
+    return currentTotal;
+  }, [ledgerBalance, currentTotal]);
+
+  const projectedTotalDisplay = useMemo(() => {
+    if (!monthSummary) {
+      return 0;
+    }
+    const baseProjection = Number(monthSummary.ProjectedPayout || 0);
+    if (ledgerBalance === null || ledgerBalance === undefined) {
+      return baseProjection;
+    }
+    const offset = Number(ledgerBalance || 0) - currentTotal;
+    return Math.max(baseProjection + offset, 0);
+  }, [monthSummary, ledgerBalance, currentTotal]);
   const choreEntriesForMonth = useMemo(() => {
     const start = new Date(monthCursor.getFullYear(), monthCursor.getMonth(), 1);
     const end = new Date(monthCursor.getFullYear(), monthCursor.getMonth() + 1, 0);
@@ -1375,7 +1393,7 @@ const KidsAdmin = () => {
                   <div>
                     <span className="kids-admin-summary-label">Current total</span>
                     <span className="kids-admin-summary-value">
-                      {monthSummary ? FormatCurrency(currentTotal) : "-"}
+                      {monthSummary ? FormatCurrency(currentTotalDisplay) : "-"}
                     </span>
                   </div>
                   <div>
@@ -1414,7 +1432,7 @@ const KidsAdmin = () => {
                 <div className="kids-admin-summary-total">
                   <span>Projected total</span>
                   <strong>
-                    {monthSummary ? FormatCurrency(monthSummary.ProjectedPayout) : "-"}
+                    {monthSummary ? FormatCurrency(projectedTotalDisplay) : "-"}
                   </strong>
                 </div>
               </section>

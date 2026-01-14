@@ -63,6 +63,7 @@ const KidsHome = () => {
   const [status, setStatus] = useState("idle");
   const [error, setError] = useState("");
   const [ledgerEntries, setLedgerEntries] = useState([]);
+  const [ledgerBalance, setLedgerBalance] = useState(null);
   const [busyChoreId, setBusyChoreId] = useState(null);
 
   const loadOverview = async () => {
@@ -84,8 +85,10 @@ const KidsHome = () => {
       try {
         const data = await FetchKidsLedger(200);
         setLedgerEntries(data?.Entries || []);
+        setLedgerBalance(data?.Balance ?? null);
       } catch (err) {
         setLedgerEntries([]);
+        setLedgerBalance(null);
       }
     };
     loadLedger();
@@ -205,6 +208,8 @@ const KidsHome = () => {
     });
     return latestAmount ?? projection[projection.length - 1]?.Amount ?? 0;
   }, [projection, today]);
+
+  const availableBalance = ledgerBalance ?? currentBalance;
 
   const filteredProjectionSeries = useMemo(() => {
     if (!projectionSeries.length) {
@@ -351,7 +356,7 @@ const KidsHome = () => {
           <p className="kids-label">{GetKidsHeaderEmoji("AvailableNow")} Available now</p>
         </div>
         <div className="kids-balance-now-row">
-          <div className="kids-balance-value">{FormatCurrency(currentBalance)}</div>
+          <div className="kids-balance-value">{FormatCurrency(availableBalance)}</div>
           <div className="kids-balance-now-meta">
             <span className="kids-balance-meta-title">This month</span>
             <span className="kids-balance-meta is-earned">In {earnedLabel}</span>
