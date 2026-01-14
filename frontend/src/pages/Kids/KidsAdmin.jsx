@@ -174,6 +174,7 @@ const KidsAdmin = () => {
   const [choreForm, setChoreForm] = useState(EmptyChoreForm());
   const [choreSearch, setChoreSearch] = useState("");
   const [choreFilter, setChoreFilter] = useState("all");
+  const [choreKidFilter, setChoreKidFilter] = useState("all");
   const [returnToChoresModal, setReturnToChoresModal] = useState(false);
 
   const [showDayDrawer, setShowDayDrawer] = useState(false);
@@ -556,29 +557,36 @@ const KidsAdmin = () => {
   }, [chores, activeKidId]);
 
   const visibleChoreGroups = useMemo(() => {
+    const kidIdFilter = choreKidFilter === "all" ? null : Number(choreKidFilter);
+    const filterByKid = (list) => {
+      if (!kidIdFilter) {
+        return list;
+      }
+      return list.filter((chore) => (chore.AssignedKidIds || []).includes(kidIdFilter));
+    };
     const disabledChores = [
       ...groupedChores.Daily,
       ...groupedChores.Habit,
       ...groupedChores.Bonus
     ].filter((chore) => chore.IsActive === false);
     if (choreFilter === "Daily") {
-      return [["Daily", groupedChores.Daily]];
+      return [["Daily", filterByKid(groupedChores.Daily)]];
     }
     if (choreFilter === "Habit") {
-      return [["Habit", groupedChores.Habit]];
+      return [["Habit", filterByKid(groupedChores.Habit)]];
     }
     if (choreFilter === "Bonus") {
-      return [["Bonus", groupedChores.Bonus]];
+      return [["Bonus", filterByKid(groupedChores.Bonus)]];
     }
     if (choreFilter === "disabled") {
-      return [["Disabled", disabledChores]];
+      return [["Disabled", filterByKid(disabledChores)]];
     }
     return [
-      ["Daily", groupedChores.Daily],
-      ["Habit", groupedChores.Habit],
-      ["Bonus", groupedChores.Bonus]
+      ["Daily", filterByKid(groupedChores.Daily)],
+      ["Habit", filterByKid(groupedChores.Habit)],
+      ["Bonus", filterByKid(groupedChores.Bonus)]
     ];
-  }, [groupedChores, choreFilter, chores]);
+  }, [groupedChores, choreFilter, choreKidFilter]);
 
   const filteredApprovals = useMemo(() => {
     return pendingApprovals.filter((entry) => {
@@ -1906,6 +1914,18 @@ const KidsAdmin = () => {
                 value={choreSearch}
                 onChange={(event) => setChoreSearch(event.target.value)}
               />
+              <select
+                aria-label="Filter by kid"
+                value={choreKidFilter}
+                onChange={(event) => setChoreKidFilter(event.target.value)}
+              >
+                <option value="all">All kids</option>
+                {kids.map((kid) => (
+                  <option key={kid.KidUserId} value={String(kid.KidUserId)}>
+                    {BuildKidName(kid)}
+                  </option>
+                ))}
+              </select>
               <div className="kids-admin-chore-filters">
                 {[
                   { key: "all", label: "All" },

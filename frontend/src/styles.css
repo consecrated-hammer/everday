@@ -6689,6 +6689,14 @@ body.kids-theme {
   background: var(--surface);
 }
 
+.kids-admin-chore-controls select {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 8px 12px;
+  background: var(--surface);
+  font: inherit;
+}
+
 .kids-admin-chore-list {
   display: grid;
   gap: 12px;
