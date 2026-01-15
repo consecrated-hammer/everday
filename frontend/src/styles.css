@@ -7647,4 +7647,8 @@ body.kids-theme {
   .kids-chore-check {
     display: inline-flex;
   }
+
+  .kids-admin-day-row .kids-chore-toggle {
+    display: inline-flex;
+  }
 }
