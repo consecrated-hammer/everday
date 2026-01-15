@@ -1415,6 +1415,14 @@ const KidsAdmin = () => {
                     </span>
                   </div>
                   <div>
+                    <span className="kids-admin-summary-label">Missed days</span>
+                    <span className="kids-admin-summary-value">
+                      {monthSummary
+                        ? `${monthSummary.MissedDays} (${FormatCurrency(monthSummary.MissedDeduction)})`
+                        : "-"}
+                    </span>
+                  </div>
+                  <div>
                     <span className="kids-admin-summary-label">Money in</span>
                     <span className="kids-admin-summary-value">
                       {monthSummary ? FormatCurrency(ledgerTotals.moneyIn) : "-"}
@@ -1424,14 +1432,6 @@ const KidsAdmin = () => {
                     <span className="kids-admin-summary-label">Money out</span>
                     <span className="kids-admin-summary-value">
                       {monthSummary ? FormatCurrency(ledgerTotals.moneyOut) : "-"}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="kids-admin-summary-label">Missed days</span>
-                    <span className="kids-admin-summary-value">
-                      {monthSummary
-                        ? `${monthSummary.MissedDays} (${FormatCurrency(monthSummary.MissedDeduction)})`
-                        : "-"}
                     </span>
                   </div>
                   <div>
