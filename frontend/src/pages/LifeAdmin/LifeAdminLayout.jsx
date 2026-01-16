@@ -1,4 +1,4 @@
-import { Outlet } from "react-router-dom";
+import { NavLink, Outlet } from "react-router-dom";
 
 const LifeAdminLayout = () => (
   <div className="module-shell">
@@ -7,6 +7,24 @@ const LifeAdminLayout = () => (
         <p className="eyebrow">Life admin</p>
         <h1>Life admin</h1>
         <p className="lede">Build flexible tables and keep household history in one place.</p>
+      </div>
+      <div className="life-admin-header-actions">
+        <NavLink
+          to="/life-admin/records"
+          className={({ isActive }) =>
+            `life-admin-header-link${isActive ? " is-active" : ""}`
+          }
+        >
+          Records
+        </NavLink>
+        <NavLink
+          to="/life-admin/builder"
+          className={({ isActive }) =>
+            `life-admin-header-link${isActive ? " is-active" : ""}`
+          }
+        >
+          Builder
+        </NavLink>
       </div>
     </header>
     <section className="module-content">

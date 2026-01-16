@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
+import Icon from "../../components/Icon.jsx";
 import {
   CreateLifeCategory,
   CreateLifeDropdown,
@@ -7,6 +8,7 @@ import {
   CreateLifeField,
   CreateLifePerson,
   DeleteLifeCategory,
+  DeleteLifeDropdown,
   DeleteLifeField,
   UpdateLifeCategory,
   UpdateLifeDropdown,
@@ -30,6 +32,12 @@ const FieldTypes = [
   "Person",
   "RecordLink",
   "Boolean"
+];
+
+const BuilderTabs = [
+  { key: "schema", label: "Schema" },
+  { key: "dropdowns", label: "Dropdowns" },
+  { key: "people", label: "People" }
 ];
 
 const EmptyCategoryForm = {
@@ -69,10 +77,21 @@ const EmptyPersonForm = {
   Notes: ""
 };
 
+const BuildCategoryLabel = (category) => {
+  const count = category?.RecordCount;
+  if (typeof count !== "number") {
+    return category.Name;
+  }
+  return `${category.Name} (${count})`;
+};
+
+const BuildStatusLabel = (isActive) => (isActive ? "Active" : "Hidden");
+
 const Builder = () => {
   const { categories, dropdowns, people, status, error, reloadCatalog } =
     useLifeAdminCatalog({ includeInactive: true });
   const { users } = useLifeAdminUsers();
+  const [activeTab, setActiveTab] = useState("schema");
   const [activeCategoryId, setActiveCategoryId] = useState(null);
   const [activeDropdownId, setActiveDropdownId] = useState(null);
   const { fields, reloadFields } = useLifeAdminFields(activeCategoryId);
@@ -80,6 +99,12 @@ const Builder = () => {
   const [actionStatus, setActionStatus] = useState("idle");
   const [actionError, setActionError] = useState("");
   const [activeModal, setActiveModal] = useState(null);
+  const [categorySearch, setCategorySearch] = useState("");
+  const [dropdownSearch, setDropdownSearch] = useState("");
+  const [peopleSearch, setPeopleSearch] = useState("");
+  const [openMenu, setOpenMenu] = useState(null);
+  const [menuPosition, setMenuPosition] = useState(null);
+  const builderRef = useRef(null);
 
   const [categoryForm, setCategoryForm] = useState(EmptyCategoryForm);
   const [editingCategoryId, setEditingCategoryId] = useState(null);
@@ -93,16 +118,48 @@ const Builder = () => {
   const [editingPersonId, setEditingPersonId] = useState(null);
 
   useEffect(() => {
-    if (!activeCategoryId && categories.length > 0) {
-      setActiveCategoryId(categories[0].Id);
+    if (activeCategoryId && !categories.some((entry) => entry.Id === activeCategoryId)) {
+      setActiveCategoryId(null);
     }
   }, [categories, activeCategoryId]);
 
   useEffect(() => {
-    if (!activeDropdownId && dropdowns.length > 0) {
-      setActiveDropdownId(dropdowns[0].Id);
+    if (activeDropdownId && !dropdowns.some((entry) => entry.Id === activeDropdownId)) {
+      setActiveDropdownId(null);
     }
   }, [dropdowns, activeDropdownId]);
+
+  useEffect(() => {
+    setOpenMenu(null);
+    setMenuPosition(null);
+  }, [activeTab]);
+
+  useEffect(() => {
+    const onClick = (event) => {
+      if (!builderRef.current || !builderRef.current.contains(event.target)) {
+        setOpenMenu(null);
+        setMenuPosition(null);
+        return;
+      }
+      if (event.target.closest(".life-admin-row-menu")) {
+        return;
+      }
+      setOpenMenu(null);
+      setMenuPosition(null);
+    };
+    const onKey = (event) => {
+      if (event.key === "Escape") {
+        setOpenMenu(null);
+        setMenuPosition(null);
+      }
+    };
+    document.addEventListener("mousedown", onClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onClick);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, []);
 
   const activeCategory = useMemo(
     () => categories.find((entry) => entry.Id === activeCategoryId) || null,
@@ -112,6 +169,34 @@ const Builder = () => {
     () => dropdowns.find((entry) => entry.Id === activeDropdownId) || null,
     [dropdowns, activeDropdownId]
   );
+  const editingDropdown = useMemo(
+    () => dropdowns.find((entry) => entry.Id === editingDropdownId) || null,
+    [dropdowns, editingDropdownId]
+  );
+
+  const filteredCategories = useMemo(() => {
+    const query = categorySearch.trim().toLowerCase();
+    if (!query) {
+      return categories;
+    }
+    return categories.filter((category) => category.Name.toLowerCase().includes(query));
+  }, [categories, categorySearch]);
+
+  const filteredDropdowns = useMemo(() => {
+    const query = dropdownSearch.trim().toLowerCase();
+    if (!query) {
+      return dropdowns;
+    }
+    return dropdowns.filter((dropdown) => dropdown.Name.toLowerCase().includes(query));
+  }, [dropdowns, dropdownSearch]);
+
+  const filteredPeople = useMemo(() => {
+    const query = peopleSearch.trim().toLowerCase();
+    if (!query) {
+      return people;
+    }
+    return people.filter((person) => person.Name.toLowerCase().includes(query));
+  }, [people, peopleSearch]);
 
   const onCategoryFormChange = (event) => {
     const { name, value, type, checked } = event.target;
@@ -360,6 +445,32 @@ const Builder = () => {
     }
   };
 
+  const onDeleteDropdown = async () => {
+    if (!editingDropdownId) {
+      return;
+    }
+    const dropdown = dropdowns.find((entry) => entry.Id === editingDropdownId);
+    if (!dropdown) {
+      return;
+    }
+    const confirmed = window.confirm(
+      `Delete ${dropdown.Name}? This will remove the dropdown and its options.`
+    );
+    if (!confirmed) {
+      return;
+    }
+    const success = await handleAction(async () => {
+      await DeleteLifeDropdown(editingDropdownId);
+      if (activeDropdownId === editingDropdownId) {
+        setActiveDropdownId(null);
+      }
+      await reloadCatalog();
+    });
+    if (success) {
+      closeDropdownModal();
+    }
+  };
+
   const onSaveOption = async (event) => {
     event.preventDefault();
     if (!activeDropdownId) {
@@ -435,157 +546,520 @@ const Builder = () => {
     }
   };
 
+  const onToggleCategoryActive = async (category) => {
+    const nextActive = !category.IsActive;
+    const success = await handleAction(async () => {
+      await UpdateLifeCategory(category.Id, {
+        Name: category.Name,
+        Description: category.Description || "",
+        SortOrder: category.SortOrder || 0,
+        IsActive: nextActive
+      });
+      await reloadCatalog();
+    });
+    if (success && editingCategoryId === category.Id && !nextActive) {
+      closeCategoryModal();
+    }
+  };
+
+  const onToggleOptionActive = async (option) => {
+    const nextActive = !option.IsActive;
+    const success = await handleAction(async () => {
+      await UpdateLifeDropdownOption(option.Id, {
+        Label: option.Label,
+        Value: option.Value || "",
+        SortOrder: option.SortOrder || 0,
+        IsActive: nextActive
+      });
+      await reloadOptions();
+    });
+    if (success && editingOptionId === option.Id && !nextActive) {
+      closeOptionModal();
+    }
+  };
+
+  const toggleMenu = (type, id, event) => {
+    event.stopPropagation();
+    if (openMenu?.type === type && openMenu?.id === id) {
+      setOpenMenu(null);
+      setMenuPosition(null);
+      return;
+    }
+    const rect = event.currentTarget.getBoundingClientRect();
+    setOpenMenu({ type, id });
+    setMenuPosition({
+      top: Math.round(rect.bottom + 6),
+      right: Math.max(12, Math.round(window.innerWidth - rect.right))
+    });
+  };
+
+  const isMenuOpen = (type, id) => openMenu?.type === type && openMenu?.id === id;
+
   return (
-    <div className="budget-subgrid">
-      <section className="module-panel">
-        <div className="module-panel-header">
-          <div>
-            <h3>Categories</h3>
-            <p className="lede">Create the tabs that organize your life admin data.</p>
-          </div>
-          <div className="module-panel-actions">
-            <button type="button" className="primary-button" onClick={openCategoryModal}>
-              Add category
-            </button>
-          </div>
+    <div className="life-admin-builder" ref={builderRef}>
+      <div className="life-admin-builder-header">
+        <div>
+          <h3>Builder</h3>
+          <p className="lede">Manage categories, fields, dropdowns, and people.</p>
         </div>
-        {error ? <p className="form-error">{error}</p> : null}
-        {actionError ? <p className="form-error">{actionError}</p> : null}
-        <div className="income-table-section">
-          <div className="income-table-header">
-            <h4>Existing categories</h4>
-            <p>Pick a category to edit its fields below.</p>
-          </div>
-          {categories.length === 0 ? (
-            <p className="form-note">No categories yet.</p>
-          ) : (
-            <div className="table-shell">
-              <div className="table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Name</th>
-                      <th>Status</th>
-                      <th />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {categories.map((category) => (
-                      <tr key={category.Id}>
-                        <td>
-                          <button
-                            type="button"
-                            className="text-button"
-                            onClick={() => setActiveCategoryId(category.Id)}
-                          >
-                            {category.Name}
-                          </button>
-                        </td>
-                        <td>{category.IsActive ? "Active" : "Hidden"}</td>
-                        <td>
-                          <div className="table-actions">
-                            <button
-                              type="button"
-                              className="text-button"
-                              onClick={() => onEditCategory(category)}
-                            >
-                              Edit
-                            </button>
-                            <button
-                              type="button"
-                              className="text-button"
-                              onClick={() => onDeleteCategory(category)}
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+      </div>
+      <div className="life-admin-tabs life-admin-tabs--underline" role="tablist" aria-label="Life admin builder tabs">
+        {BuilderTabs.map((tab) => (
+          <button
+            key={tab.key}
+            type="button"
+            className={`life-admin-tab${activeTab === tab.key ? " is-active" : ""}`}
+            onClick={() => setActiveTab(tab.key)}
+            aria-pressed={activeTab === tab.key}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+      {error ? <p className="form-error">{error}</p> : null}
+      {actionError ? <p className="form-error">{actionError}</p> : null}
+      {status === "loading" ? <p className="form-note">Loading builder data.</p> : null}
+
+      {activeTab === "schema" ? (
+        <div className="life-admin-builder-grid">
+          <section className="module-panel life-admin-panel">
+            <div className="module-panel-header">
+              <div>
+                <h3>Categories</h3>
+                <p className="lede">Organize your records by topic.</p>
+              </div>
+              <div className="module-panel-actions">
+                <button type="button" className="primary-button" onClick={openCategoryModal}>
+                  Add category
+                </button>
               </div>
             </div>
-          )}
-        </div>
-      </section>
-
-      <section className="module-panel">
-        <div className="module-panel-header">
-          <div>
-            <h3>Fields</h3>
-            <p className="lede">Define the columns that appear in each category.</p>
-          </div>
-          <div className="module-panel-actions">
-            <select
-              value={activeCategoryId || ""}
-              onChange={(event) => setActiveCategoryId(Number(event.target.value))}
-            >
-              <option value="" disabled>
-                Select a category
-              </option>
-              {categories.map((category) => (
-                <option key={category.Id} value={category.Id}>
-                  {category.Name}
-                </option>
-              ))}
-            </select>
-            <button
-              type="button"
-              className="primary-button"
-              onClick={openFieldModal}
-              disabled={!activeCategory}
-            >
-              Add field
-            </button>
-          </div>
-        </div>
-        {!activeCategory ? (
-          <p className="form-note">Choose a category to configure its fields.</p>
-        ) : (
-          <div className="income-table-section">
-            <div className="income-table-header">
-              <h4>Existing fields</h4>
-              <p>{activeCategory.Name} fields in order.</p>
+            <div className="life-admin-panel-body">
+              <label className="life-admin-search" aria-label="Search categories">
+                <Icon name="search" className="icon" />
+                <input
+                  placeholder="Search"
+                  value={categorySearch}
+                  onChange={(event) => setCategorySearch(event.target.value)}
+                />
+              </label>
+              <div className="life-admin-panel-scroll">
+                {filteredCategories.length === 0 ? (
+                  <p className="form-note">No categories yet.</p>
+                ) : (
+                  <div className="life-admin-list">
+                    {filteredCategories.map((category) => {
+                      const isSelected = category.Id === activeCategoryId;
+                      return (
+                        <div
+                          key={category.Id}
+                          className={`life-admin-list-row${isSelected ? " is-selected" : ""}`}
+                        >
+                          <button
+                            type="button"
+                            className="life-admin-list-button"
+                            onClick={() => setActiveCategoryId(category.Id)}
+                            aria-pressed={isSelected}
+                          >
+                            <span className="life-admin-list-leading">
+                              <span
+                                className={`life-admin-status-dot${
+                                  category.IsActive ? " is-active" : " is-inactive"
+                                }`}
+                                title={BuildStatusLabel(category.IsActive)}
+                              />
+                            </span>
+                            <span className="life-admin-list-name">{BuildCategoryLabel(category)}</span>
+                          </button>
+                          <div className="toolbar-flyout life-admin-row-menu">
+                            <button
+                              type="button"
+                              className="icon-button"
+                              aria-label="Category actions"
+                              onClick={(event) => toggleMenu("category", category.Id, event)}
+                            >
+                              <Icon name="more" className="icon" />
+                            </button>
+                            {isMenuOpen("category", category.Id) ? (
+                              <div
+                                className="dropdown life-admin-context-menu"
+                                style={menuPosition ? { top: menuPosition.top, right: menuPosition.right } : undefined}
+                              >
+                                <button
+                                  type="button"
+                                  className="dropdown-item"
+                                  onClick={() => {
+                                    setOpenMenu(null);
+                                    setMenuPosition(null);
+                                    onEditCategory(category);
+                                  }}
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  type="button"
+                                  className="dropdown-item"
+                                  onClick={() => {
+                                    setOpenMenu(null);
+                                    setMenuPosition(null);
+                                    onToggleCategoryActive(category);
+                                  }}
+                                >
+                                  {category.IsActive ? "Disable" : "Enable"}
+                                </button>
+                                <button
+                                  type="button"
+                                  className="dropdown-item is-danger"
+                                  onClick={() => {
+                                    setOpenMenu(null);
+                                    setMenuPosition(null);
+                                    onDeleteCategory(category);
+                                  }}
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            ) : null}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
-            {fields.length === 0 ? (
-              <p className="form-note">No fields yet.</p>
+          </section>
+
+          <section className="module-panel life-admin-panel">
+            <div className="module-panel-header">
+              <div>
+                <h3>
+                  {activeCategory ? `Editing category: ${activeCategory.Name}` : "Fields"}
+                </h3>
+                <p className="lede">Define the columns within each category.</p>
+                {activeCategory && typeof activeCategory.RecordCount === "number" ? (
+                  <span className="life-admin-meta">Records: {activeCategory.RecordCount}</span>
+                ) : null}
+              </div>
+              <div className="module-panel-actions">
+                <button
+                  type="button"
+                  className="button-secondary"
+                  onClick={() => activeCategory && onEditCategory(activeCategory)}
+                  disabled={!activeCategory}
+                >
+                  Edit category
+                </button>
+                <button
+                  type="button"
+                  className="primary-button"
+                  onClick={openFieldModal}
+                  disabled={!activeCategory}
+                >
+                  Add field
+                </button>
+              </div>
+            </div>
+            <div className="life-admin-panel-body">
+              {!activeCategory ? (
+                <p className="form-note">Select a category to view its fields.</p>
+              ) : fields.length === 0 ? (
+                <p className="form-note">No fields yet.</p>
+              ) : (
+                <div className="table-shell life-admin-panel-scroll">
+                  <div className="table-wrap">
+                    <table className="life-admin-table">
+                      <thead>
+                        <tr>
+                          <th>Label</th>
+                          <th>Type</th>
+                          <th>Required</th>
+                          <th />
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {fields.map((field) => (
+                          <tr key={field.Id}>
+                            <td>
+                              <span className="life-admin-field-label">
+                                <Icon name="drag" className="icon life-admin-field-handle" />
+                                {field.Name}
+                              </span>
+                            </td>
+                            <td>{field.FieldType}</td>
+                            <td>{field.IsRequired ? "Yes" : "No"}</td>
+                            <td className="life-admin-actions-cell">
+                              <div className="toolbar-flyout life-admin-row-menu">
+                                <button
+                                  type="button"
+                                  className="icon-button"
+                                  aria-label="Field actions"
+                                  onClick={(event) => toggleMenu("field", field.Id, event)}
+                                >
+                                  <Icon name="more" className="icon" />
+                                </button>
+                                {isMenuOpen("field", field.Id) ? (
+                                  <div
+                                    className="dropdown life-admin-context-menu"
+                                    style={menuPosition ? { top: menuPosition.top, right: menuPosition.right } : undefined}
+                                  >
+                                    <button
+                                      type="button"
+                                      className="dropdown-item"
+                                      onClick={() => {
+                                        setOpenMenu(null);
+                                        setMenuPosition(null);
+                                        onEditField(field);
+                                      }}
+                                    >
+                                      Edit
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="dropdown-item is-danger"
+                                      onClick={() => {
+                                        setOpenMenu(null);
+                                        setMenuPosition(null);
+                                        onDeleteField(field);
+                                      }}
+                                    >
+                                      Delete
+                                    </button>
+                                  </div>
+                                ) : null}
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+          </section>
+        </div>
+      ) : null}
+
+      {activeTab === "dropdowns" ? (
+        <div className="life-admin-builder-grid">
+          <section className="module-panel life-admin-panel">
+            <div className="module-panel-header">
+              <div>
+                <h3>Dropdowns</h3>
+                <p className="lede">Reusable option lists for dropdown fields.</p>
+              </div>
+              <div className="module-panel-actions">
+                <button type="button" className="primary-button" onClick={openDropdownModal}>
+                  Add dropdown
+                </button>
+              </div>
+            </div>
+            <div className="life-admin-panel-body">
+              <label className="life-admin-search" aria-label="Search dropdowns">
+                <Icon name="search" className="icon" />
+                <input
+                  placeholder="Search"
+                  value={dropdownSearch}
+                  onChange={(event) => setDropdownSearch(event.target.value)}
+                />
+              </label>
+              <div className="life-admin-panel-scroll">
+                {filteredDropdowns.length === 0 ? (
+                  <p className="form-note">No dropdowns yet.</p>
+                ) : (
+                  <div className="life-admin-list">
+                    {filteredDropdowns.map((dropdown) => {
+                      const isSelected = dropdown.Id === activeDropdownId;
+                      return (
+                        <div
+                          key={dropdown.Id}
+                          className={`life-admin-list-row${isSelected ? " is-selected" : ""}`}
+                        >
+                          <button
+                            type="button"
+                            className="life-admin-list-button"
+                            onClick={() => setActiveDropdownId(dropdown.Id)}
+                            aria-pressed={isSelected}
+                          >
+                            <span className="life-admin-list-name">{dropdown.Name}</span>
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          </section>
+
+          <section className="module-panel life-admin-panel">
+            <div className="module-panel-header">
+              <div>
+                <h3>{activeDropdown ? `Options for: ${activeDropdown.Name}` : "Options"}</h3>
+                <p className="lede">Manage the labels within each dropdown list.</p>
+              </div>
+              <div className="module-panel-actions">
+                <button
+                  type="button"
+                  className="button-secondary"
+                  onClick={() => activeDropdown && onEditDropdown(activeDropdown)}
+                  disabled={!activeDropdown}
+                >
+                  Edit dropdown
+                </button>
+                <button
+                  type="button"
+                  className="primary-button"
+                  onClick={openOptionModal}
+                  disabled={!activeDropdown}
+                >
+                  Add option
+                </button>
+              </div>
+            </div>
+            <div className="life-admin-panel-body">
+              {!activeDropdown ? (
+                <p className="form-note">Select a dropdown to view its options.</p>
+              ) : options.length === 0 ? (
+                <p className="form-note">No options yet.</p>
+              ) : (
+                <div className="table-shell life-admin-panel-scroll">
+                  <div className="table-wrap">
+                    <table className="life-admin-table">
+                      <thead>
+                        <tr>
+                          <th>Label</th>
+                          <th>Status</th>
+                          <th />
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {options.map((option) => (
+                          <tr key={option.Id}>
+                            <td>{option.Label}</td>
+                            <td>{option.IsActive ? "Active" : "Hidden"}</td>
+                            <td className="life-admin-actions-cell">
+                              <div className="toolbar-flyout life-admin-row-menu">
+                                <button
+                                  type="button"
+                                  className="icon-button"
+                                  aria-label="Option actions"
+                                  onClick={(event) => toggleMenu("option", option.Id, event)}
+                                >
+                                  <Icon name="more" className="icon" />
+                                </button>
+                                {isMenuOpen("option", option.Id) ? (
+                                  <div
+                                    className="dropdown life-admin-context-menu"
+                                    style={menuPosition ? { top: menuPosition.top, right: menuPosition.right } : undefined}
+                                  >
+                                    <button
+                                      type="button"
+                                      className="dropdown-item"
+                                      onClick={() => {
+                                        setOpenMenu(null);
+                                        setMenuPosition(null);
+                                        onEditOption(option);
+                                      }}
+                                    >
+                                      Edit
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="dropdown-item"
+                                      onClick={() => {
+                                        setOpenMenu(null);
+                                        setMenuPosition(null);
+                                        onToggleOptionActive(option);
+                                      }}
+                                    >
+                                      {option.IsActive ? "Disable" : "Enable"}
+                                    </button>
+                                  </div>
+                                ) : null}
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+          </section>
+        </div>
+      ) : null}
+
+      {activeTab === "people" ? (
+        <section className="module-panel life-admin-panel">
+          <div className="module-panel-header">
+            <div>
+              <h3>People</h3>
+              <p className="lede">Use people in person picker fields.</p>
+            </div>
+            <div className="module-panel-actions">
+              <button type="button" className="primary-button" onClick={openPersonModal}>
+                Add person
+              </button>
+            </div>
+          </div>
+          <div className="life-admin-panel-body">
+            <label className="life-admin-search" aria-label="Search people">
+              <Icon name="search" className="icon" />
+              <input
+                placeholder="Search"
+                value={peopleSearch}
+                onChange={(event) => setPeopleSearch(event.target.value)}
+              />
+            </label>
+            {filteredPeople.length === 0 ? (
+              <p className="form-note">No people yet.</p>
             ) : (
-              <div className="table-shell">
+              <div className="table-shell life-admin-panel-scroll">
                 <div className="table-wrap">
-                  <table>
+                  <table className="life-admin-table">
                     <thead>
                       <tr>
-                        <th>Label</th>
-                        <th>Key</th>
-                        <th>Type</th>
-                        <th>Required</th>
+                        <th>Name</th>
+                        <th>Linked user</th>
                         <th />
                       </tr>
                     </thead>
                     <tbody>
-                      {fields.map((field) => (
-                        <tr key={field.Id}>
-                          <td>{field.Name}</td>
-                          <td>{field.Key}</td>
-                          <td>{field.FieldType}</td>
-                          <td>{field.IsRequired ? "Yes" : "No"}</td>
-                          <td>
-                            <div className="table-actions">
+                      {filteredPeople.map((person) => (
+                        <tr key={person.Id}>
+                          <td>{person.Name}</td>
+                          <td>{person.UserId ? `User ${person.UserId}` : "None"}</td>
+                          <td className="life-admin-actions-cell">
+                            <div className="toolbar-flyout life-admin-row-menu">
                               <button
                                 type="button"
-                                className="text-button"
-                                onClick={() => onEditField(field)}
+                                className="icon-button"
+                                aria-label="Person actions"
+                                onClick={(event) => toggleMenu("person", person.Id, event)}
                               >
-                                Edit
+                                <Icon name="more" className="icon" />
                               </button>
-                              <button
-                                type="button"
-                                className="text-button"
-                                onClick={() => onDeleteField(field)}
-                              >
-                                Delete
-                              </button>
+                              {isMenuOpen("person", person.Id) ? (
+                                <div
+                                  className="dropdown life-admin-context-menu"
+                                  style={menuPosition ? { top: menuPosition.top, right: menuPosition.right } : undefined}
+                                >
+                                  <button
+                                    type="button"
+                                    className="dropdown-item"
+                                    onClick={() => {
+                                      setOpenMenu(null);
+                                      setMenuPosition(null);
+                                      onEditPerson(person);
+                                    }}
+                                  >
+                                    Edit
+                                  </button>
+                                </div>
+                              ) : null}
                             </div>
                           </td>
                         </tr>
@@ -596,179 +1070,11 @@ const Builder = () => {
               </div>
             )}
           </div>
-        )}
-      </section>
+        </section>
+      ) : null}
 
-      <section className="module-panel">
-        <div className="module-panel-header">
-          <div>
-            <h3>Dropdowns</h3>
-            <p className="lede">Reusable option lists for dropdown fields.</p>
-          </div>
-          <div className="module-panel-actions">
-            <button type="button" className="primary-button" onClick={openDropdownModal}>
-              Add dropdown
-            </button>
-          </div>
-        </div>
-        <div className="income-table-section">
-          <div className="income-table-header">
-            <h4>Dropdown lists</h4>
-            <p>Select a list to manage its options.</p>
-          </div>
-          {dropdowns.length === 0 ? (
-            <p className="form-note">No dropdowns yet.</p>
-          ) : (
-            <div className="table-shell">
-              <div className="table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Name</th>
-                      <th />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {dropdowns.map((dropdown) => (
-                      <tr key={dropdown.Id}>
-                        <td>
-                          <button
-                            type="button"
-                            className="text-button"
-                            onClick={() => setActiveDropdownId(dropdown.Id)}
-                          >
-                            {dropdown.Name}
-                          </button>
-                        </td>
-                        <td>
-                          <div className="table-actions">
-                            <button
-                              type="button"
-                              className="text-button"
-                              onClick={() => onEditDropdown(dropdown)}
-                            >
-                              Edit
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-        </div>
-        {activeDropdown ? (
-          <div className="income-table-section">
-            <div className="module-panel-header">
-              <div>
-                <h4>Options for {activeDropdown.Name}</h4>
-                <p>Keep labels short and clear.</p>
-              </div>
-              <div className="module-panel-actions">
-                <button type="button" className="primary-button" onClick={openOptionModal}>
-                  Add option
-                </button>
-              </div>
-            </div>
-            {options.length === 0 ? (
-              <p className="form-note">No options yet.</p>
-            ) : (
-              <div className="table-shell">
-                <div className="table-wrap">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Label</th>
-                        <th>Status</th>
-                        <th />
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {options.map((option) => (
-                        <tr key={option.Id}>
-                          <td>{option.Label}</td>
-                        <td>{option.IsActive ? "Active" : "Hidden"}</td>
-                        <td>
-                          <div className="table-actions">
-                            <button
-                              type="button"
-                              className="text-button"
-                              onClick={() => onEditOption(option)}
-                            >
-                              Edit
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-          </div>
-        ) : null}
-      </section>
-
-      <section className="module-panel">
-        <div className="module-panel-header">
-          <div>
-            <h3>People</h3>
-            <p className="lede">Add people for person picker fields.</p>
-          </div>
-          <div className="module-panel-actions">
-            <button type="button" className="primary-button" onClick={openPersonModal}>
-              Add person
-            </button>
-          </div>
-        </div>
-        {people.length === 0 ? (
-          <p className="form-note">No people yet.</p>
-        ) : (
-          <div className="table-shell">
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Name</th>
-                    <th>Linked user</th>
-                    <th />
-                  </tr>
-                </thead>
-                <tbody>
-                  {people.map((person) => (
-                    <tr key={person.Id}>
-                      <td>{person.Name}</td>
-                      <td>{person.UserId ? `User ${person.UserId}` : "None"}</td>
-                      <td>
-                        <div className="table-actions">
-                          <button
-                            type="button"
-                            className="text-button"
-                            onClick={() => onEditPerson(person)}
-                          >
-                            Edit
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-      </section>
-      {status === "loading" ? <p className="form-note">Loading builder data.</p> : null}
       {activeModal === "category" ? (
-        <div
-          className="modal-backdrop"
-          role="dialog"
-          aria-modal="true"
-          onClick={closeCategoryModal}
-        >
+        <div className="modal-backdrop" role="dialog" aria-modal="true" onClick={closeCategoryModal}>
           <div className="modal life-admin-modal" onClick={(event) => event.stopPropagation()}>
             <div className="modal-header">
               <div>
@@ -783,39 +1089,20 @@ const Builder = () => {
             <form className="form-grid" onSubmit={onSaveCategory}>
               <label title="The tab name shown in Life admin.">
                 Name
-                <input
-                  name="Name"
-                  value={categoryForm.Name}
-                  onChange={onCategoryFormChange}
-                  required
-                />
+                <input name="Name" value={categoryForm.Name} onChange={onCategoryFormChange} required />
               </label>
               <label title="Optional helper text shown on the records view.">
                 Description
-                <textarea
-                  name="Description"
-                  value={categoryForm.Description}
-                  onChange={onCategoryFormChange}
-                />
+                <textarea name="Description" value={categoryForm.Description} onChange={onCategoryFormChange} />
               </label>
               <label title="Lower numbers appear earlier in the tab list.">
                 Sort order
-                <input
-                  name="SortOrder"
-                  type="number"
-                  value={categoryForm.SortOrder}
-                  onChange={onCategoryFormChange}
-                />
+                <input name="SortOrder" type="number" value={categoryForm.SortOrder} onChange={onCategoryFormChange} />
               </label>
               <label className="form-switch-row form-switch-row--inline">
                 <span className="form-switch-label">Active</span>
                 <span className="form-switch">
-                  <input
-                    type="checkbox"
-                    name="IsActive"
-                    checked={categoryForm.IsActive}
-                    onChange={onCategoryFormChange}
-                  />
+                  <input type="checkbox" name="IsActive" checked={categoryForm.IsActive} onChange={onCategoryFormChange} />
                   <span className="switch-track" aria-hidden="true">
                     <span className="switch-thumb" />
                   </span>
@@ -881,11 +1168,7 @@ const Builder = () => {
               {fieldForm.FieldType === "RecordLink" ? (
                 <label title="Choose which category to link to.">
                   Linked category
-                  <select
-                    name="LinkedCategoryId"
-                    value={fieldForm.LinkedCategoryId}
-                    onChange={onFieldFormChange}
-                  >
+                  <select name="LinkedCategoryId" value={fieldForm.LinkedCategoryId} onChange={onFieldFormChange}>
                     <option value="">Select a category</option>
                     {categories.map((category) => (
                       <option key={category.Id} value={category.Id}>
@@ -897,22 +1180,12 @@ const Builder = () => {
               ) : null}
               <label title="Lower numbers appear earlier in the table.">
                 Sort order
-                <input
-                  name="SortOrder"
-                  type="number"
-                  value={fieldForm.SortOrder}
-                  onChange={onFieldFormChange}
-                />
+                <input name="SortOrder" type="number" value={fieldForm.SortOrder} onChange={onFieldFormChange} />
               </label>
               <label className="form-switch-row form-switch-row--inline">
                 <span className="form-switch-label">Required</span>
                 <span className="form-switch">
-                  <input
-                    type="checkbox"
-                    name="IsRequired"
-                    checked={fieldForm.IsRequired}
-                    onChange={onFieldFormChange}
-                  />
+                  <input type="checkbox" name="IsRequired" checked={fieldForm.IsRequired} onChange={onFieldFormChange} />
                   <span className="switch-track" aria-hidden="true">
                     <span className="switch-thumb" />
                   </span>
@@ -921,12 +1194,7 @@ const Builder = () => {
               <label className="form-switch-row form-switch-row--inline">
                 <span className="form-switch-label">Allow multiple values</span>
                 <span className="form-switch">
-                  <input
-                    type="checkbox"
-                    name="IsMulti"
-                    checked={fieldForm.IsMulti}
-                    onChange={onFieldFormChange}
-                  />
+                  <input type="checkbox" name="IsMulti" checked={fieldForm.IsMulti} onChange={onFieldFormChange} />
                   <span className="switch-track" aria-hidden="true">
                     <span className="switch-thumb" />
                   </span>
@@ -945,12 +1213,7 @@ const Builder = () => {
         </div>
       ) : null}
       {activeModal === "dropdown" ? (
-        <div
-          className="modal-backdrop"
-          role="dialog"
-          aria-modal="true"
-          onClick={closeDropdownModal}
-        >
+        <div className="modal-backdrop" role="dialog" aria-modal="true" onClick={closeDropdownModal}>
           <div className="modal life-admin-modal" onClick={(event) => event.stopPropagation()}>
             <div className="modal-header">
               <div>
@@ -965,21 +1228,18 @@ const Builder = () => {
             <form className="form-grid" onSubmit={onSaveDropdown}>
               <label title="The list name shown in the builder.">
                 Name
-                <input
-                  name="Name"
-                  value={dropdownForm.Name}
-                  onChange={onDropdownFormChange}
-                  required
-                />
+                <input name="Name" value={dropdownForm.Name} onChange={onDropdownFormChange} required />
               </label>
               <label title="Optional description for the list.">
                 Description
-                <textarea
-                  name="Description"
-                  value={dropdownForm.Description}
-                  onChange={onDropdownFormChange}
-                />
+                <textarea name="Description" value={dropdownForm.Description} onChange={onDropdownFormChange} />
               </label>
+              {editingDropdownId && editingDropdown?.InUseCount ? (
+                <p className="form-note">
+                  Delete is disabled while this dropdown is used by {editingDropdown.InUseCount} field
+                  {editingDropdown.InUseCount === 1 ? "" : "s"}.
+                </p>
+              ) : null}
               <div className="form-actions">
                 <button type="submit" disabled={actionStatus === "saving"}>
                   {editingDropdownId ? "Save dropdown" : "Add dropdown"}
@@ -987,6 +1247,16 @@ const Builder = () => {
                 <button type="button" className="button-secondary" onClick={closeDropdownModal}>
                   Cancel
                 </button>
+                {editingDropdownId ? (
+                  <button
+                    type="button"
+                    className="button-danger"
+                    onClick={onDeleteDropdown}
+                    disabled={actionStatus === "saving" || (editingDropdown?.InUseCount || 0) > 0}
+                  >
+                    Delete dropdown
+                  </button>
+                ) : null}
               </div>
             </form>
           </div>
@@ -1016,22 +1286,12 @@ const Builder = () => {
               </label>
               <label title="Lower numbers appear earlier in the list.">
                 Sort order
-                <input
-                  name="SortOrder"
-                  type="number"
-                  value={optionForm.SortOrder}
-                  onChange={onOptionFormChange}
-                />
+                <input name="SortOrder" type="number" value={optionForm.SortOrder} onChange={onOptionFormChange} />
               </label>
               <label className="form-switch-row form-switch-row--inline">
                 <span className="form-switch-label">Active</span>
                 <span className="form-switch">
-                  <input
-                    type="checkbox"
-                    name="IsActive"
-                    checked={optionForm.IsActive}
-                    onChange={onOptionFormChange}
-                  />
+                  <input type="checkbox" name="IsActive" checked={optionForm.IsActive} onChange={onOptionFormChange} />
                   <span className="switch-track" aria-hidden="true">
                     <span className="switch-thumb" />
                   </span>

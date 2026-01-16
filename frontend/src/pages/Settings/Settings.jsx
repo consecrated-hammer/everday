@@ -13,7 +13,6 @@ import {
   UpdateHealthProfile,
   UpdateHealthSettings
 } from "../../lib/healthApi.js";
-import LifeAdminBuilder from "../LifeAdmin/Builder.jsx";
 import { GetTokens, GetUserId, SetTokens } from "../../lib/authStorage.js";
 import { ResetDashboardLayout } from "../../lib/dashboardLayout.js";
 import { GetUiSettings, SetUiSettings } from "../../lib/uiSettings.js";
@@ -493,14 +492,6 @@ const Settings = () => {
             onClick={() => setActiveSection("access")}
           >
             User profiles
-          </button>
-          <p className="settings-nav-title">Life admin</p>
-          <button
-            type="button"
-            className={`settings-nav-item${activeSection === "life-admin" ? " is-active" : ""}`}
-            onClick={() => setActiveSection("life-admin")}
-          >
-            Builder
           </button>
         </aside>
         <section className="settings-content">
@@ -1063,15 +1054,6 @@ const Settings = () => {
                   </div>
                 </div>
               )}
-            </div>
-          ) : null}
-          {activeSection === "life-admin" ? (
-            <div className="settings-section">
-              <div className="settings-section-header">
-                <h3>Life admin builder</h3>
-                <p>Define categories, fields, dropdowns, and people for life admin records.</p>
-              </div>
-              <LifeAdminBuilder />
             </div>
           ) : null}
         </section>

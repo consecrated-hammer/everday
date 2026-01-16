@@ -10,6 +10,8 @@ const EmptyRecordForm = {
   Data: {}
 };
 
+const ActiveCategoryStorageKey = "life-admin.records.activeCategoryId";
+
 const ParseLocalDate = (value) => {
   const [year, month, day] = value.split("-").map((part) => Number(part));
   return new Date(year, month - 1, day);
@@ -81,8 +83,37 @@ const Records = () => {
   const selectAllRef = useRef(null);
 
   useEffect(() => {
-    if (!activeCategoryId && categories.length > 0) {
-      setActiveCategoryId(categories[0].Id);
+    if (activeCategoryId) {
+      return;
+    }
+    if (categories.length === 0) {
+      return;
+    }
+    const stored = localStorage.getItem(ActiveCategoryStorageKey);
+    const match = stored
+      ? categories.find((category) => String(category.Id) === stored)
+      : null;
+    if (match) {
+      setActiveCategoryId(match.Id);
+      return;
+    }
+    setActiveCategoryId(categories[0].Id);
+  }, [categories, activeCategoryId]);
+
+  useEffect(() => {
+    if (!activeCategoryId) {
+      return;
+    }
+    localStorage.setItem(ActiveCategoryStorageKey, String(activeCategoryId));
+  }, [activeCategoryId]);
+
+  useEffect(() => {
+    if (!activeCategoryId || categories.length === 0) {
+      return;
+    }
+    const exists = categories.some((category) => category.Id === activeCategoryId);
+    if (!exists) {
+      setActiveCategoryId(categories[0]?.Id || null);
     }
   }, [categories, activeCategoryId]);
 
@@ -512,7 +543,7 @@ const Records = () => {
   };
 
   return (
-    <div className="module-panel module-panel--stretch">
+    <div className="module-panel module-panel--stretch life-admin-records">
       <div className="module-panel-header">
         <div>
           <h3>Records</h3>
@@ -534,7 +565,11 @@ const Records = () => {
       {recordError ? <p className="form-error">{recordError}</p> : null}
       {actionError ? <p className="form-error">{actionError}</p> : null}
       {categories.length > 0 ? (
-        <div className="life-admin-tabs" role="tablist" aria-label="Life admin categories">
+        <div
+          className="life-admin-tabs life-admin-tabs--underline"
+          role="tablist"
+          aria-label="Life admin categories"
+        >
           {categories.map((category) => {
             const isActive = category.Id === activeCategoryId;
             return (
