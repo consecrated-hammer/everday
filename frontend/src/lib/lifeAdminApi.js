@@ -67,6 +67,12 @@ export const UpdateLifeDropdown = async (dropdownId, payload) => {
   });
 };
 
+export const DeleteLifeDropdown = async (dropdownId) => {
+  return RequestJson(`/life-admin/dropdowns/${dropdownId}`, {
+    method: "DELETE"
+  });
+};
+
 export const FetchLifeDropdownOptions = async (dropdownId) => {
   return RequestJson(`/life-admin/dropdowns/${dropdownId}/options`);
 };

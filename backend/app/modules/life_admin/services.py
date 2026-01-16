@@ -273,6 +273,25 @@ def UpdateDropdown(db: Session, dropdown_id: int, input_data: dict[str, Any]) ->
     return record
 
 
+def DeleteDropdown(db: Session, dropdown_id: int) -> bool:
+    in_use = (
+        db.query(LifeField.Id)
+        .filter(LifeField.DropdownId == dropdown_id)
+        .first()
+    )
+    if in_use:
+        raise ValueError("Dropdown is in use by existing fields")
+    record = db.query(LifeDropdown).filter(LifeDropdown.Id == dropdown_id).first()
+    if not record:
+        return False
+    db.query(LifeDropdownOption).filter(LifeDropdownOption.DropdownId == dropdown_id).delete(
+        synchronize_session=False
+    )
+    db.delete(record)
+    db.commit()
+    return True
+
+
 def ListDropdownOptions(db: Session, dropdown_id: int) -> list[LifeDropdownOption]:
     return (
         db.query(LifeDropdownOption)

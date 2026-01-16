@@ -28,6 +28,7 @@ import KidsHistory from "./pages/Kids/KidsHistory.jsx";
 import KidsAdmin from "./pages/Kids/KidsAdmin.jsx";
 import LifeAdminLayout from "./pages/LifeAdmin/LifeAdminLayout.jsx";
 import LifeAdminRecords from "./pages/LifeAdmin/Records.jsx";
+import LifeAdminBuilder from "./pages/LifeAdmin/Builder.jsx";
 
 const App = () => (
   <BrowserRouter>
@@ -65,7 +66,7 @@ const App = () => (
         <Route path="/life-admin" element={<LifeAdminLayout />}>
           <Route index element={<Navigate to="/life-admin/records" replace />} />
           <Route path="records" element={<LifeAdminRecords />} />
-          <Route path="builder" element={<Navigate to="/settings" replace />} />
+          <Route path="builder" element={<LifeAdminBuilder />} />
         </Route>
         <Route path="/settings" element={<Settings />} />
         <Route path="/kids-admin" element={<KidsAdmin />} />

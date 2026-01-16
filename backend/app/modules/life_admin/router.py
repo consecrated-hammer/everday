@@ -1,10 +1,12 @@
 import json
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.db import GetDb
 from app.modules.auth.deps import RequireModuleRole, UserContext
+from app.modules.life_admin.models import LifeField
 from app.modules.life_admin import services
 from app.modules.life_admin.schemas import (
     CategoryCreate,
@@ -63,11 +65,12 @@ def _field_out(record) -> FieldOut:
     )
 
 
-def _dropdown_out(record) -> DropdownOut:
+def _dropdown_out(record, in_use_count: int = 0) -> DropdownOut:
     return DropdownOut(
         Id=record.Id,
         Name=record.Name,
         Description=record.Description,
+        InUseCount=in_use_count,
         CreatedAt=record.CreatedAt,
         UpdatedAt=record.UpdatedAt,
     )
@@ -205,7 +208,15 @@ def ListDropdowns(
     db: Session = Depends(GetDb),
     user: UserContext = Depends(RequireModuleRole("life_admin", write=False)),
 ) -> list[DropdownOut]:
-    return [_dropdown_out(entry) for entry in services.ListDropdowns(db)]
+    dropdowns = services.ListDropdowns(db)
+    usage = (
+        db.query(LifeField.DropdownId, func.count(LifeField.Id))
+        .filter(LifeField.DropdownId.isnot(None))
+        .group_by(LifeField.DropdownId)
+        .all()
+    )
+    usage_map = {dropdown_id: count for dropdown_id, count in usage}
+    return [_dropdown_out(entry, usage_map.get(entry.Id, 0)) for entry in dropdowns]
 
 
 @router.post("/dropdowns", response_model=DropdownOut, status_code=status.HTTP_201_CREATED)
@@ -215,7 +226,7 @@ def CreateDropdown(
     user: UserContext = Depends(RequireModuleRole("life_admin", write=True)),
 ) -> DropdownOut:
     record = services.CreateDropdown(db, payload.dict())
-    return _dropdown_out(record)
+    return _dropdown_out(record, 0)
 
 
 @router.put("/dropdowns/{dropdown_id}", response_model=DropdownOut)
@@ -228,7 +239,26 @@ def UpdateDropdown(
     record = services.UpdateDropdown(db, dropdown_id, payload.dict())
     if not record:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Dropdown not found")
-    return _dropdown_out(record)
+    in_use_count = (
+        db.query(func.count(LifeField.Id))
+        .filter(LifeField.DropdownId == dropdown_id)
+        .scalar()
+    )
+    return _dropdown_out(record, in_use_count or 0)
+
+
+@router.delete("/dropdowns/{dropdown_id}", status_code=status.HTTP_204_NO_CONTENT)
+def DeleteDropdown(
+    dropdown_id: int,
+    db: Session = Depends(GetDb),
+    user: UserContext = Depends(RequireModuleRole("life_admin", write=True)),
+) -> None:
+    try:
+        deleted = services.DeleteDropdown(db, dropdown_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    if not deleted:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Dropdown not found")
 
 
 @router.get("/dropdowns/{dropdown_id}/options", response_model=list[DropdownOptionOut])

@@ -1078,6 +1078,7 @@ iconify-icon {
   justify-content: center;
   cursor: pointer;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
+  white-space: nowrap;
 }
 
 .button-pill {
@@ -1174,6 +1175,26 @@ iconify-icon {
   justify-content: space-between;
   gap: 16px;
   margin-bottom: 24px;
+}
+
+.life-admin-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.life-admin-header-link {
+  text-decoration: none;
+  color: var(--text-muted);
+  font-weight: 600;
+  padding: 4px 0;
+  border-bottom: 2px solid transparent;
+}
+
+.life-admin-header-link.is-active {
+  color: var(--accent);
+  border-color: var(--accent);
 }
 
 .module-nav {
@@ -1468,6 +1489,20 @@ iconify-icon {
   background: transparent;
   color: var(--text-muted);
   border: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.button-danger {
+  background: rgba(178, 59, 46, 0.08);
+  color: #b23b2e;
+  border: 1px solid rgba(178, 59, 46, 0.35);
+  box-shadow: none;
+}
+
+.button-danger:hover {
+  color: #d04c3f;
+  border-color: rgba(208, 76, 63, 0.45);
+  background: rgba(208, 76, 63, 0.12);
 }
 
 .form-actions button:disabled {
@@ -1547,8 +1582,258 @@ iconify-icon {
 .life-admin-tabs {
   display: flex;
   flex-wrap: wrap;
+  gap: 18px;
+  margin-bottom: 12px;
+}
+
+.life-admin-tabs--underline {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 6px;
+}
+
+.life-admin-builder {
+  display: grid;
+  gap: 12px;
+}
+
+.life-admin-builder-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.life-admin-builder-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.life-admin-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 16px;
+  border-radius: 16px;
+  box-shadow: 0 12px 22px rgba(94, 74, 51, 0.1);
+}
+
+.life-admin-panel .module-panel-actions {
   gap: 8px;
-  margin-bottom: 16px;
+}
+
+.life-admin-panel .module-panel-actions .primary-button,
+.life-admin-panel .module-panel-actions .button-secondary,
+.life-admin-panel .module-panel-actions .button-secondary-pill {
+  padding: 6px 12px;
+  font-size: 0.82rem;
+}
+
+.life-admin-panel .module-panel-actions .button-secondary,
+.life-admin-panel .module-panel-actions .button-secondary-pill {
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.life-admin-records {
+  padding: 18px;
+}
+
+.life-admin-records .module-panel-header {
+  margin-bottom: 12px;
+}
+
+.life-admin-records .life-admin-tabs {
+  margin-bottom: 12px;
+}
+
+.life-admin-records .income-table-section {
+  margin-top: 12px;
+}
+
+.life-admin-records .income-table-header p {
+  margin-top: 2px;
+}
+
+.life-admin-panel .module-panel-header {
+  margin-bottom: 10px;
+}
+
+.life-admin-panel .lede {
+  margin: 4px 0 0;
+}
+
+.life-admin-panel-body {
+  display: grid;
+  gap: 10px;
+  min-height: 0;
+}
+
+.life-admin-panel-title h4 {
+  margin: 0;
+}
+
+.life-admin-meta {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
+.life-admin-panel-header-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.life-admin-panel-scroll {
+  max-height: min(420px, 55vh);
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.life-admin-search {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  padding: 6px 10px;
+  background: var(--surface);
+  color: var(--text);
+}
+
+.life-admin-search .icon,
+.life-admin-search iconify-icon {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.life-admin-search input {
+  border: none;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  width: 100%;
+  outline: none;
+}
+
+.life-admin-list {
+  display: grid;
+  gap: 6px;
+}
+
+.life-admin-list-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 6px 8px;
+  background: var(--surface);
+}
+
+.life-admin-list-row.is-selected {
+  border-color: rgba(43, 110, 246, 0.35);
+  background: rgba(43, 110, 246, 0.08);
+}
+
+.life-admin-list-button {
+  border: none;
+  background: transparent;
+  padding: 0;
+  flex: 1;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.life-admin-list-leading {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
+}
+
+.life-admin-list-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.life-admin-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: rgba(90, 84, 76, 0.35);
+  display: inline-flex;
+}
+
+.life-admin-status-dot.is-active {
+  background: #4bb67f;
+}
+
+.life-admin-status-dot.is-inactive {
+  background: #c9c4bd;
+}
+
+.life-admin-row-menu {
+  position: relative;
+}
+
+.life-admin-row-menu .dropdown {
+  top: 30px;
+}
+
+.life-admin-row-menu .icon-button {
+  padding: 4px;
+}
+
+.life-admin-context-menu {
+  position: fixed;
+  z-index: 60;
+}
+
+.life-admin-actions-cell {
+  width: 40px;
+}
+
+.life-admin-table th,
+.life-admin-table td {
+  padding: 7px 8px;
+  font-size: 0.85rem;
+}
+
+.life-admin-table th {
+  color: var(--text-muted);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.life-admin-field-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.life-admin-field-handle {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.dropdown-item.is-danger {
+  color: #b23b2e;
+}
+
+.dropdown-item.is-danger:hover {
+  color: #d04c3f;
 }
 
 .life-admin-tab {
@@ -1565,6 +1850,33 @@ iconify-icon {
   background: var(--accent);
   color: var(--accent-contrast);
   border-color: transparent;
+}
+
+.life-admin-tabs--underline .life-admin-tab {
+  border: none;
+  background: transparent;
+  padding: 4px 0 8px;
+  border-radius: 0;
+  border-bottom: 2px solid transparent;
+}
+
+.life-admin-tabs--underline .life-admin-tab.is-active {
+  background: transparent;
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+@media (min-width: 980px) {
+  .life-admin-builder-grid {
+    grid-template-columns: minmax(220px, 300px) minmax(0, 1fr);
+    align-items: start;
+  }
+}
+
+@media (min-width: 720px) {
+  .life-admin-panel .module-panel-actions {
+    flex-wrap: nowrap;
+  }
 }
 
 .income-table-section {
@@ -2050,6 +2362,7 @@ iconify-icon {
   align-items: center;
   gap: 8px;
   box-shadow: 0 10px 18px rgba(43, 110, 246, 0.3);
+  white-space: nowrap;
 }
 
 .table-shell {
@@ -2199,6 +2512,11 @@ iconify-icon {
 
 .dropdown-item .dropdown-icon {
   color: var(--text-soft);
+}
+
+.dropdown.life-admin-context-menu {
+  position: fixed;
+  z-index: 180;
 }
 
 .table-wrap {

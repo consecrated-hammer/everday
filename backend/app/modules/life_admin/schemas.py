@@ -83,6 +83,7 @@ class DropdownOut(BaseModel):
     Id: int
     Name: str
     Description: str | None = None
+    InUseCount: int = 0
     CreatedAt: datetime
     UpdatedAt: datetime
 
