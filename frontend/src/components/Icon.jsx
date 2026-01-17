@@ -23,6 +23,46 @@ const IconMap = {
     material: "material-symbols:monitor-heart",
     lucide: "lucide:heart-pulse"
   },
+  breakfast: {
+    phosphor: "ph:sun-horizon",
+    material: "material-symbols:wb-twilight",
+    lucide: "lucide:sunrise"
+  },
+  morningSnack: {
+    phosphor: "ph:coffee",
+    material: "material-symbols:local-cafe",
+    lucide: "lucide:coffee"
+  },
+  lunch: {
+    phosphor: "ph:sun",
+    material: "material-symbols:sunny",
+    lucide: "lucide:sun"
+  },
+  afternoonSnack: {
+    phosphor: "ph:apple-logo",
+    material: "material-symbols:nutrition",
+    lucide: "lucide:apple"
+  },
+  dinner: {
+    phosphor: "ph:moon-stars",
+    material: "material-symbols:dark-mode",
+    lucide: "lucide:moon"
+  },
+  eveningSnack: {
+    phosphor: "ph:cookie",
+    material: "material-symbols:cookie",
+    lucide: "lucide:cookie"
+  },
+  steps: {
+    phosphor: "ph:footprints",
+    material: "material-symbols:footprint",
+    lucide: "lucide:footprints"
+  },
+  weight: {
+    phosphor: "ph:scales",
+    material: "material-symbols:scale",
+    lucide: "lucide:scale"
+  },
   agenda: {
     phosphor: "ph:calendar-check",
     material: "material-symbols:event",
@@ -172,6 +212,26 @@ const IconMap = {
     phosphor: "ph:info",
     material: "material-symbols:info",
     lucide: "lucide:info"
+  },
+  food: {
+    phosphor: "ph:apple-logo",
+    material: "material-symbols:nutrition",
+    lucide: "lucide:apple"
+  },
+  meal: {
+    phosphor: "ph:fork-knife",
+    material: "material-symbols:restaurant",
+    lucide: "lucide:utensils"
+  },
+  recent: {
+    phosphor: "ph:clock-counter-clockwise",
+    material: "material-symbols:history",
+    lucide: "lucide:history"
+  },
+  list: {
+    phosphor: "ph:list-bullets",
+    material: "material-symbols:lists",
+    lucide: "lucide:list"
   }
 };
 

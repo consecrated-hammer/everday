@@ -2,6 +2,7 @@ import uuid
 from datetime import date
 
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.modules.auth.models import User
@@ -17,6 +18,7 @@ from app.modules.health.schemas import (
     DailyLog,
     MealEntry,
     MealEntryWithFood,
+    ShareMealEntryInput,
     UpdateMealEntryInput,
 )
 from app.modules.health.services.portion_entry_service import BuildPortionValues
@@ -129,10 +131,23 @@ def GetEntriesForLog(db: Session, UserId: int, DailyLogId: str) -> list[MealEntr
         if entry.MealTemplateId:
             totals = _BuildTemplateTotals(db, entry.MealTemplateId)
             template_name = template.TemplateName if template else "Meal"
+            servings = float(template.Servings) if template and template.Servings is not None else 1.0
+            if servings <= 0:
+                servings = 1.0
+            per_serving = {
+                "Calories": totals["Calories"] / servings,
+                "Protein": totals["Protein"] / servings,
+                "Fibre": totals["Fibre"] / servings,
+                "Carbs": totals["Carbs"] / servings,
+                "Fat": totals["Fat"] / servings,
+                "SaturatedFat": totals["SaturatedFat"] / servings,
+                "Sugar": totals["Sugar"] / servings,
+                "Sodium": totals["Sodium"] / servings,
+            }
             display_quantity = (
                 float(entry.DisplayQuantity) if entry.DisplayQuantity is not None else float(entry.Quantity)
             )
-            portion_label = entry.PortionLabel or "meal"
+            portion_label = entry.PortionLabel or "serving"
             portion_base_unit = entry.PortionBaseUnit or "each"
             portion_base_amount = (
                 float(entry.PortionBaseAmount) if entry.PortionBaseAmount is not None else 1.0
@@ -149,15 +164,17 @@ def GetEntriesForLog(db: Session, UserId: int, DailyLogId: str) -> list[MealEntr
                     MealTemplateId=entry.MealTemplateId,
                     TemplateName=template_name,
                     FoodName=template_name,
-                    ServingDescription="meal",
-                    CaloriesPerServing=int(round(totals["Calories"])),
-                    ProteinPerServing=float(totals["Protein"]),
-                    FibrePerServing=float(totals["Fibre"]) if totals["Fibre"] else None,
-                    CarbsPerServing=float(totals["Carbs"]) if totals["Carbs"] else None,
-                    FatPerServing=float(totals["Fat"]) if totals["Fat"] else None,
-                    SaturatedFatPerServing=float(totals["SaturatedFat"]) if totals["SaturatedFat"] else None,
-                    SugarPerServing=float(totals["Sugar"]) if totals["Sugar"] else None,
-                    SodiumPerServing=float(totals["Sodium"]) if totals["Sodium"] else None,
+                    ServingDescription="serving",
+                    CaloriesPerServing=int(round(per_serving["Calories"])),
+                    ProteinPerServing=float(per_serving["Protein"]),
+                    FibrePerServing=float(per_serving["Fibre"]) if per_serving["Fibre"] else None,
+                    CarbsPerServing=float(per_serving["Carbs"]) if per_serving["Carbs"] else None,
+                    FatPerServing=float(per_serving["Fat"]) if per_serving["Fat"] else None,
+                    SaturatedFatPerServing=float(per_serving["SaturatedFat"])
+                    if per_serving["SaturatedFat"]
+                    else None,
+                    SugarPerServing=float(per_serving["Sugar"]) if per_serving["Sugar"] else None,
+                    SodiumPerServing=float(per_serving["Sodium"]) if per_serving["Sodium"] else None,
                     Quantity=float(entry.Quantity),
                     DisplayQuantity=display_quantity,
                     PortionOptionId=entry.PortionOptionId,
@@ -320,7 +337,14 @@ def EnsureDailyLogForDate(db: Session, UserId: int, LogDate: str) -> DailyLog:
         StepKcalFactorOverride=None,
     )
     db.add(record)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        existing = GetDailyLogByDate(db, UserId, LogDate)
+        if existing is not None:
+            return existing
+        raise
     db.refresh(record)
     return _BuildDailyLog(record)
 
@@ -347,8 +371,7 @@ def CreateMealEntry(db: Session, UserId: int, Input: CreateMealEntryInput) -> Me
         template_row = (
             db.query(MealTemplateModel)
             .filter(
-                MealTemplateModel.MealTemplateId == Input.MealTemplateId,
-                MealTemplateModel.UserId == UserId,
+                MealTemplateModel.MealTemplateId == Input.MealTemplateId
             )
             .first()
         )
@@ -413,6 +436,38 @@ def CreateMealEntry(db: Session, UserId: int, Input: CreateMealEntryInput) -> Me
     db.refresh(record)
 
     return _BuildMealEntrySchema(record)
+
+
+def ShareMealEntry(db: Session, UserId: int, Input: ShareMealEntryInput, IsAdmin: bool = False) -> MealEntry:
+    if Input.TargetUserId != UserId and not IsAdmin:
+        raise ValueError("Unauthorized")
+    target = db.query(User).filter(User.Id == Input.TargetUserId).first()
+    if not target:
+        raise ValueError("User not found.")
+    if target.Role != "Parent":
+        raise ValueError("User not eligible for sharing.")
+    daily_log = EnsureDailyLogForDate(db, Input.TargetUserId, Input.LogDate)
+    max_sort = (
+        db.query(func.max(MealEntryModel.SortOrder))
+        .filter(MealEntryModel.DailyLogId == daily_log.DailyLogId)
+        .scalar()
+    )
+    next_sort = int(max_sort or -1) + 1
+    payload = CreateMealEntryInput(
+        DailyLogId=daily_log.DailyLogId,
+        MealType=Input.MealType,
+        FoodId=Input.FoodId,
+        MealTemplateId=Input.MealTemplateId,
+        Quantity=Input.Quantity,
+        PortionOptionId=Input.PortionOptionId,
+        PortionLabel=Input.PortionLabel,
+        PortionBaseUnit=Input.PortionBaseUnit,
+        PortionBaseAmount=Input.PortionBaseAmount,
+        EntryNotes=Input.EntryNotes,
+        SortOrder=next_sort,
+        ScheduleSlotId=Input.ScheduleSlotId,
+    )
+    return CreateMealEntry(db, Input.TargetUserId, payload)
 
 
 def DeleteMealEntry(db: Session, UserId: int, MealEntryId: str, IsAdmin: bool = False) -> None:

@@ -140,6 +140,7 @@ class MealTemplate(Base):
     MealTemplateId = Column(String(36), primary_key=True, index=True)
     UserId = Column(Integer, nullable=False, index=True)
     TemplateName = Column(String(200), nullable=False)
+    Servings = Column(Numeric(10, 2), nullable=False, default=1)
     CreatedAt = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
 
 

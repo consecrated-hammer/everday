@@ -4,10 +4,12 @@ const Clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
 let ActiveCloseRow = null;
 
-const SwipeableEntryRow = ({ children, onEdit, onDelete }) => {
+const SwipeableEntryRow = ({ children, onEdit, onDelete, Nudge = false }) => {
   const startRef = useRef({ x: 0, y: 0 });
   const [offset, setOffset] = useState(0);
   const [isSwiping, setIsSwiping] = useState(false);
+  const [hasNudged, setHasNudged] = useState(false);
+  const nudgeTimersRef = useRef([]);
   const maxOffset = 112;
   const commitOffset = 96;
   const startThreshold = 24;
@@ -31,6 +33,30 @@ const SwipeableEntryRow = ({ children, onEdit, onDelete }) => {
       }
     };
   }, [offset, closeRow]);
+
+  useEffect(() => {
+    if (!Nudge || hasNudged) {
+      return undefined;
+    }
+    setHasNudged(true);
+    const timers = [];
+    const startTimer = window.setTimeout(() => {
+      if (isSwiping) {
+        return;
+      }
+      setOffset(18);
+      const endTimer = window.setTimeout(() => {
+        setOffset(0);
+      }, 240);
+      timers.push(endTimer);
+    }, 420);
+    timers.push(startTimer);
+    nudgeTimersRef.current = timers;
+    return () => {
+      nudgeTimersRef.current.forEach((timer) => clearTimeout(timer));
+      nudgeTimersRef.current = [];
+    };
+  }, [Nudge, hasNudged, isSwiping]);
 
   const handleTouchStart = (event) => {
     if (ActiveCloseRow && ActiveCloseRow !== closeRow) {
@@ -84,7 +110,6 @@ const SwipeableEntryRow = ({ children, onEdit, onDelete }) => {
   const handleRowClick = () => {
     if (offset !== 0) {
       setOffset(0);
-      return;
     }
     onEdit?.();
   };

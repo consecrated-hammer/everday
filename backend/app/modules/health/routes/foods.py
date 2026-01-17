@@ -45,7 +45,12 @@ def UpdateFoodRoute(
         return UpdateFood(db, user.Id, food_id, payload, IsAdmin=IsParent(user))
     except ValueError as exc:
         detail = str(exc)
-        status_code = status.HTTP_403_FORBIDDEN if "Unauthorized" in detail else status.HTTP_404_NOT_FOUND
+        if "Unauthorized" in detail:
+            status_code = status.HTTP_403_FORBIDDEN
+        elif "not found" in detail.lower():
+            status_code = status.HTTP_404_NOT_FOUND
+        else:
+            status_code = status.HTTP_400_BAD_REQUEST
         raise HTTPException(status_code=status_code, detail=detail) from exc
 
 

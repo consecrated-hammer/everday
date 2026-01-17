@@ -69,7 +69,7 @@ def GetPortionOptions(db: Session, UserId: int, FoodId: str | None) -> tuple[str
                 food_row.ServingUnit or "serving",
             )
             serve_option = PortionOption(
-                Label="serve",
+                Label="serving",
                 BaseUnit=serve_unit,
                 BaseAmount=serve_amount,
                 Scope="food",
@@ -82,6 +82,8 @@ def GetPortionOptions(db: Session, UserId: int, FoodId: str | None) -> tuple[str
         options.append(serve_option)
 
     global_options = _GlobalOptions(base_unit)
+    if serve_option and base_unit == "each":
+        global_options = [option for option in global_options if option.Label != "each"]
     options.extend(global_options)
 
     if FoodId:

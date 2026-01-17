@@ -1,4 +1,4 @@
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes, useParams } from "react-router-dom";
 
 import AppShell from "./components/AppShell.jsx";
 import RequireAuth from "./components/RequireAuth.jsx";
@@ -18,8 +18,6 @@ import HealthLayout from "./pages/Health/HealthLayout.jsx";
 import HealthToday from "./pages/Health/Today.jsx";
 import HealthLog from "./pages/Health/Log.jsx";
 import HealthFoods from "./pages/Health/Foods.jsx";
-import HealthHistory from "./pages/Health/History.jsx";
-import HealthHistoryDay from "./pages/Health/HistoryDay.jsx";
 import HealthInsights from "./pages/Health/Insights.jsx";
 import HealthSettings from "./pages/Health/Settings.jsx";
 import KidsLayout from "./pages/Kids/KidsLayout.jsx";
@@ -29,6 +27,12 @@ import KidsAdmin from "./pages/Kids/KidsAdmin.jsx";
 import LifeAdminLayout from "./pages/LifeAdmin/LifeAdminLayout.jsx";
 import LifeAdminRecords from "./pages/LifeAdmin/Records.jsx";
 import LifeAdminBuilder from "./pages/LifeAdmin/Builder.jsx";
+
+const HealthHistoryRedirect = () => {
+  const { date } = useParams();
+  const target = date ? `/health/log?date=${encodeURIComponent(date)}` : "/health/log";
+  return <Navigate to={target} replace />;
+};
 
 const App = () => (
   <BrowserRouter>
@@ -57,8 +61,8 @@ const App = () => (
           <Route path="today" element={<HealthToday />} />
           <Route path="log" element={<HealthLog />} />
           <Route path="foods" element={<HealthFoods />} />
-          <Route path="history" element={<HealthHistory />} />
-          <Route path="history/:date" element={<HealthHistoryDay />} />
+          <Route path="history" element={<HealthHistoryRedirect />} />
+          <Route path="history/:date" element={<HealthHistoryRedirect />} />
           <Route path="insights" element={<HealthInsights />} />
           <Route path="settings" element={<HealthSettings />} />
         </Route>

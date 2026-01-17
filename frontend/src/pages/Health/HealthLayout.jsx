@@ -1,10 +1,11 @@
 import { NavLink, Outlet } from "react-router-dom";
 
+import HealthFab from "../../components/HealthFab.jsx";
+
 const navItems = [
   { label: "Today", path: "/health/today" },
   { label: "Log", path: "/health/log" },
   { label: "Foods", path: "/health/foods" },
-  { label: "History", path: "/health/history" },
   { label: "Insights", path: "/health/insights" }
 ];
 
@@ -12,7 +13,6 @@ const bottomNavItems = [
   { label: "Today", path: "/health/today" },
   { label: "Log", path: "/health/log" },
   { label: "Foods", path: "/health/foods" },
-  { label: "History", path: "/health/history" },
   { label: "Insights", path: "/health/insights" }
 ];
 
@@ -52,6 +52,7 @@ const HealthLayout = () => (
         </NavLink>
       ))}
     </nav>
+    <HealthFab />
   </div>
 );
 

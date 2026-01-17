@@ -37,6 +37,11 @@ export const CreateMealEntry = (payload) =>
     method: "POST",
     body: JSON.stringify(payload)
   });
+export const ShareMealEntry = (payload) =>
+  RequestJson(`${Health}/daily-logs/meal-entries/share`, {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
 export const UpdateMealEntry = (mealEntryId, payload) =>
   RequestJson(`${Health}/daily-logs/meal-entries/${mealEntryId}`, {
     method: "PATCH",
