@@ -9,6 +9,16 @@ engine = None
 SessionLocal = None
 
 
+def _read_int_env(name: str, default: int) -> int:
+    raw = os.getenv(name, "").strip()
+    if not raw:
+        return default
+    try:
+        return int(raw)
+    except ValueError as exc:
+        raise RuntimeError(f"{name} must be an integer") from exc
+
+
 def _build_connection_url(login_env: str, password_env: str, database_override: str | None = None) -> str:
     driver = os.getenv("SQLSERVER_DRIVER", "")
     host = os.getenv("SQLSERVER_HOST", "")
@@ -45,7 +55,16 @@ def BuildAdminConnectionUrl(database_override: str | None = None) -> str:
 def _ensure_engine():
     global engine, SessionLocal
     if engine is None:
-        engine = create_engine(BuildUserConnectionUrl(), pool_pre_ping=True)
+        pool_size = _read_int_env("SQLALCHEMY_POOL_SIZE", 10)
+        max_overflow = _read_int_env("SQLALCHEMY_MAX_OVERFLOW", 20)
+        pool_timeout = _read_int_env("SQLALCHEMY_POOL_TIMEOUT", 60)
+        engine = create_engine(
+            BuildUserConnectionUrl(),
+            pool_pre_ping=True,
+            pool_size=pool_size,
+            max_overflow=max_overflow,
+            pool_timeout=pool_timeout,
+        )
         SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 
 
