@@ -37,6 +37,7 @@ const EmptyFoodForm = {
 const EmptyTemplateForm = {
   TemplateName: "",
   Servings: "1",
+  IsFavourite: false,
   Items: []
 };
 
@@ -430,6 +431,12 @@ const Foods = () => {
 
   useEffect(() => {
     loadData();
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      ClearMealDraft();
+    };
   }, []);
 
   useEffect(() => {
@@ -977,6 +984,7 @@ const Foods = () => {
       const payload = {
         TemplateName: templateForm.TemplateName,
         Servings: servingsValue,
+        IsFavourite: !!templateForm.IsFavourite,
         Items: templateForm.Items.map((item, index) => ({
           FoodId: item.FoodId,
           MealType: item.MealType,
@@ -1013,6 +1021,7 @@ const Foods = () => {
     setTemplateForm({
       TemplateName: template.Template.TemplateName,
       Servings: template.Template.Servings ? String(template.Template.Servings) : "1",
+      IsFavourite: !!template.Template.IsFavourite,
       Items: template.Items.map((item) => ({
         FoodId: item.FoodId,
         MealType: item.MealType,
@@ -2023,7 +2032,12 @@ const Foods = () => {
       ) : null}
 
       {lookupModalOpen ? (
-        <div className="modal-backdrop" role="dialog" aria-modal="true">
+        <div
+          className="modal-backdrop"
+          role="dialog"
+          aria-modal="true"
+          data-health-modal-label="Lookup results"
+        >
           <div className="modal health-edit-modal" onClick={(event) => event.stopPropagation()}>
             <div className="modal-header">
               <div>
@@ -2260,6 +2274,22 @@ const Foods = () => {
                     }
                   />
                 </label>
+                {editingTemplateId ? (
+                  <div className="health-toggle-inline health-toggle-inline--meal">
+                    <input
+                      id="meal-favourite"
+                      type="checkbox"
+                      checked={templateForm.IsFavourite}
+                      onChange={(event) =>
+                        setTemplateForm((prev) => ({
+                          ...prev,
+                          IsFavourite: event.target.checked
+                        }))
+                      }
+                    />
+                    <label htmlFor="meal-favourite">Favourite</label>
+                  </div>
+                ) : null}
               </div>
               <div className="form-actions">
                 <button type="button" onClick={saveTemplate}>

@@ -1,17 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 
 import Icon from "../../components/Icon.jsx";
 import {
   CreateDailyLog,
+  CreateFood,
   CreateMealEntry,
-  CreatePortionOption,
+  CreateMealTemplate,
   DeleteMealEntry,
-  FetchHealthProfile,
   FetchDailyLog,
   FetchFoods,
+  FetchHealthProfile,
   FetchMealTemplates,
   FetchPortionOptions,
+  ParseMealTemplateText,
   ShareMealEntry,
   UpdateMealEntry
 } from "../../lib/healthApi.js";
@@ -82,6 +84,13 @@ const FormatAmount = (value) => {
   }
   return Number.isInteger(numeric) ? String(numeric) : String(Number(numeric.toFixed(2)));
 };
+const FormatNumber = (value, options = {}) => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return "";
+  }
+  return numeric.toLocaleString("en-US", options);
+};
 const FormatUserLabel = (user) => {
   return user.FirstName || user.Username || `User ${user.Id}`;
 };
@@ -89,18 +98,6 @@ const CalculateEntryCalories = (entry) => {
   const calories = Number(entry?.CaloriesPerServing) * Number(entry?.Quantity);
   return Number.isFinite(calories) ? calories : 0;
 };
-const NormalizeServingLabel = (value) => {
-  const label = (value || "").trim();
-  if (!label) {
-    return "";
-  }
-  const normalized = label.toLowerCase();
-  if (normalized === "serve" || normalized === "meal") {
-    return "serving";
-  }
-  return label;
-};
-
 const GetDefaultMealType = (value = new Date()) => {
   const hour = value.getHours();
   if (hour < 10) {
@@ -218,9 +215,6 @@ const NormalizeUnit = (unit) => {
     if (UnitAliases[trimmed]) {
       return UnitAliases[trimmed];
     }
-    if (CountUnits.has(trimmed)) {
-      return trimmed;
-    }
   }
   return value;
 };
@@ -244,9 +238,6 @@ const ResolveServingBase = (food) => {
 };
 
 const ResolveServingMultiplier = (food, baseTotal, baseUnit) => {
-  if (!food || !baseTotal || !baseUnit) {
-    return null;
-  }
   const normalizedBaseUnit = NormalizeUnit(baseUnit);
   const servingBase = ResolveServingBase(food);
   if (!servingBase.amount || !servingBase.unit) {
@@ -297,49 +288,47 @@ const GroupEntriesByMeal = (entries) => {
   return grouped;
 };
 
-const Log = ({ InitialDate, InitialAddMode, InitialEditId }) => {
+const BuildEasyLabel = (option) => {
+  const label = option.Label || "serving";
+  const normalized = label.toLowerCase();
+  if (/^\d/.test(label)) {
+    return label;
+  }
+  if (normalized === "serving" || normalized === "each") {
+    return `1 ${label}`;
+  }
+  return `1 ${label}`;
+};
+
+const Log = ({ InitialDate, InitialAddMode }) => {
   const [searchParams] = useSearchParams();
   const fallbackDate = searchParams.get("date") || FormatDate(new Date());
   const defaultMealType = ResolveMealType(searchParams.get("meal")) || GetDefaultMealType();
   const initialDate = InitialDate || fallbackDate;
   const initialMonth = initialDate.slice(0, 7);
   const initialAddMode = InitialAddMode ?? searchParams.get("add") === "1";
-  const initialEditId = InitialEditId ?? searchParams.get("edit");
   const today = useMemo(() => FormatDate(new Date()), []);
 
   const [logDate, setLogDate] = useState(initialDate);
   const [dailyLog, setDailyLog] = useState(null);
-  const [dailyTotals, setDailyTotals] = useState(null);
-  const [dailyTargets, setDailyTargets] = useState(null);
   const [entries, setEntries] = useState([]);
   const [foods, setFoods] = useState([]);
   const [templates, setTemplates] = useState([]);
-  const [foodSearch, setFoodSearch] = useState("");
-  const [selectorOpen, setSelectorOpen] = useState(false);
-  const selectorRef = useRef(null);
-  const searchInputRef = useRef(null);
-  const quantityInputRef = useRef(null);
-  const quickSearchRef = useRef(null);
   const [status, setStatus] = useState("idle");
   const [error, setError] = useState("");
-  const [showForm, setShowForm] = useState(initialAddMode || !!initialEditId);
-  const [toast, setToast] = useState(null);
-  const [editingEntryId, setEditingEntryId] = useState(null);
-  const [mealTypeTouched, setMealTypeTouched] = useState(false);
-  const [editContext, setEditContext] = useState(null);
-  const pendingDeletesRef = useRef(new Map());
-  const handledEditRef = useRef(null);
-  const [quickPickerOpen, setQuickPickerOpen] = useState(initialAddMode && !initialEditId);
-  const [quickTab, setQuickTab] = useState("foods");
-  const [quickSearch, setQuickSearch] = useState("");
-  const [quickSelectedKeys, setQuickSelectedKeys] = useState([]);
-  const [quickQuantities, setQuickQuantities] = useState({});
-  const [shareUsers, setShareUsers] = useState([]);
-  const [shareTargetUserId, setShareTargetUserId] = useState("");
-  const [datePickerOpen, setDatePickerOpen] = useState(false);
-  const [loggedDays, setLoggedDays] = useState([]);
-  const [pickerMonth, setPickerMonth] = useState(initialMonth);
-  const datePickerRef = useRef(null);
+
+  const [view, setView] = useState(initialAddMode ? "add" : "slots");
+  const [returnView, setReturnView] = useState("slots");
+  const [activeMealType, setActiveMealType] = useState(defaultMealType);
+
+  const [searchTab, setSearchTab] = useState("search");
+  const [searchQuery, setSearchQuery] = useState("");
+  const searchInputRef = useRef(null);
+
+  const [describeOpen, setDescribeOpen] = useState(false);
+  const [describeText, setDescribeText] = useState("");
+  const [describeResult, setDescribeResult] = useState(null);
+  const [describeStatus, setDescribeStatus] = useState("idle");
 
   const [form, setForm] = useState({
     MealType: defaultMealType,
@@ -351,15 +340,27 @@ const Log = ({ InitialDate, InitialAddMode, InitialEditId }) => {
   const [portionOptions, setPortionOptions] = useState([]);
   const [portionBaseUnit, setPortionBaseUnit] = useState("each");
   const [selectedPortion, setSelectedPortion] = useState("");
-  const [detailsOpen, setDetailsOpen] = useState(false);
-  const [showFoodDetails, setShowFoodDetails] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const [showNotes, setShowNotes] = useState(false);
-  const [portionOverride, setPortionOverride] = useState({
-    Label: "",
-    BaseAmount: "",
-    BaseUnit: "",
-    SaveAsDefault: false
-  });
+
+  const [editingEntryId, setEditingEntryId] = useState(null);
+  const [editContext, setEditContext] = useState(null);
+
+  const [shareUsers, setShareUsers] = useState([]);
+  const [shareTargetUserId, setShareTargetUserId] = useState("");
+  const [shareSummaryUserId, setShareSummaryUserId] = useState("");
+
+  const [datePickerOpen, setDatePickerOpen] = useState(false);
+  const [loggedDays, setLoggedDays] = useState([]);
+  const [pickerMonth, setPickerMonth] = useState(initialMonth);
+  const datePickerRef = useRef(null);
+
+  const [saveMealOpen, setSaveMealOpen] = useState(false);
+  const [saveMealName, setSaveMealName] = useState("");
+  const [saveMealServings, setSaveMealServings] = useState("1");
+  const [saveMealError, setSaveMealError] = useState("");
+  const [summaryDetailsOpen, setSummaryDetailsOpen] = useState(false);
 
   const loadData = async (dateValue) => {
     try {
@@ -372,8 +373,6 @@ const Log = ({ InitialDate, InitialAddMode, InitialEditId }) => {
       ]);
       setDailyLog(logData.DailyLog || null);
       setEntries(logData.Entries || []);
-      setDailyTotals(logData.Totals || null);
-      setDailyTargets(logData.Targets || null);
       setFoods(foodData);
       setTemplates(templateData.Templates || []);
       setStatus("ready");
@@ -388,63 +387,10 @@ const Log = ({ InitialDate, InitialAddMode, InitialEditId }) => {
   }, [logDate]);
 
   useEffect(() => {
-    let isActive = true;
-    const loadShareUsers = async () => {
-      try {
-        const [profile, users] = await Promise.all([FetchHealthProfile(), FetchUsers()]);
-        if (!isActive) {
-          return;
-        }
-        const currentId = profile?.UserId;
-        const filtered = Array.isArray(users)
-          ? users.filter(
-              (entry) => entry.Id !== currentId && String(entry.Role || "") === "Parent"
-            )
-          : [];
-        setShareUsers(filtered);
-      } catch {
-        if (isActive) {
-          setShareUsers([]);
-        }
-      }
-    };
-    loadShareUsers();
-    return () => {
-      isActive = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!shareTargetUserId) {
-      return;
-    }
-    if (!shareUsers.some((user) => String(user.Id) === String(shareTargetUserId))) {
-      setShareTargetUserId("");
-    }
-  }, [shareTargetUserId, shareUsers]);
-
-  useEffect(() => {
     if (logDate > today) {
       setLogDate(today);
     }
   }, [logDate, today]);
-
-  useEffect(() => {
-    const nextDate = searchParams.get("date");
-    if (nextDate && nextDate !== logDate) {
-      setLogDate(nextDate);
-    }
-    const shouldShowForm = searchParams.get("add") === "1" || !!searchParams.get("edit");
-    if (shouldShowForm) {
-      setShowForm(true);
-    } else if (!editingEntryId) {
-      setShowForm(false);
-    }
-    const nextMealType = ResolveMealType(searchParams.get("meal"));
-    if (nextMealType && !editingEntryId && !mealTypeTouched) {
-      setForm((prev) => ({ ...prev, MealType: nextMealType }));
-    }
-  }, [searchParams, logDate, editingEntryId, mealTypeTouched]);
 
   useEffect(() => {
     if (!datePickerOpen) {
@@ -453,26 +399,6 @@ const Log = ({ InitialDate, InitialAddMode, InitialEditId }) => {
       setPickerMonth(selectedMonth > currentMonth ? currentMonth : selectedMonth);
     }
   }, [datePickerOpen, logDate, today]);
-
-  useEffect(() => {
-    if (!showForm) {
-      setQuickPickerOpen(false);
-      return;
-    }
-    if (editingEntryId || form.SelectedId) {
-      setQuickPickerOpen(false);
-      return;
-    }
-    if (searchParams.get("add") === "1") {
-      setQuickPickerOpen(true);
-    }
-  }, [editingEntryId, form.SelectedId, searchParams, showForm]);
-
-  useEffect(() => {
-    if (quickPickerOpen && quickSearchRef.current) {
-      quickSearchRef.current.focus();
-    }
-  }, [quickPickerOpen]);
 
   useEffect(() => {
     if (!datePickerOpen) {
@@ -532,67 +458,67 @@ const Log = ({ InitialDate, InitialAddMode, InitialEditId }) => {
   }, [datePickerOpen, pickerMonth]);
 
   useEffect(() => {
+    let isActive = true;
+    const loadShareUsers = async () => {
+      try {
+        const [profile, users] = await Promise.all([FetchHealthProfile(), FetchUsers()]);
+        if (!isActive) {
+          return;
+        }
+        const currentId = profile?.UserId;
+        const filtered = Array.isArray(users)
+          ? users.filter(
+              (entry) => entry.Id !== currentId && String(entry.Role || "") === "Parent"
+            )
+          : [];
+        setShareUsers(filtered);
+      } catch {
+        if (isActive) {
+          setShareUsers([]);
+        }
+      }
+    };
+    loadShareUsers();
     return () => {
-      pendingDeletesRef.current.forEach((pending) => clearTimeout(pending.timeoutId));
-      pendingDeletesRef.current.clear();
+      isActive = false;
     };
   }, []);
 
   useEffect(() => {
-    if (editingEntryId) {
+    if (!shareTargetUserId) {
       return;
     }
-    setMealTypeTouched(false);
-    const nextMealType = ResolveMealType(searchParams.get("meal")) || GetDefaultMealType();
-    setForm((prev) => ({ ...prev, MealType: nextMealType }));
-  }, [editingEntryId, logDate, searchParams]);
+    if (!shareUsers.some((user) => String(user.Id) === String(shareTargetUserId))) {
+      setShareTargetUserId("");
+    }
+  }, [shareTargetUserId, shareUsers]);
 
   useEffect(() => {
-    if (!selectorOpen) {
-      setFoodSearch("");
+    if (!shareSummaryUserId) {
       return;
     }
-    const handleClick = (event) => {
-      if (selectorRef.current && !selectorRef.current.contains(event.target)) {
-        setSelectorOpen(false);
-      }
-    };
-    const handleKey = (event) => {
-      if (event.key === "Escape") {
-        setSelectorOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClick);
-    document.addEventListener("keydown", handleKey);
-    if (searchInputRef.current) {
+    if (!shareUsers.some((user) => String(user.Id) === String(shareSummaryUserId))) {
+      setShareSummaryUserId("");
+    }
+  }, [shareSummaryUserId, shareUsers]);
+
+  useEffect(() => {
+    if (view === "add" && searchInputRef.current) {
       searchInputRef.current.focus();
     }
-    return () => {
-      document.removeEventListener("mousedown", handleClick);
-      document.removeEventListener("keydown", handleKey);
-    };
-  }, [selectorOpen]);
+  }, [view]);
 
-  const [selectedType, selectedValue] = form.SelectedId ? form.SelectedId.split(":") : ["", ""];
+  const selectedValue = form.SelectedId ? form.SelectedId.split(":")[1] : "";
+  const selectedType = form.SelectedId ? form.SelectedId.split(":")[0] : "";
   const isFoodSelected = selectedType === "food";
   const isTemplateSelected = selectedType === "template";
 
   useEffect(() => {
     let isActive = true;
-
     const resetOptions = () => {
-      if (!isActive) {
-        return;
-      }
       setPortionOptions([]);
-      setPortionBaseUnit("each");
       setSelectedPortion("");
-      setPortionOverride({
-        Label: "",
-        BaseAmount: "",
-        BaseUnit: "",
-        SaveAsDefault: false
-      });
+      setPortionBaseUnit("each");
     };
 
     if (!form.SelectedId) {
@@ -617,12 +543,6 @@ const Log = ({ InitialDate, InitialAddMode, InitialEditId }) => {
         setPortionBaseUnit("each");
         setPortionOptions(options);
         setSelectedPortion(options[0]?.OptionKey || "");
-        setPortionOverride({
-          Label: "",
-          BaseAmount: "",
-          BaseUnit: "each",
-          SaveAsDefault: false
-        });
       }
       return () => {
         isActive = false;
@@ -651,13 +571,7 @@ const Log = ({ InitialDate, InitialAddMode, InitialEditId }) => {
         setPortionBaseUnit(baseUnit);
         setPortionOptions(options);
         setSelectedPortion(defaultOption ? defaultOption.OptionKey : "");
-        setPortionOverride({
-          Label: "",
-          BaseAmount: "",
-          BaseUnit: baseUnit,
-          SaveAsDefault: false
-        });
-      } catch (err) {
+      } catch {
         if (!isActive) {
           return;
         }
@@ -680,12 +594,6 @@ const Log = ({ InitialDate, InitialAddMode, InitialEditId }) => {
     if (isTemplateSelected) {
       if (portionOptions.length) {
         setSelectedPortion(portionOptions[0].OptionKey || "");
-        setPortionOverride({
-          Label: "",
-          BaseAmount: "",
-          BaseUnit: "each",
-          SaveAsDefault: false
-        });
         setEditContext(null);
       }
       return;
@@ -699,12 +607,6 @@ const Log = ({ InitialDate, InitialAddMode, InitialEditId }) => {
       );
       if (match) {
         setSelectedPortion(match.OptionKey);
-        setPortionOverride({
-          Label: "",
-          BaseAmount: "",
-          BaseUnit: portionBaseUnit,
-          SaveAsDefault: false
-        });
         setEditContext(null);
         return;
       }
@@ -723,22 +625,10 @@ const Log = ({ InitialDate, InitialAddMode, InitialEditId }) => {
       });
       if (matchByBase) {
         setSelectedPortion(matchByBase.OptionKey);
-        setPortionOverride({
-          Label: "",
-          BaseAmount: "",
-          BaseUnit: portionBaseUnit,
-          SaveAsDefault: false
-        });
         setEditContext(null);
         return;
       }
-      setSelectedPortion("custom");
-      setPortionOverride({
-        Label: editContext.PortionLabel || "",
-        BaseAmount: String(editContext.PortionBaseAmount),
-        BaseUnit: baseUnit,
-        SaveAsDefault: false
-      });
+      setSelectedPortion(portionOptions[0]?.OptionKey || "");
       setEditContext(null);
       return;
     }
@@ -753,31 +643,9 @@ const Log = ({ InitialDate, InitialAddMode, InitialEditId }) => {
     portionBaseUnit
   ]);
 
-  const filteredFoods = useMemo(() => {
-    const query = foodSearch.trim().toLowerCase();
-    if (!query) {
-      return foods;
-    }
-    return foods.filter((food) => food.FoodName.toLowerCase().includes(query));
-  }, [foods, foodSearch]);
-
-  const foodsById = useMemo(
-    () =>
-      foods.reduce((map, food) => {
-        map[food.FoodId] = food;
-        return map;
-      }, {}),
-    [foods]
-  );
-
   const resolveTemplateServings = (template) => {
     const servings = Number(template?.Template?.Servings || 1);
     return Number.isFinite(servings) && servings > 0 ? servings : 1;
-  };
-
-  const getTemplateServingLabel = (template) => {
-    const servings = resolveTemplateServings(template);
-    return servings > 1 ? `1 of ${FormatAmount(servings)} servings` : "1 serving";
   };
 
   const templateCalories = useMemo(() => {
@@ -785,7 +653,7 @@ const Log = ({ InitialDate, InitialAddMode, InitialEditId }) => {
     templates.forEach((template) => {
       let calories = 0;
       template.Items.forEach((item) => {
-        const food = foodsById[item.FoodId];
+        const food = foods.find((entry) => entry.FoodId === item.FoodId);
         if (!food) {
           return;
         }
@@ -796,530 +664,123 @@ const Log = ({ InitialDate, InitialAddMode, InitialEditId }) => {
       totals[template.Template.MealTemplateId] = Math.round(calories / servings);
     });
     return totals;
-  }, [templates, foodsById]);
+  }, [templates, foods]);
+
+  const groupedEntries = useMemo(() => GroupEntriesByMeal(entries), [entries]);
+  const slotTotals = useMemo(() => {
+    const totals = {};
+    Object.entries(groupedEntries).forEach(([meal, items]) => {
+      totals[meal] = items.reduce((acc, entry) => acc + CalculateEntryCalories(entry), 0);
+    });
+    return totals;
+  }, [groupedEntries]);
+
+  const filteredFoods = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) {
+      return foods;
+    }
+    return foods.filter((food) => food.FoodName.toLowerCase().includes(query));
+  }, [foods, searchQuery]);
 
   const filteredTemplates = useMemo(() => {
-    const query = foodSearch.trim().toLowerCase();
+    const query = searchQuery.trim().toLowerCase();
     if (!query) {
       return templates;
     }
     return templates.filter((template) =>
       template.Template.TemplateName.toLowerCase().includes(query)
     );
-  }, [templates, foodSearch]);
+  }, [templates, searchQuery]);
 
-  const quickQuery = quickSearch.trim().toLowerCase();
-  const quickFoodItems = useMemo(() => {
-    const list = foods.map((food) => ({
-      type: "food",
-      id: food.FoodId,
-      name: food.FoodName,
-      serving: food.ServingDescription || `${food.ServingQuantity} ${food.ServingUnit}`,
-      calories: Math.round(food.CaloriesPerServing || 0),
-      createdAt: food.CreatedAt ? new Date(food.CreatedAt).getTime() : 0
-    }));
-    if (!quickQuery) {
-      return list;
+  const searchItems = useMemo(() => {
+    if (searchTab === "meals") {
+      return filteredTemplates.map((template) => ({
+        type: "template",
+        id: template.Template.MealTemplateId,
+        name: template.Template.TemplateName,
+        hint: templateCalories[template.Template.MealTemplateId]
+          ? `${templateCalories[template.Template.MealTemplateId]} kcal`
+          : "",
+        template
+      }));
     }
-    return list.filter((item) => item.name.toLowerCase().includes(quickQuery));
-  }, [foods, quickQuery]);
-
-  const quickMealItems = useMemo(() => {
-    const list = templates.map((template) => ({
-      type: "meal",
-      id: template.Template.MealTemplateId,
-      name: template.Template.TemplateName,
-      serving: getTemplateServingLabel(template),
-      calories: templateCalories[template.Template.MealTemplateId] ?? null,
-      createdAt: template.Template.CreatedAt ? new Date(template.Template.CreatedAt).getTime() : 0
-    }));
-    if (!quickQuery) {
-      return list;
+    if (searchTab === "favourites") {
+      return [
+        ...filteredFoods
+          .filter((food) => food.IsFavourite)
+          .map((food) => ({
+            type: "food",
+            id: food.FoodId,
+            name: food.FoodName,
+            hint: food.ServingDescription
+              ? `${food.ServingDescription} · ${food.CaloriesPerServing || 0} kcal`
+              : food.CaloriesPerServing
+                ? `${food.CaloriesPerServing} kcal`
+                : "",
+            food
+          })),
+        ...filteredTemplates
+          .filter((template) => template.Template.IsFavourite)
+          .map((template) => ({
+            type: "template",
+            id: template.Template.MealTemplateId,
+            name: template.Template.TemplateName,
+            hint: templateCalories[template.Template.MealTemplateId]
+              ? `${templateCalories[template.Template.MealTemplateId]} kcal`
+              : "",
+            template
+          }))
+      ];
     }
-    return list.filter((item) => item.name.toLowerCase().includes(quickQuery));
-  }, [templates, templateCalories, quickQuery]);
+    return [
+      ...filteredFoods.map((food) => ({
+        type: "food",
+        id: food.FoodId,
+        name: food.FoodName,
+        hint: food.ServingDescription
+          ? `${food.ServingDescription} · ${food.CaloriesPerServing || 0} kcal`
+          : food.CaloriesPerServing
+            ? `${food.CaloriesPerServing} kcal`
+            : "",
+        food
+      })),
+      ...filteredTemplates.map((template) => ({
+        type: "template",
+        id: template.Template.MealTemplateId,
+        name: template.Template.TemplateName,
+        hint: templateCalories[template.Template.MealTemplateId]
+          ? `${templateCalories[template.Template.MealTemplateId]} kcal`
+          : "",
+        template
+      }))
+    ];
+  }, [filteredFoods, filteredTemplates, searchTab, templateCalories]);
 
-  const quickRecentItems = useMemo(() => {
-    const combined = [...quickFoodItems, ...quickMealItems];
-    combined.sort((a, b) => b.createdAt - a.createdAt);
-    return combined.slice(0, 20);
-  }, [quickFoodItems, quickMealItems]);
-
-  const quickAllItems = useMemo(() => {
-    const combined = [...quickFoodItems, ...quickMealItems];
-    combined.sort((a, b) => a.name.localeCompare(b.name));
-    return combined;
-  }, [quickFoodItems, quickMealItems]);
-
-  const quickItemMap = useMemo(() => {
-    const map = new Map();
-    quickAllItems.forEach((item) => {
-      map.set(`${item.type}:${item.id}`, item);
-    });
-    return map;
-  }, [quickAllItems]);
-
-  const quickSelectedSet = useMemo(
-    () => new Set(quickSelectedKeys),
-    [quickSelectedKeys]
-  );
-
-  const getQuickQuantity = (key) => quickQuantities[key] ?? "1";
-  const updateQuickQuantity = (key, value) => {
-    setQuickQuantities((prev) => ({ ...prev, [key]: value }));
-  };
-
-  const quickItems =
-    quickTab === "all"
-      ? quickAllItems
-      : quickTab === "foods"
-        ? quickFoodItems
-        : quickTab === "meals"
-          ? quickMealItems
-          : quickRecentItems;
-
-  const selectedLabel = useMemo(() => {
-    if (!form.SelectedId) {
-      return "Select food or meal";
-    }
-    if (isFoodSelected) {
-      const food = foods.find((item) => item.FoodId === selectedValue);
-      return food?.FoodName || "Select food or meal";
-    }
-    if (isTemplateSelected) {
-      const template = templates.find(
-        (item) => item.Template.MealTemplateId === selectedValue
-      );
-      return template?.Template.TemplateName || "Select food or meal";
-    }
-    return "Select food or meal";
-  }, [form.SelectedId, foods, isFoodSelected, isTemplateSelected, selectedValue, templates]);
-
-  const selectedFood = useMemo(() => {
-    if (!isFoodSelected) {
-      return null;
-    }
-    return foods.find((food) => food.FoodId === selectedValue) || null;
-  }, [foods, isFoodSelected, selectedValue]);
+  const selectedFood = isFoodSelected
+    ? foods.find((item) => item.FoodId === selectedValue)
+    : null;
+  const selectedTemplate = isTemplateSelected
+    ? templates.find((item) => item.Template.MealTemplateId === selectedValue)
+    : null;
 
   const selectedOption = portionOptions.find((option) => option.OptionKey === selectedPortion) || null;
-  const isCustomPortion = selectedPortion === "custom";
-  const overrideAmount = portionOverride.BaseAmount ? Number(portionOverride.BaseAmount) : null;
-  const overrideUnit = portionOverride.BaseUnit || portionBaseUnit;
-  const effectiveBaseAmount = overrideAmount ?? selectedOption?.BaseAmount ?? null;
-  const effectiveBaseUnit = overrideAmount ? overrideUnit : selectedOption?.BaseUnit;
-  const effectiveLabel = isCustomPortion
-    ? portionOverride.Label.trim() || "custom"
-    : selectedOption?.Label || "serving";
+  const effectiveBaseAmount = selectedOption?.BaseAmount ?? null;
+  const effectiveBaseUnit = selectedOption?.BaseUnit || null;
+  const effectiveLabel = selectedOption?.Label || "serving";
   const quantityValue = Number(form.Quantity || 0);
-  const equivalentValue =
-    Number.isFinite(quantityValue) && effectiveBaseAmount
-      ? quantityValue * Number(effectiveBaseAmount)
-      : null;
-  const estimatedCalories = useMemo(
-    () =>
-      selectedFood && equivalentValue && effectiveBaseUnit
-        ? EstimateCalories(selectedFood, equivalentValue, effectiveBaseUnit)
-        : null,
-    [selectedFood, equivalentValue, effectiveBaseUnit]
-  );
-  const estimatedNutrition = useMemo(
-    () =>
-      selectedFood && equivalentValue && effectiveBaseUnit
-        ? EstimateNutrition(selectedFood, equivalentValue, effectiveBaseUnit)
-        : null,
-    [selectedFood, equivalentValue, effectiveBaseUnit]
-  );
-  const foodDetailRows = useMemo(() => {
-    if (!estimatedNutrition) {
-      return [];
-    }
-    const targets = dailyTargets || {};
-    const proteinTarget = targets.ProteinTargetMax ?? targets.ProteinTargetMin ?? 0;
-    return [
-      {
-        label: "Calories",
-        value: estimatedNutrition.calories,
-        unit: "kcal",
-        target: targets.DailyCalorieTarget ?? 0
-      },
-      {
-        label: "Protein",
-        value: estimatedNutrition.protein,
-        unit: "g",
-        target: proteinTarget
-      },
-      {
-        label: "Carbs",
-        value: estimatedNutrition.carbs,
-        unit: "g",
-        target: targets.CarbsTarget ?? 0
-      },
-      {
-        label: "Fat",
-        value: estimatedNutrition.fat,
-        unit: "g",
-        target: targets.FatTarget ?? 0
-      },
-      {
-        label: "Fibre",
-        value: estimatedNutrition.fibre,
-        unit: "g",
-        target: targets.FibreTarget ?? 0
-      }
-    ].map((row) => {
-      const percent =
-        row.target > 0 ? Math.round((Number(row.value) / Number(row.target)) * 100) : null;
-      return {
-        ...row,
-        percentLabel: percent === null ? "No target" : `${percent}% of daily target`
-      };
-    });
-  }, [dailyTargets, estimatedNutrition]);
-  const editCalories = useMemo(() => {
-    if (!form.SelectedId || !Number.isFinite(quantityValue)) {
+  const estimatedCalories = useMemo(() => {
+    if (!selectedFood || !effectiveBaseAmount || !effectiveBaseUnit) {
       return null;
     }
-    if (isFoodSelected) {
-      if (Number.isFinite(estimatedCalories)) {
-        return estimatedCalories;
-      }
-      const base = Number(selectedFood?.CaloriesPerServing || 0);
-      return Math.round(base * quantityValue);
+    return EstimateCalories(selectedFood, effectiveBaseAmount * quantityValue, effectiveBaseUnit);
+  }, [effectiveBaseAmount, effectiveBaseUnit, quantityValue, selectedFood]);
+  const estimatedNutrition = useMemo(() => {
+    if (!selectedFood || !effectiveBaseAmount || !effectiveBaseUnit) {
+      return null;
     }
-    if (isTemplateSelected) {
-      const base = Number(templateCalories[selectedValue] || 0);
-      return Math.round(base * quantityValue);
-    }
-    return null;
-  }, [
-    estimatedCalories,
-    form.SelectedId,
-    isFoodSelected,
-    isTemplateSelected,
-    quantityValue,
-    selectedFood,
-    selectedValue,
-    templateCalories
-  ]);
-
-  const onFormChange = (event) => {
-    const { name, value } = event.target;
-    if (name === "MealType") {
-      setMealTypeTouched(true);
-    }
-    setForm((prev) => ({ ...prev, [name]: value }));
-  };
-
-  const onSelectItem = (event, type, id) => {
-    event.preventDefault();
-    event.stopPropagation();
-    setForm((prev) => ({ ...prev, SelectedId: `${type}:${id}` }));
-    setSelectorOpen(false);
-    setFoodSearch("");
-    requestAnimationFrame(() => {
-      quantityInputRef.current?.focus();
-    });
-  };
-
-  const selectQuickItem = (type, id) => {
-    const nextSelected = `${type}:${id}`;
-    setForm((prev) => ({ ...prev, SelectedId: nextSelected }));
-    setSelectorOpen(false);
-    setFoodSearch("");
-    setQuickSearch("");
-    setQuickPickerOpen(false);
-    requestAnimationFrame(() => {
-      quantityInputRef.current?.focus();
-    });
-  };
-
-  const closeQuickPicker = () => {
-    setQuickPickerOpen(false);
-    setShowForm(false);
-    setEditingEntryId(null);
-    setEditContext(null);
-    setForm((prev) => ({
-      ...prev,
-      SelectedId: "",
-      Quantity: "1",
-      EntryNotes: "",
-      MealType: prev.MealType || GetDefaultMealType()
-    }));
-    setFoodSearch("");
-    setQuickSearch("");
-    setSelectedPortion("");
-    setPortionOptions([]);
-    setPortionBaseUnit("each");
-    setPortionOverride({
-      Label: "",
-      BaseAmount: "",
-      BaseUnit: "",
-      SaveAsDefault: false
-    });
-    setDetailsOpen(false);
-    setQuickSelectedKeys([]);
-    setQuickQuantities({});
-    setShareTargetUserId("");
-  };
-
-  const toggleQuickSelection = (key) => {
-    setQuickSelectedKeys((prev) => {
-      if (prev.includes(key)) {
-        setQuickQuantities((quantities) => {
-          const next = { ...quantities };
-          delete next[key];
-          return next;
-        });
-        return prev.filter((item) => item !== key);
-      }
-      setQuickQuantities((quantities) =>
-        Object.prototype.hasOwnProperty.call(quantities, key)
-          ? quantities
-          : { ...quantities, [key]: "1" }
-      );
-      return [...prev, key];
-    });
-  };
-
-  const logQuickSelections = async () => {
-    if (!quickSelectedKeys.length) {
-      return;
-    }
-    const invalidKey = quickSelectedKeys.find((key) => {
-      const value = Number(getQuickQuantity(key));
-      return !Number.isFinite(value) || value <= 0;
-    });
-    if (invalidKey) {
-      setStatus("error");
-      setError("Enter a valid amount for each selected item.");
-      return;
-    }
-    try {
-      setStatus("saving");
-      setError("");
-      const log = await ensureDailyLog();
-      const maxSort = entries.length ? Math.max(...entries.map((entry) => entry.SortOrder || 0)) + 1 : 0;
-      const mealType = form.MealType || GetDefaultMealType();
-      const shareUserId = Number(shareTargetUserId || 0);
-      const shouldShare = Number.isFinite(shareUserId) && shareUserId > 0;
-
-      const payloads = quickSelectedKeys
-        .map((key, index) => {
-          const item = quickItemMap.get(key);
-          if (!item) {
-            return null;
-          }
-          const quantity = Number(getQuickQuantity(key));
-          if (item.type === "meal") {
-            return {
-              DailyLogId: log.DailyLogId,
-              MealType: mealType,
-              FoodId: null,
-              MealTemplateId: item.id,
-              Quantity: quantity,
-              PortionOptionId: null,
-              PortionLabel: "serving",
-              PortionBaseUnit: "each",
-              PortionBaseAmount: 1,
-              EntryNotes: null,
-              SortOrder: maxSort + index
-            };
-          }
-          const food = foodsById[item.id];
-          if (!food) {
-            return null;
-          }
-          const base = ResolveServingBase(food);
-          return {
-            DailyLogId: log.DailyLogId,
-            MealType: mealType,
-            FoodId: item.id,
-            MealTemplateId: null,
-            Quantity: quantity,
-            PortionOptionId: null,
-            PortionLabel: "serving",
-            PortionBaseUnit: base.unit,
-            PortionBaseAmount: base.amount,
-            EntryNotes: null,
-            SortOrder: maxSort + index
-          };
-        })
-        .filter(Boolean);
-
-      await Promise.all(payloads.map((payload) => CreateMealEntry(payload)));
-      if (shouldShare) {
-        const sharePayloads = payloads.map((payload) => ({
-          LogDate: logDate,
-          TargetUserId: shareUserId,
-          MealType: payload.MealType,
-          FoodId: payload.FoodId,
-          MealTemplateId: payload.MealTemplateId,
-          Quantity: payload.Quantity,
-          PortionOptionId: payload.PortionOptionId,
-          PortionLabel: payload.PortionLabel,
-          PortionBaseUnit: payload.PortionBaseUnit,
-          PortionBaseAmount: payload.PortionBaseAmount,
-          EntryNotes: payload.EntryNotes || null,
-          ScheduleSlotId: null
-        }));
-        await Promise.all(sharePayloads.map((payload) => ShareMealEntry(payload)));
-      }
-      await loadData(logDate);
-      setQuickSelectedKeys([]);
-      setQuickQuantities({});
-      setQuickPickerOpen(false);
-      setShowForm(false);
-    } catch (err) {
-      setStatus("error");
-      setError(err?.message || "Failed to log selections");
-    }
-  };
-
-  const onCancelEdit = () => {
-    setEditingEntryId(null);
-    setShowForm(false);
-    setEditContext(null);
-    setForm((prev) => ({
-      ...prev,
-      SelectedId: "",
-      Quantity: "1",
-      EntryNotes: "",
-      MealType: prev.MealType || GetDefaultMealType()
-    }));
-    setFoodSearch("");
-    setSelectedPortion("");
-    setPortionOptions([]);
-    setPortionBaseUnit("each");
-    setPortionOverride({
-      Label: "",
-      BaseAmount: "",
-      BaseUnit: "",
-      SaveAsDefault: false
-    });
-    setDetailsOpen(false);
-    setShowFoodDetails(false);
-    setShowNotes(false);
-    setQuickQuantities({});
-    setShareTargetUserId("");
-  };
-
-  const openAddEntry = () => {
-    setEditingEntryId(null);
-    setEditContext(null);
-    setForm((prev) => ({
-      ...prev,
-      SelectedId: "",
-      Quantity: "1",
-      EntryNotes: "",
-      MealType: prev.MealType || GetDefaultMealType()
-    }));
-    setFoodSearch("");
-    setQuickSearch("");
-    setSelectedPortion("");
-    setPortionOptions([]);
-    setPortionBaseUnit("each");
-    setPortionOverride({
-      Label: "",
-      BaseAmount: "",
-      BaseUnit: "",
-      SaveAsDefault: false
-    });
-    setDetailsOpen(false);
-    setShowFoodDetails(false);
-    setShowNotes(false);
-    setQuickSelectedKeys([]);
-    setQuickQuantities({});
-    setShowForm(true);
-    setQuickPickerOpen(true);
-  };
-
-  const onDeleteEditingEntry = () => {
-    if (!editingEntryId) {
-      return;
-    }
-    const entry = entries.find((item) => item.MealEntryId === editingEntryId);
-    if (entry) {
-      scheduleDelete(entry);
-    }
-    setEditingEntryId(null);
-    setShowForm(false);
-  };
-
-  const onPortionOverrideChange = (event) => {
-    const { name, value, type, checked } = event.target;
-    setPortionOverride((prev) => ({
-      ...prev,
-      [name]: type === "checkbox" ? checked : value
-    }));
-  };
-
-  const onAdjustQuantity = (delta) => {
-    const current = Number(form.Quantity);
-    const baseValue = Number.isFinite(current) ? current : 0;
-    const nextValue = Math.max(0.25, Math.round((baseValue + delta) * 100) / 100);
-    setForm((prev) => ({ ...prev, Quantity: String(nextValue) }));
-  };
-
-  const onSelectPortion = (event) => {
-    const value = event.target.value;
-    setSelectedPortion(value);
-    setPortionOverride((prev) => ({
-      ...prev,
-      BaseAmount: "",
-      Label: value === "custom" ? prev.Label : "",
-      SaveAsDefault: false
-    }));
-  };
-
-  const onEditEntry = (entry) => {
-    const nextSelectedId = entry.FoodId
-      ? `food:${entry.FoodId}`
-      : entry.MealTemplateId
-      ? `template:${entry.MealTemplateId}`
-      : "";
-    setShowForm(true);
-    setEditingEntryId(entry.MealEntryId);
-    setSelectorOpen(false);
-    setMealTypeTouched(true);
-    setForm((prev) => ({
-      ...prev,
-      MealType: entry.MealType,
-      SelectedId: nextSelectedId,
-      Quantity: String(entry.DisplayQuantity ?? entry.Quantity ?? 1),
-      EntryNotes: entry.EntryNotes || ""
-    }));
-    requestAnimationFrame(() => {
-      quantityInputRef.current?.focus();
-    });
-    setEditContext({
-      SelectedId: nextSelectedId,
-      PortionOptionId: entry.PortionOptionId,
-      PortionLabel: entry.PortionLabel,
-      PortionBaseUnit: entry.PortionBaseUnit,
-      PortionBaseAmount: entry.PortionBaseAmount
-    });
-    setDetailsOpen(false);
-    setShowFoodDetails(false);
-    setShowNotes(false);
-  };
-
-  useEffect(() => {
-    const editEntryId = searchParams.get("edit");
-    if (!editEntryId) {
-      handledEditRef.current = null;
-      return;
-    }
-    if (handledEditRef.current === editEntryId) {
-      return;
-    }
-    const entry = entries.find((item) => item.MealEntryId === editEntryId);
-    if (!entry) {
-      return;
-    }
-    onEditEntry(entry);
-    handledEditRef.current = editEntryId;
-  }, [entries, searchParams]);
+    return EstimateNutrition(selectedFood, effectiveBaseAmount * quantityValue, effectiveBaseUnit);
+  }, [effectiveBaseAmount, effectiveBaseUnit, quantityValue, selectedFood]);
 
   const ensureDailyLog = async () => {
     if (dailyLog) {
@@ -1330,8 +791,114 @@ const Log = ({ InitialDate, InitialAddMode, InitialEditId }) => {
     return created.DailyLog;
   };
 
-  const onSubmit = async (event) => {
-    event.preventDefault();
+  const startMealFlow = (mealType, backTarget = "slots") => {
+    setActiveMealType(mealType);
+    setReturnView(backTarget);
+    setView("add");
+    setSearchQuery("");
+    setSearchTab("search");
+    setDescribeOpen(false);
+    setDescribeText("");
+    setDescribeResult(null);
+    setForm((prev) => ({
+      ...prev,
+      MealType: mealType,
+      SelectedId: "",
+      Quantity: "1",
+      EntryNotes: ""
+    }));
+    setSheetOpen(false);
+    setAdvancedOpen(false);
+    setEditingEntryId(null);
+    setEditContext(null);
+    setShowNotes(false);
+  };
+
+  const openSummary = (mealType) => {
+    setActiveMealType(mealType);
+    setView("summary");
+  };
+
+  const handleSelectItem = (item) => {
+    setForm((prev) => ({
+      ...prev,
+      MealType: activeMealType,
+      SelectedId: `${item.type}:${item.id}`,
+      Quantity: "1",
+      EntryNotes: ""
+    }));
+    setEditingEntryId(null);
+    setEditContext(null);
+    setSheetOpen(true);
+    setAdvancedOpen(false);
+    setShowNotes(false);
+    setShareTargetUserId("");
+  };
+
+  const onAdjustQuantity = (delta) => {
+    const current = Number(form.Quantity || 0);
+    const nextValue = Math.max(0.25, Number.isFinite(current) ? current + delta : 1);
+    setForm((prev) => ({ ...prev, Quantity: String(nextValue) }));
+  };
+
+  const buildPortionPayload = () => {
+    if (isTemplateSelected) {
+      return {
+        PortionOptionId: null,
+        PortionLabel: "serving",
+        PortionBaseUnit: "each",
+        PortionBaseAmount: 1
+      };
+    }
+    if (!effectiveBaseAmount || !effectiveBaseUnit) {
+      return null;
+    }
+    return {
+      PortionOptionId: selectedOption?.PortionOptionId || null,
+      PortionLabel: effectiveLabel || "serving",
+      PortionBaseUnit: effectiveBaseUnit,
+      PortionBaseAmount: Number(effectiveBaseAmount)
+    };
+  };
+
+  const shareSlotEntries = async () => {
+    if (!shareSummaryUserId) {
+      setError("Choose someone to share with.");
+      return;
+    }
+    if (!slotEntries.length) {
+      setError("No items to share yet.");
+      return;
+    }
+    try {
+      setStatus("saving");
+      setError("");
+      const targetId = Number(shareSummaryUserId);
+      for (const entry of slotEntries) {
+        await ShareMealEntry({
+          LogDate: logDate,
+          TargetUserId: targetId,
+          MealType: entry.MealType,
+          FoodId: entry.FoodId || null,
+          MealTemplateId: entry.MealTemplateId || null,
+          Quantity: Number(entry.Quantity || 1),
+          PortionOptionId: entry.PortionOptionId || null,
+          PortionLabel: entry.PortionLabel || "serving",
+          PortionBaseUnit: entry.PortionBaseUnit || "each",
+          PortionBaseAmount: Number(entry.PortionBaseAmount || 1),
+          EntryNotes: entry.EntryNotes || null,
+          ScheduleSlotId: null
+        });
+      }
+      setShareSummaryUserId("");
+      setStatus("ready");
+    } catch (err) {
+      setStatus("error");
+      setError(err?.message || "Failed to share items");
+    }
+  };
+
+  const submitEntry = async ({ closeToSummary = true } = {}) => {
     if (!form.SelectedId) {
       setError("Select a food or meal.");
       return;
@@ -1341,689 +908,931 @@ const Log = ({ InitialDate, InitialAddMode, InitialEditId }) => {
       setError("Amount must be greater than zero.");
       return;
     }
+    const portionPayload = buildPortionPayload();
+    if (!portionPayload) {
+      setError("Select a serving size.");
+      return;
+    }
     try {
       setStatus("saving");
       setError("");
       const log = await ensureDailyLog();
-      const [type, id] = form.SelectedId.split(":");
-      const maxSort = entries.length ? Math.max(...entries.map((entry) => entry.SortOrder || 0)) + 1 : 0;
-      const isFoodEntry = type === "food";
-
-      let portionPayload = {
-        PortionOptionId: null,
-        PortionLabel: "serving",
-        PortionBaseUnit: "each",
-        PortionBaseAmount: 1
+      const payloadBase = {
+        MealType: form.MealType,
+        Quantity: quantity,
+        ...portionPayload,
+        EntryNotes: form.EntryNotes || null
       };
-
-      if (isFoodEntry) {
-        if (!effectiveBaseAmount || !effectiveBaseUnit) {
-          setStatus("error");
-          setError("Select a serving size.");
-          return;
-        }
-        portionPayload = {
-          PortionOptionId: selectedOption?.PortionOptionId || null,
-          PortionLabel: effectiveLabel || "serving",
-          PortionBaseUnit: effectiveBaseUnit,
-          PortionBaseAmount: Number(effectiveBaseAmount)
-        };
-
-        if (portionOverride.SaveAsDefault && overrideAmount) {
-          await CreatePortionOption({
-            FoodId: id,
-            Label: portionOverride.Label.trim() || portionPayload.PortionLabel,
-            BaseUnit: portionPayload.PortionBaseUnit,
-            BaseAmount: portionPayload.PortionBaseAmount,
-            IsDefault: true,
-            SortOrder: 0
-          });
-        }
-      }
-
+      const [type, id] = form.SelectedId.split(":");
       if (editingEntryId) {
-        const payload = {
-          MealType: form.MealType,
-          Quantity: quantity,
-          ...portionPayload,
-          EntryNotes: form.EntryNotes || null
-        };
-        await UpdateMealEntry(editingEntryId, payload);
-        setShowForm(false);
+        await UpdateMealEntry(editingEntryId, payloadBase);
       } else {
-        const payload = {
+        const maxSort = entries.length
+          ? Math.max(...entries.map((entry) => entry.SortOrder || 0)) + 1
+          : 0;
+        await CreateMealEntry({
           DailyLogId: log.DailyLogId,
           MealType: form.MealType,
-          FoodId: isFoodEntry ? id : null,
+          FoodId: type === "food" ? id : null,
           MealTemplateId: type === "template" ? id : null,
           Quantity: quantity,
           ...portionPayload,
           EntryNotes: form.EntryNotes || null,
           SortOrder: maxSort
-        };
-        await CreateMealEntry(payload);
-        setShowForm(false);
+        });
       }
+
+      const shareUserId = Number(shareTargetUserId || 0);
+      if (!editingEntryId && Number.isFinite(shareUserId) && shareUserId > 0) {
+        await ShareMealEntry({
+          LogDate: logDate,
+          TargetUserId: shareUserId,
+          MealType: form.MealType,
+          FoodId: type === "food" ? id : null,
+          MealTemplateId: type === "template" ? id : null,
+          Quantity: quantity,
+          ...portionPayload,
+          EntryNotes: form.EntryNotes || null,
+          ScheduleSlotId: null
+        });
+      }
+
       await loadData(logDate);
-      setForm((prev) => ({
-        ...prev,
-        SelectedId: "",
-        Quantity: "1",
-        EntryNotes: ""
-      }));
-      setFoodSearch("");
-      setSelectedPortion("");
-      setPortionOptions([]);
-      setPortionBaseUnit("each");
-      setPortionOverride({
-        Label: "",
-        BaseAmount: "",
-        BaseUnit: "",
-        SaveAsDefault: false
-      });
-      setDetailsOpen(false);
+      setSheetOpen(false);
+      setAdvancedOpen(false);
       setEditingEntryId(null);
       setEditContext(null);
+      setShareTargetUserId("");
+      if (closeToSummary) {
+        openSummary(form.MealType);
+      }
     } catch (err) {
       setStatus("error");
       setError(err?.message || "Failed to save entry");
     }
   };
 
-  const scheduleDelete = (entry) => {
-    const entryId = entry.MealEntryId;
-    if (pendingDeletesRef.current.has(entryId)) {
-      return;
-    }
-    const entryIndex = entries.findIndex((item) => item.MealEntryId === entryId);
-    setEntries((prev) => prev.filter((item) => item.MealEntryId !== entryId));
-    const timeoutId = window.setTimeout(async () => {
-      try {
-        await DeleteMealEntry(entryId);
-      } catch (err) {
-        setError(err?.message || "Failed to delete entry");
-        await loadData(logDate);
-      } finally {
-        pendingDeletesRef.current.delete(entryId);
-        setToast((prev) => (prev?.entryId === entryId ? null : prev));
-      }
-    }, 4500);
-    pendingDeletesRef.current.set(entryId, { entry, entryIndex, timeoutId });
-    setToast({ entryId, message: "Entry deleted" });
+  const onEditEntry = (entry) => {
+    setEditingEntryId(entry.MealEntryId);
+    setReturnView("summary");
+    setForm({
+      MealType: entry.MealType,
+      SelectedId: entry.FoodId
+        ? `food:${entry.FoodId}`
+        : entry.MealTemplateId
+          ? `template:${entry.MealTemplateId}`
+          : "",
+      Quantity: String(entry.DisplayQuantity ?? entry.Quantity ?? 1),
+      EntryNotes: entry.EntryNotes || ""
+    });
+    setEditContext({
+      SelectedId: entry.FoodId
+        ? `food:${entry.FoodId}`
+        : entry.MealTemplateId
+          ? `template:${entry.MealTemplateId}`
+          : "",
+      PortionOptionId: entry.PortionOptionId,
+      PortionLabel: entry.PortionLabel,
+      PortionBaseUnit: entry.PortionBaseUnit,
+      PortionBaseAmount: entry.PortionBaseAmount
+    });
+    setAdvancedOpen(true);
+    setSheetOpen(true);
+    setShowNotes(false);
+    setShareTargetUserId("");
+    setView("summary");
   };
 
-  const undoDelete = () => {
-    if (!toast?.entryId) {
+  const onDeleteEntry = async () => {
+    if (!editingEntryId) {
       return;
     }
-    const pending = pendingDeletesRef.current.get(toast.entryId);
-    if (!pending) {
-      setToast(null);
+    try {
+      setStatus("saving");
+      setError("");
+      await DeleteMealEntry(editingEntryId);
+      await loadData(logDate);
+      setEditingEntryId(null);
+      setSheetOpen(false);
+      setAdvancedOpen(false);
+      setView("summary");
+    } catch (err) {
+      setStatus("error");
+      setError(err?.message || "Failed to delete entry");
+    }
+  };
+
+  const runDescribeMeal = async () => {
+    if (!describeText.trim()) {
+      setError("Describe the meal first.");
       return;
     }
-    clearTimeout(pending.timeoutId);
-    pendingDeletesRef.current.delete(toast.entryId);
-    setEntries((prev) => {
-      const next = [...prev];
-      const index = pending.entryIndex >= 0 ? pending.entryIndex : 0;
-      next.splice(Math.min(index, next.length), 0, pending.entry);
-      return next;
-    });
-    setToast(null);
-  };
-
-  const groupedEntries = useMemo(() => GroupEntriesByMeal(entries), [entries]);
-  const orderedGroups = useMemo(() => {
-    const ordered = MealOrder.filter((meal) => groupedEntries[meal]?.length).map((meal) => ({
-      meal,
-      items: groupedEntries[meal]
-    }));
-    Object.entries(groupedEntries).forEach(([meal, items]) => {
-      if (!MealOrder.includes(meal)) {
-        ordered.push({ meal, items });
-      }
-    });
-    return ordered;
-  }, [groupedEntries]);
-  const slotTotals = useMemo(() => {
-    const totals = {};
-    Object.entries(groupedEntries).forEach(([meal, items]) => {
-      totals[meal] = items.reduce((sum, entry) => sum + CalculateEntryCalories(entry), 0);
-    });
-    return totals;
-  }, [groupedEntries]);
-  const macroRows = useMemo(() => {
-    if (!dailyTotals || !dailyTargets) {
-      return [];
+    try {
+      setDescribeStatus("loading");
+      setError("");
+      const result = await ParseMealTemplateText({ Text: describeText.trim() });
+      setDescribeResult(result);
+      setDescribeStatus("ready");
+    } catch (err) {
+      setDescribeStatus("error");
+      setError(err?.message || "Failed to parse meal");
     }
-    const buildTargetRow = ({
-      label,
-      value,
-      unit,
-      target,
-      minTarget,
-      maxTarget
-    }) => {
-      const min = minTarget ?? 0;
-      const max = maxTarget ?? 0;
-      const rangeTarget = max || min;
-      const singleTarget = target ?? 0;
-      const effectiveTarget = rangeTarget || singleTarget;
-      if (!effectiveTarget || effectiveTarget <= 0) {
-        return null;
-      }
-      const percent = Math.round((value / effectiveTarget) * 100);
-      const percentClamped = Math.min(100, Math.max(0, percent));
-      const diffPercent = (current, goal) =>
-        goal > 0 ? Math.abs((current - goal) / goal) * 100 : 0;
-      const resolveTone = (difference) => {
-        if (difference <= 5) {
-          return "is-on";
-        }
-        if (difference <= 15) {
-          return "is-near";
-        }
-        return "is-far";
-      };
-      let percentLabel = `${percent}% of target`;
-      let deltaLabel = "";
-      let barClass = resolveTone(diffPercent(value, effectiveTarget));
-      if (rangeTarget) {
-        if (max) {
-          percentLabel = `${percent}% of max`;
-        } else if (min) {
-          percentLabel = `${percent}% of min`;
-        }
-        if (min && value < min) {
-          deltaLabel = `${FormatAmount(min - value)}${unit} under min`;
-          barClass = resolveTone(diffPercent(value, min));
-        } else if (max && value > max) {
-          deltaLabel = `${FormatAmount(value - max)}${unit} over max`;
-          barClass = resolveTone(diffPercent(value, max));
-        } else {
-          deltaLabel = "Within range";
-          barClass = "is-on";
-        }
-      } else {
-        const delta = value - effectiveTarget;
-        deltaLabel =
-          delta > 0
-            ? `${FormatAmount(delta)}${unit} over`
-            : `${FormatAmount(Math.abs(delta))}${unit} under`;
-      }
-      return {
-        label,
-        value,
-        unit,
-        percentLabel,
-        percentClamped,
-        deltaLabel,
-        barClass
-      };
-    };
-
-    return [
-      buildTargetRow({
-        label: "Calories",
-        value: dailyTotals.TotalCalories,
-        unit: "kcal",
-        target: dailyTargets.DailyCalorieTarget ?? 0
-      }),
-      buildTargetRow({
-        label: "Protein",
-        value: dailyTotals.TotalProtein,
-        unit: "g",
-        minTarget: dailyTargets.ProteinTargetMin ?? 0,
-        maxTarget: dailyTargets.ProteinTargetMax ?? 0
-      }),
-      buildTargetRow({
-        label: "Carbs",
-        value: dailyTotals.TotalCarbs,
-        unit: "g",
-        target: dailyTargets.CarbsTarget ?? 0
-      }),
-      buildTargetRow({
-        label: "Fat",
-        value: dailyTotals.TotalFat,
-        unit: "g",
-        target: dailyTargets.FatTarget ?? 0
-      }),
-      buildTargetRow({
-        label: "Fibre",
-        value: dailyTotals.TotalFibre,
-        unit: "g",
-        target: dailyTargets.FibreTarget ?? 0
-      }),
-      buildTargetRow({
-        label: "Saturated fat",
-        value: dailyTotals.TotalSaturatedFat,
-        unit: "g",
-        target: dailyTargets.SaturatedFatTarget ?? 0
-      }),
-      buildTargetRow({
-        label: "Sugar",
-        value: dailyTotals.TotalSugar,
-        unit: "g",
-        target: dailyTargets.SugarTarget ?? 0
-      }),
-      buildTargetRow({
-        label: "Sodium",
-        value: dailyTotals.TotalSodium,
-        unit: "g",
-        target: dailyTargets.SodiumTarget ?? 0
-      })
-    ].filter(Boolean);
-  }, [dailyTotals, dailyTargets]);
-  const loggedDaysSet = useMemo(() => new Set(loggedDays), [loggedDays]);
-  const monthCells = useMemo(() => BuildMonthGrid(pickerMonth), [pickerMonth]);
-  const dayLabel = logDate === today ? "Today" : FormatDayLabel(logDate);
-  const parsedDate = ParseIsoDate(logDate);
-  const previousDate = FormatDate(
-    new Date(parsedDate.getFullYear(), parsedDate.getMonth(), parsedDate.getDate() - 1)
-  );
-  const nextDate = FormatDate(
-    new Date(parsedDate.getFullYear(), parsedDate.getMonth(), parsedDate.getDate() + 1)
-  );
-  const isLatestDate = logDate >= today;
-  const currentMonth = today.slice(0, 7);
-  const nextMonth = ShiftMonth(pickerMonth, 1);
-  const isNextMonthDisabled = nextMonth > currentMonth;
-  const handleLogDateChange = (value) => {
-    setLogDate(value);
-    setDatePickerOpen(false);
   };
-  const logForm = (
-    <form className="health-log-form" onSubmit={onSubmit}>
-      <label>
-        Meal slot
-        <select name="MealType" value={form.MealType} onChange={onFormChange}>
-          <option value="Breakfast">Breakfast</option>
-          <option value="Snack1">Snack 1</option>
-          <option value="Lunch">Lunch</option>
-          <option value="Snack2">Snack 2</option>
-          <option value="Dinner">Dinner</option>
-          <option value="Snack3">Snack 3</option>
-        </select>
-      </label>
-      <label>
-        Food or meal
-        <div className="health-select" ref={selectorRef}>
-          <button
-            type="button"
-            className="health-select-trigger"
-            onClick={() => setSelectorOpen((prev) => !prev)}
-            aria-expanded={selectorOpen}
-            disabled={!!editingEntryId}
-          >
-            <span>{selectedLabel}</span>
-            <Icon name={selectorOpen ? "chevronDown" : "chevronRight"} className="icon" />
-          </button>
-          {selectorOpen ? (
-            <div className="health-select-menu">
-              <div className="health-select-search">
-                <Icon name="search" className="icon" />
-                <input
-                  ref={searchInputRef}
-                  type="text"
-                  value={foodSearch}
-                  onChange={(event) => setFoodSearch(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      event.preventDefault();
-                    }
-                  }}
-                  placeholder="Search foods or meals"
-                />
-              </div>
-              <div className="health-search-meta">
-                Showing {filteredFoods.length} foods and {filteredTemplates.length} meals
-              </div>
-              <div className="health-select-group">
-                <span className="health-select-heading">Foods</span>
-                {filteredFoods.length ? (
-                  filteredFoods.map((food) => (
-                    <button
-                      key={food.FoodId}
-                      type="button"
-                      className="health-select-item"
-                      onClick={(event) => onSelectItem(event, "food", food.FoodId)}
-                    >
-                      {food.FoodName}
-                    </button>
-                  ))
-                ) : (
-                  <span className="health-select-empty">No foods found.</span>
-                )}
-              </div>
-              <div className="health-select-group">
-                <span className="health-select-heading">Meals</span>
-                {filteredTemplates.length ? (
-                  filteredTemplates.map((template) => (
-                    <button
-                      key={template.Template.MealTemplateId}
-                      type="button"
-                      className="health-select-item"
-                      onClick={(event) =>
-                        onSelectItem(event, "template", template.Template.MealTemplateId)
-                      }
-                    >
-                      {template.Template.TemplateName}
-                    </button>
-                  ))
-                ) : (
-                  <span className="health-select-empty">No meals found.</span>
-                )}
-              </div>
-            </div>
-          ) : null}
-        </div>
-      </label>
-      <label>
-        Amount
-        <div className="health-stepper">
-          <button
-            type="button"
-            className="icon-button is-secondary"
-            aria-label="Decrease amount"
-            onClick={() => onAdjustQuantity(-0.25)}
-          >
-            -
-          </button>
-          <input
-            ref={quantityInputRef}
-            type="number"
-            name="Quantity"
-            min="0.25"
-            step="any"
-            value={form.Quantity}
-            onChange={onFormChange}
-          />
-          <button
-            type="button"
-            className="icon-button is-secondary"
-            aria-label="Increase amount"
-            onClick={() => onAdjustQuantity(0.25)}
-          >
-            +
-          </button>
-        </div>
-      </label>
-      <label>
-        Serving size
-        <select value={selectedPortion} onChange={onSelectPortion} disabled={!form.SelectedId}>
-          <option value="">Select</option>
-          {portionOptions.map((option) => (
-            <option key={option.OptionKey} value={option.OptionKey}>
-              {option.Label} ({FormatAmount(option.BaseAmount)} {option.BaseUnit})
-            </option>
-          ))}
-          {isFoodSelected ? <option value="custom">Custom...</option> : null}
-        </select>
-      </label>
-      {isFoodSelected && effectiveBaseAmount && effectiveBaseUnit ? (
-        <p className="health-equivalent health-form-span">
-          Logs: {FormatAmount(equivalentValue)} {effectiveBaseUnit}
-          {Number.isFinite(estimatedCalories)
-            ? ` | Estimated calories: ${estimatedCalories} kcal`
-            : ""}
-        </p>
-      ) : null}
-      <div className="health-form-span">
-        <button
-          type="button"
-          className="button-secondary health-details-toggle"
-          onClick={() => setDetailsOpen((prev) => !prev)}
-        >
-          <Icon name={detailsOpen ? "chevronDown" : "chevronRight"} className="icon" />
-          {detailsOpen ? "Hide options" : "More options"}
-        </button>
-        {detailsOpen ? (
-          <div className="health-details-panel">
-            {estimatedNutrition ? (
-              <div className="health-nutrition">
-                {equivalentValue && effectiveBaseUnit ? (
-                  <span>
-                    {FormatAmount(equivalentValue)} {effectiveBaseUnit}
-                  </span>
-                ) : null}
-                <span>{estimatedNutrition.calories} kcal</span>
-                <span>{FormatAmount(estimatedNutrition.protein)} g protein</span>
-                <span>{FormatAmount(estimatedNutrition.carbs)} g carbs</span>
-                <span>{FormatAmount(estimatedNutrition.fat)} g fat</span>
-                <span>{FormatAmount(estimatedNutrition.fibre)} g fibre</span>
-              </div>
-            ) : (
-              <span className="health-nutrition-empty">Nutrition preview available for foods.</span>
-            )}
-            <div className="health-portion-override">
-              <label>
-                Serving size amount
-                <input
-                  type="number"
-                  name="BaseAmount"
-                  min="0.1"
-                  step="0.1"
-                  value={portionOverride.BaseAmount}
-                  onChange={onPortionOverrideChange}
-                  placeholder={`Optional (${portionBaseUnit})`}
-                />
-              </label>
-              <label>
-                Serving size unit
-                <select
-                  name="BaseUnit"
-                  value={portionOverride.BaseUnit || portionBaseUnit}
-                  onChange={onPortionOverrideChange}
-                  disabled={!portionBaseUnit}
-                >
-                  {portionBaseUnit ? <option value={portionBaseUnit}>{portionBaseUnit}</option> : null}
-                </select>
-              </label>
-            </div>
-            <label>
-              Serving size label
-              <input
-                name="Label"
-                value={portionOverride.Label}
-                onChange={onPortionOverrideChange}
-                placeholder="Optional"
-              />
-            </label>
-            {isFoodSelected ? (
-              <label className="health-checkbox">
-                <input
-                  type="checkbox"
-                  name="SaveAsDefault"
-                  checked={portionOverride.SaveAsDefault}
-                  onChange={onPortionOverrideChange}
-                  disabled={!portionOverride.BaseAmount}
-                />
-                Save as default for this food
-              </label>
-            ) : null}
-          </div>
-        ) : null}
-      </div>
-      <label className="health-form-span">
-        Notes
-        <input
-          type="text"
-          name="EntryNotes"
-          value={form.EntryNotes}
-          onChange={onFormChange}
-          placeholder="Optional"
-        />
-      </label>
-      <div className="form-actions">
-        <button type="submit">{editingEntryId ? "Update" : "Add entry"}</button>
-        {editingEntryId ? (
-          <>
-            <button type="button" className="button-secondary" onClick={onCancelEdit}>
-              Cancel
-            </button>
-            <button
-              type="button"
-              className="button-secondary button-danger"
-              onClick={onDeleteEditingEntry}
-            >
-              Delete
-            </button>
-          </>
-        ) : (
-          <button type="button" className="button-secondary" onClick={() => setShowForm(false)}>
-            Close
-          </button>
-        )}
-      </div>
-    </form>
-  );
 
-  const editForm = (
-    <form className="health-log-form health-edit-form" onSubmit={onSubmit}>
-      <label>
-        Meal slot
-        <select name="MealType" value={form.MealType} onChange={onFormChange}>
-          <option value="Breakfast">Breakfast</option>
-          <option value="Snack1">Snack 1</option>
-          <option value="Lunch">Lunch</option>
-          <option value="Snack2">Snack 2</option>
-          <option value="Dinner">Dinner</option>
-          <option value="Snack3">Snack 3</option>
-        </select>
-      </label>
-      <div className="health-edit-row">
-        <label>
-          Amount
-          <div className="health-stepper">
-            <button
-              type="button"
-              className="icon-button is-secondary"
-              aria-label="Decrease amount"
-              onClick={() => onAdjustQuantity(-0.25)}
-            >
-              -
-            </button>
-            <input
-              ref={quantityInputRef}
-              type="number"
-              name="Quantity"
-              min="0.25"
-              step="any"
-              value={form.Quantity}
-              onChange={onFormChange}
-            />
-            <button
-              type="button"
-              className="icon-button is-secondary"
-              aria-label="Increase amount"
-              onClick={() => onAdjustQuantity(0.25)}
-            >
-              +
-            </button>
-          </div>
-        </label>
-        <label>
-          Serving size
-          <select value={selectedPortion} onChange={onSelectPortion} disabled={!form.SelectedId}>
-            <option value="">Select</option>
-            {portionOptions.map((option) => (
-              <option key={option.OptionKey} value={option.OptionKey}>
-                {option.Label} ({FormatAmount(option.BaseAmount)} {option.BaseUnit})
-              </option>
-            ))}
-            {isFoodSelected ? <option value="custom">Custom...</option> : null}
-          </select>
-        </label>
-      </div>
-      <div className="health-edit-actions">
-        <button
-          type="button"
-          className="button-secondary health-details-toggle"
-          onClick={() => setShowFoodDetails((prev) => !prev)}
-        >
-          <Icon name={showFoodDetails ? "chevronDown" : "chevronRight"} className="icon" />
-          {showFoodDetails ? "Hide food details" : "Food details"}
-        </button>
-        {showFoodDetails ? (
-          <div className="health-details-panel">
-            {foodDetailRows.length ? (
-              <div className="health-food-details">
-                {foodDetailRows.map((row) => (
-                  <div key={row.label} className="health-food-detail-row">
-                    <span>{row.label}</span>
-                    <span>
-                      {FormatAmount(row.value)} {row.unit}
-                    </span>
-                    <span>{row.percentLabel}</span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <span className="health-nutrition-empty">Food details available for foods.</span>
-            )}
-          </div>
-        ) : null}
-      </div>
-      <div className="health-edit-actions">
-        <button
-          type="button"
-          className="button-secondary health-details-toggle"
-          onClick={() => setShowNotes((prev) => !prev)}
-        >
-          <Icon name={showNotes ? "chevronDown" : "chevronRight"} className="icon" />
-          {showNotes ? "Hide notes" : "Notes"}
-        </button>
-        {showNotes ? (
-          <div className="health-edit-notes">
-            <input
-              type="text"
-              name="EntryNotes"
-              value={form.EntryNotes}
-              onChange={onFormChange}
-              placeholder="Notes"
-              aria-label="Notes"
-            />
-          </div>
-        ) : null}
-      </div>
-      <div className="form-actions">
-        <button type="submit">Update</button>
-        <button type="button" className="button-secondary" onClick={onCancelEdit}>
-          Cancel
-        </button>
-        <button
-          type="button"
-          className="button-danger"
-          onClick={onDeleteEditingEntry}
-        >
-          Delete
-        </button>
-      </div>
-    </form>
-  );
+  const logDescribeResult = async () => {
+    if (!describeResult) {
+      return;
+    }
+    try {
+      setStatus("saving");
+      setError("");
+      const name = `${describeResult.MealName} (AI total)`;
+      const created = await CreateFood({
+        FoodName: name,
+        ServingQuantity: describeResult.ServingQuantity,
+        ServingUnit: describeResult.ServingUnit,
+        CaloriesPerServing: describeResult.CaloriesPerServing,
+        ProteinPerServing: describeResult.ProteinPerServing,
+        FibrePerServing: describeResult.FibrePerServing,
+        CarbsPerServing: describeResult.CarbsPerServing,
+        FatPerServing: describeResult.FatPerServing,
+        SaturatedFatPerServing: describeResult.SaturatedFatPerServing,
+        SugarPerServing: describeResult.SugarPerServing,
+        SodiumPerServing: describeResult.SodiumPerServing,
+        DataSource: "ai",
+        CountryCode: "AU",
+        IsFavourite: false
+      });
+      const log = await ensureDailyLog();
+      const base = ResolveServingBase(created);
+      await CreateMealEntry({
+        DailyLogId: log.DailyLogId,
+        MealType: activeMealType,
+        FoodId: created.FoodId,
+        MealTemplateId: null,
+        Quantity: 1,
+        PortionOptionId: null,
+        PortionLabel: "serving",
+        PortionBaseUnit: base.unit,
+        PortionBaseAmount: base.amount,
+        EntryNotes: describeResult.Summary || null,
+        SortOrder: entries.length
+      });
+      await loadData(logDate);
+      setDescribeResult(null);
+      setDescribeText("");
+      openSummary(activeMealType);
+    } catch (err) {
+      setStatus("error");
+      setError(err?.message || "Failed to log AI meal");
+    }
+  };
+
+  const slotEntries = groupedEntries[activeMealType] || [];
+  const slotCalories = Math.round(slotTotals[activeMealType] || 0);
+  const slotProtein = useMemo(() => {
+    return slotEntries.reduce(
+      (total, entry) => total + Number(entry.ProteinPerServing || 0) * Number(entry.Quantity || 1),
+      0
+    );
+  }, [slotEntries]);
+  const slotCaloriesLabel = FormatNumber(slotCalories);
+  const slotProteinLabel = FormatNumber(slotProtein, { maximumFractionDigits: 2 });
+  const slotMacros = useMemo(() => {
+    return slotEntries.reduce(
+      (totals, entry) => ({
+        protein: totals.protein + Number(entry.ProteinPerServing || 0) * Number(entry.Quantity || 1),
+        carbs: totals.carbs + Number(entry.CarbsPerServing || 0) * Number(entry.Quantity || 1),
+        fat: totals.fat + Number(entry.FatPerServing || 0) * Number(entry.Quantity || 1),
+        fibre: totals.fibre + Number(entry.FibrePerServing || 0) * Number(entry.Quantity || 1),
+        sugar: totals.sugar + Number(entry.SugarPerServing || 0) * Number(entry.Quantity || 1),
+        saturatedFat:
+          totals.saturatedFat +
+          Number(entry.SaturatedFatPerServing || 0) * Number(entry.Quantity || 1),
+        sodium: totals.sodium + Number(entry.SodiumPerServing || 0) * Number(entry.Quantity || 1)
+      }),
+      {
+        protein: 0,
+        carbs: 0,
+        fat: 0,
+        fibre: 0,
+        sugar: 0,
+        saturatedFat: 0,
+        sodium: 0
+      }
+    );
+  }, [slotEntries]);
+  const macroRows = [
+    { key: "Protein", value: slotMacros.protein, unit: "g" },
+    { key: "Carbs", value: slotMacros.carbs, unit: "g" },
+    { key: "Fat", value: slotMacros.fat, unit: "g" },
+    { key: "Fibre", value: slotMacros.fibre, unit: "g" },
+    { key: "Sugar", value: slotMacros.sugar, unit: "g" },
+    { key: "Saturated fat", value: slotMacros.saturatedFat, unit: "g" },
+    { key: "Sodium", value: slotMacros.sodium, unit: "mg" }
+  ].filter((row) => row.value > 0);
+
+  const buildTemplateItemsFromEntries = () => {
+    const items = [];
+    slotEntries.forEach((entry) => {
+      if (entry.FoodId) {
+        items.push({
+          FoodId: entry.FoodId,
+          MealType: activeMealType,
+          Quantity: Number(entry.Quantity || 1),
+          EntryQuantity: entry.DisplayQuantity ? Number(entry.DisplayQuantity) : null,
+          EntryUnit: entry.PortionLabel || null,
+          EntryNotes: entry.EntryNotes || null
+        });
+        return;
+      }
+      if (entry.MealTemplateId) {
+        const template = templates.find(
+          (item) => item.Template.MealTemplateId === entry.MealTemplateId
+        );
+        if (!template) {
+          return;
+        }
+        template.Items.forEach((item) => {
+          const multiplier = Number(entry.Quantity || 1);
+          const baseQuantity = Number(item.Quantity || 1) * multiplier;
+          const baseEntryQuantity = item.EntryQuantity
+            ? Number(item.EntryQuantity) * multiplier
+            : null;
+          items.push({
+            FoodId: item.FoodId,
+            MealType: activeMealType,
+            Quantity: baseQuantity,
+            EntryQuantity: baseEntryQuantity,
+            EntryUnit: item.EntryUnit || null,
+            EntryNotes: item.EntryNotes || null
+          });
+        });
+      }
+    });
+    return items.map((item, index) => ({ ...item, SortOrder: index }));
+  };
+
+  const saveMealFromSlot = async () => {
+    if (!saveMealName.trim()) {
+      setSaveMealError("Meal name is required.");
+      return;
+    }
+    const servings = Number(saveMealServings || 1);
+    if (!Number.isFinite(servings) || servings <= 0) {
+      setSaveMealError("Servings must be greater than zero.");
+      return;
+    }
+    const items = buildTemplateItemsFromEntries();
+    if (!items.length) {
+      setSaveMealError("Add at least one item.");
+      return;
+    }
+    try {
+      setStatus("saving");
+      setSaveMealError("");
+      await CreateMealTemplate({
+        TemplateName: saveMealName.trim(),
+        Servings: servings,
+        Items: items
+      });
+      await loadData(logDate);
+      setSaveMealOpen(false);
+      setSaveMealName("");
+      setSaveMealServings("1");
+    } catch (err) {
+      setSaveMealError(err?.message || "Failed to save meal");
+    }
+  };
+
+  const handlePreviousDate = () => {
+    const date = ParseIsoDate(logDate);
+    date.setDate(date.getDate() - 1);
+    setLogDate(FormatDate(date));
+  };
+
+  const handleNextDate = () => {
+    const date = ParseIsoDate(logDate);
+    date.setDate(date.getDate() + 1);
+    const nextValue = FormatDate(date);
+    if (nextValue <= today) {
+      setLogDate(nextValue);
+    }
+  };
+
+  const dayLabel = FormatDayLabel(logDate);
+  const isNextDisabled = logDate >= today;
+
+  const easyOptions = useMemo(() => {
+    if (isFoodSelected) {
+      return portionOptions.slice(0, 6).map((option) => ({
+        key: option.OptionKey,
+        label: BuildEasyLabel(option),
+        calories: selectedFood
+          ? EstimateCalories(selectedFood, option.BaseAmount, option.BaseUnit)
+          : null,
+        option
+      }));
+    }
+    if (isTemplateSelected && selectedTemplate) {
+      const perServing = templateCalories[selectedTemplate.Template.MealTemplateId] || 0;
+      return [0.5, 1, 2, 3].map((value) => ({
+        key: String(value),
+        label: value === 0.5 ? "1/2 serving" : `${FormatAmount(value)} serving${value > 1 ? "s" : ""}`,
+        calories: perServing ? Math.round(perServing * value) : null,
+        quantity: value
+      }));
+    }
+    return [];
+  }, [
+    isFoodSelected,
+    isTemplateSelected,
+    portionOptions,
+    selectedFood,
+    selectedTemplate,
+    templateCalories
+  ]);
+
+  const handleEasySelect = (option) => {
+    if (isTemplateSelected) {
+      setForm((prev) => ({ ...prev, Quantity: String(option.quantity || 1) }));
+      return;
+    }
+    setSelectedPortion(option.key);
+    setForm((prev) => ({ ...prev, Quantity: "1" }));
+  };
+
+  const showPortionSheet = sheetOpen && form.SelectedId;
+  const portionModalLabel = editingEntryId ? "Edit entry" : "Portion picker";
+  const showSearchList = searchTab !== "search" || searchQuery.trim();
+  const emptyListLabel =
+    searchTab === "meals"
+      ? "No meals yet."
+      : searchTab === "favourites"
+        ? "No favourites yet."
+        : "No foods or meals yet.";
+  const handleSheetKeyDown = (event) => {
+    if (event.key !== "Enter") {
+      return;
+    }
+    if (event.shiftKey || event.altKey || event.metaKey || event.ctrlKey) {
+      return;
+    }
+    if (event.target?.tagName === "TEXTAREA") {
+      return;
+    }
+    event.preventDefault();
+    submitEntry({ closeToSummary: true });
+  };
+
+  const viewLabel = view === "slots" ? "Slot list" : view === "add" ? "Slot add" : "Slot summary";
 
   return (
-    <div className="health-log">
-      {quickPickerOpen ? (
-        <div className="health-quick-overlay" role="dialog" aria-modal="true">
-          <div className="health-quick-panel">
-            <header className="health-quick-header">
+    <div className="health-log" data-health-view-label={viewLabel}>
+      {view === "slots" ? (
+        <section className="module-panel health-log-noom">
+          <div className="health-log-date-row" ref={datePickerRef}>
+            <button
+              type="button"
+              className="icon-button is-secondary"
+              onClick={handlePreviousDate}
+              aria-label="Previous day"
+            >
+              <Icon name="chevronLeft" className="icon" />
+            </button>
+            <button
+              type="button"
+              className="health-log-date-chip"
+              onClick={() => setDatePickerOpen((prev) => !prev)}
+              aria-haspopup="dialog"
+              aria-expanded={datePickerOpen}
+              aria-label="Choose log date"
+            >
+              <span>{dayLabel}</span>
+              <Icon name="agenda" className="icon" />
+            </button>
+            <button
+              type="button"
+              className="icon-button is-secondary"
+              onClick={handleNextDate}
+              aria-label="Next day"
+              disabled={isNextDisabled}
+            >
+              <Icon name="chevronRight" className="icon" />
+            </button>
+            {datePickerOpen ? (
+              <div className="health-date-picker" role="dialog" aria-label="Choose date">
+                <div className="health-date-picker-header">
+                  <button
+                    type="button"
+                    className="icon-button"
+                    onClick={() => setPickerMonth((prev) => ShiftMonth(prev, -1))}
+                    aria-label="Previous month"
+                  >
+                    <Icon name="chevronLeft" className="icon" />
+                  </button>
+                  <span>{FormatMonthLabel(pickerMonth)}</span>
+                  <button
+                    type="button"
+                    className="icon-button"
+                    onClick={() => setPickerMonth((prev) => ShiftMonth(prev, 1))}
+                    aria-label="Next month"
+                    disabled={pickerMonth >= today.slice(0, 7)}
+                  >
+                    <Icon name="chevronRight" className="icon" />
+                  </button>
+                </div>
+                <div className="health-date-picker-weekdays">
+                  {WeekdayLabels.map((day) => (
+                    <span key={day}>{day}</span>
+                  ))}
+                </div>
+                <div className="health-date-picker-grid">
+                  {BuildMonthGrid(pickerMonth).map((date, index) => {
+                    if (!date) {
+                      return <span key={`empty-${index}`} className="health-date-picker-cell is-empty" />;
+                    }
+                    const isSelected = date === logDate;
+                    const isLogged = loggedDays.includes(date);
+                    const isToday = date === today;
+                    const isFuture = date > today;
+                    return (
+                      <div key={date} className="health-date-picker-cell">
+                        <button
+                          type="button"
+                          className={`health-date-picker-day${isSelected ? " is-selected" : ""}${
+                            isLogged ? " is-logged" : ""
+                          }${isToday ? " is-today" : ""}${isFuture ? " is-disabled" : ""}`}
+                          onClick={() => {
+                            if (isFuture) {
+                              return;
+                            }
+                            setLogDate(date);
+                            setDatePickerOpen(false);
+                          }}
+                          disabled={isFuture}
+                        >
+                          {date.split("-")[2]}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
+          </div>
+          <div className="health-slot-list">
+            {MealOrder.map((meal) => (
+              <div key={meal} className="health-slot-row">
+                <button
+                  type="button"
+                  className="health-slot-main"
+                  onClick={() => openSummary(meal)}
+                >
+                  <span className="health-slot-icon" aria-hidden="true">
+                    <Icon name={MealTypeIcons[meal] || "meal"} className="icon" />
+                  </span>
+                  <span className="health-slot-label">{FormatMealTypeLabel(meal)}</span>
+                </button>
+                <div className="health-slot-meta">
+                  {slotTotals[meal] ? (
+                    <span className="health-slot-calories">
+                      {Math.round(slotTotals[meal])} kcal
+                    </span>
+                  ) : null}
+                  <button
+                    type="button"
+                    className="health-slot-plus"
+                    onClick={() => startMealFlow(meal, "slots")}
+                    aria-label={`Add to ${FormatMealTypeLabel(meal)}`}
+                  >
+                    <Icon name="plus" className="icon" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      {view === "add" ? (
+        <section className="module-panel health-log-add">
+          <header className="health-add-header">
+            <button
+              type="button"
+              className="icon-button"
+              onClick={() => setView(returnView)}
+              aria-label="Back"
+            >
+              <Icon name="chevronLeft" className="icon" />
+            </button>
+            <h2>{FormatMealTypeLabel(activeMealType)}</h2>
+          </header>
+          {slotEntries.length ? (
+            <div className="health-slot-summary">
+              <div className="health-slot-summary-header">
+                <span>Already logged</span>
+                <span>
+                  {slotCaloriesLabel} kcal · {slotProteinLabel} g protein
+                </span>
+              </div>
+              <ul className="health-slot-summary-list">
+                {slotEntries.map((entry) => (
+                  <li key={entry.MealEntryId}>
+                    <button
+                      type="button"
+                      className="health-slot-summary-row"
+                      onClick={() => onEditEntry(entry)}
+                    >
+                      <span>{entry.TemplateName || entry.FoodName || "Item"}</span>
+                      <span className="health-slot-summary-kcal">
+                        {FormatNumber(
+                          Math.round((entry.CaloriesPerServing || 0) * (entry.Quantity || 1))
+                        )}{" "}
+                        kcal
+                      </span>
+                      <Icon name="chevronRight" className="icon" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          <div className="health-add-actions">
+            <button
+              type="button"
+              className="health-action-tile"
+              onClick={() => setDescribeOpen((prev) => !prev)}
+            >
+              <span className="health-action-icon" aria-hidden="true">
+                <Icon name="edit" className="icon" />
+              </span>
+              <span>Describe meal</span>
+            </button>
+          </div>
+          <div className="health-add-search">
+            <Icon name="search" className="icon" />
+            <input
+              ref={searchInputRef}
+              type="search"
+              placeholder="Search for your food"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+            />
+          </div>
+          {describeOpen ? (
+            <div className="health-describe-panel">
+              <textarea
+                value={describeText}
+                onChange={(event) => setDescribeText(event.target.value)}
+                placeholder="Describe your meal"
+              />
+              <div className="health-describe-actions">
+                <button
+                  type="button"
+                  className="button-secondary"
+                  onClick={runDescribeMeal}
+                  disabled={describeStatus === "loading"}
+                >
+                  {describeStatus === "loading" ? "Working..." : "Get nutrition"}
+                </button>
+                {describeResult ? (
+                  <button type="button" className="primary-button" onClick={logDescribeResult}>
+                    Log meal
+                  </button>
+                ) : null}
+              </div>
+              {describeResult ? (
+                <div className="health-describe-result">
+                  <h4>{describeResult.MealName}</h4>
+                  <p>{describeResult.Summary}</p>
+                  <span>
+                    {describeResult.CaloriesPerServing} kcal · {describeResult.ProteinPerServing} g protein
+                  </span>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+          <div className="health-add-tabs" role="tablist" aria-label="Log tabs">
+            {[
+              { key: "search", label: "Search" },
+              { key: "meals", label: "My meals" },
+              { key: "favourites", label: "Favourites" },
+              { key: "foods", label: "Foods" }
+            ].map((tab) => (
+              <button
+                key={tab.key}
+                type="button"
+                role="tab"
+                aria-selected={searchTab === tab.key}
+                className={`health-add-tab${searchTab === tab.key ? " is-active" : ""}`}
+                onClick={() => setSearchTab(tab.key)}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+          {showSearchList ? (
+            <ul className="health-result-list">
+              {searchItems.length ? (
+                searchItems.map((item) => (
+                  <li key={`${item.type}-${item.id}`}>
+                    <button
+                      type="button"
+                      className="health-result-row"
+                      onClick={() => handleSelectItem(item)}
+                    >
+                      <span className="health-result-icon" aria-hidden="true">
+                        <Icon name={item.type === "template" ? "meal" : "food"} className="icon" />
+                      </span>
+                      <span className="health-result-name">{item.name}</span>
+                      {item.hint ? <span className="health-result-hint">{item.hint}</span> : null}
+                    </button>
+                  </li>
+                ))
+              ) : searchQuery.trim() && searchTab === "search" ? (
+                <li>
+                  <Link className="health-add-cta" to="/health/foods?add=food">
+                    <Icon name="plus" className="icon" />
+                    <span>Can't find it? Let's add it!</span>
+                  </Link>
+                </li>
+              ) : (
+                <li className="health-empty">{emptyListLabel}</li>
+              )}
+            </ul>
+          ) : (
+            <p className="health-empty">Start typing to see results.</p>
+          )}
+        </section>
+      ) : null}
+
+      {view === "summary" ? (
+        <section className="module-panel health-log-summary-screen">
+          <header className="health-summary-header">
+            <button
+              type="button"
+              className="icon-button"
+              onClick={() => setView("slots")}
+              aria-label="Back"
+            >
+              <Icon name="chevronLeft" className="icon" />
+            </button>
+            <div>
+              <h2>{FormatMealTypeLabel(activeMealType)}</h2>
+              <span>{slotCalories} kcal</span>
+            </div>
+            <button type="button" className="primary-button" onClick={() => setView("slots")}>
+              Done
+            </button>
+          </header>
+          <ul className="health-summary-list">
+            {slotEntries.length ? (
+              slotEntries.map((entry) => (
+                <li key={entry.MealEntryId}>
+                  <button
+                    type="button"
+                    className="health-summary-row"
+                    onClick={() => onEditEntry(entry)}
+                  >
+                    <span>{entry.TemplateName || entry.FoodName || "Item"}</span>
+                    <span>
+                      {Math.round((entry.CaloriesPerServing || 0) * (entry.Quantity || 1))} kcal
+                    </span>
+                  </button>
+                </li>
+              ))
+            ) : (
+              <li className="health-empty">No items yet.</li>
+            )}
+          </ul>
+          {macroRows.length ? (
+            <div className="health-summary-details">
+              <button
+                type="button"
+                className="health-summary-toggle"
+                onClick={() => setSummaryDetailsOpen((prev) => !prev)}
+              >
+                {summaryDetailsOpen ? "Hide details" : "More details"}
+                <Icon
+                  name="chevronDown"
+                  className={`icon${summaryDetailsOpen ? " is-rotated" : ""}`}
+                />
+              </button>
+              {summaryDetailsOpen ? (
+                <div className="health-summary-macro-list">
+                  {macroRows.map((row) => (
+                    <div key={row.key} className="health-summary-macro-row">
+                      <span>{row.key}</span>
+                      <span>
+                        {FormatNumber(row.value, { maximumFractionDigits: 2 })} {row.unit}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+          <div className="health-summary-actions">
+            {shareUsers.length ? (
+              <div className="health-summary-share">
+                <label htmlFor="share-summary">Share with</label>
+                <div className="health-summary-share-row">
+                  <select
+                    id="share-summary"
+                    value={shareSummaryUserId}
+                    onChange={(event) => setShareSummaryUserId(event.target.value)}
+                  >
+                    <option value="">Select a user</option>
+                    {shareUsers.map((user) => (
+                      <option key={user.Id} value={user.Id}>
+                        {FormatUserLabel(user)}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    className="button-secondary"
+                    onClick={shareSlotEntries}
+                    disabled={!shareSummaryUserId}
+                  >
+                    Share
+                  </button>
+                </div>
+              </div>
+            ) : null}
+            <button
+              type="button"
+              className="primary-button health-summary-button"
+              onClick={() => startMealFlow(activeMealType, "summary")}
+            >
+              Add more items
+            </button>
+            {slotEntries.length ? (
+              <button
+                type="button"
+                className="button-secondary health-summary-button"
+                onClick={() => setSaveMealOpen(true)}
+              >
+                Save this meal
+              </button>
+            ) : null}
+          </div>
+        </section>
+      ) : null}
+
+      {showPortionSheet ? (
+        <div
+          className="health-log-overlay"
+          role="dialog"
+          aria-modal="true"
+          data-health-modal-label={portionModalLabel}
+        >
+          <div
+            className={`health-log-sheet${advancedOpen ? " is-advanced" : ""}`}
+            onKeyDown={handleSheetKeyDown}
+          >
+            <header className="health-sheet-header">
+              <div>
+                <span className="health-sheet-label">{isFoodSelected ? "Food" : "Meal"}</span>
+                <h3>{selectedFood?.FoodName || selectedTemplate?.Template.TemplateName || "Item"}</h3>
+              </div>
               <button
                 type="button"
                 className="icon-button"
-                aria-label="Close logging"
-                onClick={closeQuickPicker}
+                onClick={() => {
+                  setSheetOpen(false);
+                  setAdvancedOpen(false);
+                  setView(returnView);
+                }}
+                aria-label="Close"
               >
                 <Icon name="close" className="icon" />
               </button>
-              <div>
-                <p className="eyebrow">Log</p>
-                <h3>{FormatMealTypeLabel(form.MealType)}</h3>
+            </header>
+
+            {!advancedOpen ? (
+              <div className="health-sheet-body">
+                <div className="health-easy-list">
+                  {easyOptions.length ? (
+                    easyOptions.map((option) => (
+                      <button
+                        key={option.key}
+                        type="button"
+                        className={`health-easy-row${
+                          (isFoodSelected && selectedPortion === option.key) ||
+                          (isTemplateSelected && Number(form.Quantity) === option.quantity)
+                            ? " is-active"
+                            : ""
+                        }`}
+                        onClick={() => handleEasySelect(option)}
+                      >
+                        <span>{option.label}</span>
+                        {option.calories ? <span>{option.calories} kcal</span> : null}
+                      </button>
+                    ))
+                  ) : (
+                    <p className="health-empty">No serving options available.</p>
+                  )}
+                </div>
               </div>
-              <div className="health-quick-actions">
-                {shareUsers.length && quickSelectedKeys.length ? (
-                  <label className="health-quick-share">
-                    <span>Share</span>
+            ) : (
+              <div className="health-sheet-body">
+                {editingEntryId ? (
+                  <label className="health-sheet-field">
+                    Meal slot
+                    <select
+                      value={form.MealType}
+                      onChange={(event) =>
+                        setForm((prev) => ({ ...prev, MealType: event.target.value }))
+                      }
+                    >
+                      <option value="Breakfast">Breakfast</option>
+                      <option value="Snack1">Morning snack</option>
+                      <option value="Lunch">Lunch</option>
+                      <option value="Snack2">Afternoon snack</option>
+                      <option value="Dinner">Dinner</option>
+                      <option value="Snack3">Evening snack</option>
+                    </select>
+                  </label>
+                ) : null}
+                <div className="health-sheet-field">
+                  <div className="health-sheet-row">
+                    <label className="health-sheet-subfield">
+                      <span>Amount</span>
+                      <div className="health-sheet-stepper">
+                        <button
+                          type="button"
+                          className="icon-button is-secondary"
+                          onClick={() => onAdjustQuantity(-0.25)}
+                          aria-label="Decrease amount"
+                        >
+                          -
+                        </button>
+                        <input
+                          type="number"
+                          min="0.25"
+                          step="0.25"
+                          value={form.Quantity}
+                          aria-label="Amount"
+                          onChange={(event) =>
+                            setForm((prev) => ({ ...prev, Quantity: event.target.value }))
+                          }
+                        />
+                        <button
+                          type="button"
+                          className="icon-button is-secondary"
+                          onClick={() => onAdjustQuantity(0.25)}
+                          aria-label="Increase amount"
+                        >
+                          +
+                        </button>
+                      </div>
+                    </label>
+                    <label className="health-sheet-subfield">
+                      <span>Serving size</span>
+                      <select
+                        value={selectedPortion}
+                        aria-label="Serving size"
+                        onChange={(event) => setSelectedPortion(event.target.value)}
+                      >
+                        {portionOptions.map((option) => (
+                          <option key={option.OptionKey} value={option.OptionKey}>
+                            {option.Label} ({FormatAmount(option.BaseAmount)} {option.BaseUnit})
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                </div>
+                {estimatedCalories ? (
+                  <div className="health-sheet-summary">
+                    Estimated: {estimatedCalories} kcal
+                    {estimatedNutrition?.protein
+                      ? ` · ${FormatAmount(estimatedNutrition.protein)} g protein`
+                      : ""}
+                  </div>
+                ) : null}
+                <button
+                  type="button"
+                  className="health-sheet-toggle"
+                  onClick={() => setShowNotes((prev) => !prev)}
+                >
+                  {showNotes ? "Hide notes" : "Notes"}
+                </button>
+                {showNotes ? (
+                  <input
+                    type="text"
+                    value={form.EntryNotes}
+                    onChange={(event) =>
+                      setForm((prev) => ({ ...prev, EntryNotes: event.target.value }))
+                    }
+                    placeholder="Notes"
+                  />
+                ) : null}
+                {!editingEntryId && shareUsers.length ? (
+                  <label className="health-sheet-field">
+                    Share with
                     <select
                       value={shareTargetUserId}
                       onChange={(event) => setShareTargetUserId(event.target.value)}
@@ -2037,358 +1846,103 @@ const Log = ({ InitialDate, InitialAddMode, InitialEditId }) => {
                     </select>
                   </label>
                 ) : null}
-                {quickSelectedKeys.length ? (
-                  <button type="button" className="health-quick-log" onClick={logQuickSelections}>
-                    Log {quickSelectedKeys.length}
-                  </button>
-                ) : null}
               </div>
-            </header>
-            <div className="health-quick-header-group">
-              <div className="health-quick-tabs" role="tablist" aria-label="Log categories">
-                {[
-                  { key: "all", label: "All items", icon: "list" },
-                  { key: "foods", label: "Foods", icon: "food" },
-                  { key: "meals", label: "Meals", icon: "meal" },
-                  { key: "recent", label: "Recent", icon: "recent" }
-                ].map((tab) => (
-                  <button
-                    key={tab.key}
-                    type="button"
-                    className={`health-quick-tab${quickTab === tab.key ? " is-active" : ""}`}
-                    onClick={() => setQuickTab(tab.key)}
-                    role="tab"
-                    aria-selected={quickTab === tab.key}
-                  >
-                    <span className="health-quick-tab-icon" aria-hidden="true">
-                      <Icon name={tab.icon} className="icon" />
-                    </span>
-                    {tab.label}
-                  </button>
-                ))}
-              </div>
-              <div className="health-quick-search">
-                <Icon name="search" className="icon" />
-                <input
-                  ref={quickSearchRef}
-                  type="search"
-                  placeholder="Search foods or meals"
-                  value={quickSearch}
-                  onChange={(event) => setQuickSearch(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" && quickSelectedKeys.length) {
-                      event.preventDefault();
-                      logQuickSelections();
-                    }
-                  }}
-                />
-              </div>
-            </div>
-            <div className="health-quick-list">
-              {quickItems.map((item) => {
-                const itemKey = `${item.type}:${item.id}`;
-                const isSelected = quickSelectedSet.has(itemKey);
-                return (
-                  <div
-                    key={`${item.type}-${item.id}`}
-                    className="health-quick-item"
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => toggleQuickSelection(itemKey)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter" || event.key === " ") {
-                        event.preventDefault();
-                        toggleQuickSelection(itemKey);
-                      }
-                    }}
-                  >
-                    <span
-                      className={`health-quick-type-icon ${
-                        item.type === "meal" ? "is-meal" : "is-food"
-                      }`}
-                      aria-hidden="true"
-                    >
-                      <Icon name={item.type === "meal" ? "meal" : "food"} className="icon" />
-                    </span>
-                    <div className="health-quick-item-name">
-                      <p>{item.name}</p>
-                    </div>
-                    <div className="health-quick-right">
-                      <div className="health-quick-meta">
-                        <span className="health-quick-calories">
-                          {item.calories !== null && item.calories !== undefined
-                            ? `${item.calories} kcal`
-                            : "kcal"}
-                        </span>
-                        <span className="health-quick-serving">{item.serving}</span>
-                      </div>
-                      {isSelected ? (
-                        <div className="health-quick-qty">
-                          <span>x</span>
-                          <input
-                            type="number"
-                            min="0.25"
-                            step="0.25"
-                            value={getQuickQuantity(itemKey)}
-                            onChange={(event) => updateQuickQuantity(itemKey, event.target.value)}
-                            onClick={(event) => event.stopPropagation()}
-                            onMouseDown={(event) => event.stopPropagation()}
-                            onKeyDown={(event) => {
-                              if (event.key === "Enter") {
-                                event.preventDefault();
-                                logQuickSelections();
-                              }
-                            }}
-                            aria-label={`${item.name} quantity`}
-                          />
-                        </div>
-                      ) : null}
-                      <span
-                        className={`health-quick-select${isSelected ? " is-selected" : ""}`}
-                        aria-hidden="true"
-                      >
-                        <Icon name="check" className="icon" />
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
-              {quickItems.length === 0 ? (
-                <p className="health-empty">No matches yet.</p>
+            )}
+            <footer className="health-sheet-footer">
+              {!advancedOpen ? (
+                <button
+                  type="button"
+                  className="button-secondary"
+                  onClick={() => setAdvancedOpen(true)}
+                >
+                  Other units
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="button-secondary"
+                  onClick={() => setAdvancedOpen(false)}
+                >
+                  Easy units
+                </button>
+              )}
+              <button
+                type="button"
+                className="primary-button"
+                onClick={() => submitEntry({ closeToSummary: true })}
+              >
+                {editingEntryId ? "Update" : "Log"}
+              </button>
+              {editingEntryId ? (
+                <button type="button" className="button-secondary button-danger" onClick={onDeleteEntry}>
+                  Delete
+                </button>
               ) : null}
-            </div>
+            </footer>
           </div>
         </div>
       ) : null}
-      <section className="module-panel health-log-nav-panel">
-        <header className="module-panel-header health-log-header">
-          <div className="health-log-date-nav" ref={datePickerRef}>
-            <button
-              type="button"
-              className="icon-button is-secondary"
-              onClick={() => handleLogDateChange(previousDate)}
-              aria-label="Previous day"
-            >
-              <Icon name="chevronLeft" className="icon" />
-            </button>
-            <button
-              type="button"
-              className="health-log-date-button"
-              onClick={() => setDatePickerOpen((prev) => !prev)}
-              aria-haspopup="dialog"
-              aria-expanded={datePickerOpen}
-              aria-label="Choose log date"
-            >
-              <span>{dayLabel}</span>
-              <Icon name="agenda" className="icon" />
-            </button>
-            <button
-              type="button"
-              className="icon-button is-secondary"
-              onClick={() => handleLogDateChange(nextDate)}
-              aria-label="Next day"
-              disabled={isLatestDate}
-            >
-              <Icon name="chevronRight" className="icon" />
-            </button>
-            {datePickerOpen ? (
-              <div className="health-date-picker" role="dialog" aria-label="Select log date">
-                <div className="health-date-picker-header">
-                  <button
-                    type="button"
-                    className="icon-button is-secondary"
-                    onClick={() => setPickerMonth((prev) => ShiftMonth(prev, -1))}
-                    aria-label="Previous month"
-                  >
-                    <Icon name="chevronLeft" className="icon" />
-                  </button>
-                  <span>{FormatMonthLabel(pickerMonth)}</span>
-                  <button
-                    type="button"
-                    className="icon-button is-secondary"
-                    onClick={() => {
-                      const nextValue = ShiftMonth(pickerMonth, 1);
-                      if (nextValue <= currentMonth) {
-                        setPickerMonth(nextValue);
-                      }
-                    }}
-                    aria-label="Next month"
-                    disabled={isNextMonthDisabled}
-                  >
-                    <Icon name="chevronRight" className="icon" />
-                  </button>
-                </div>
-                <div className="health-date-picker-weekdays">
-                  {WeekdayLabels.map((label) => (
-                    <span key={label}>{label}</span>
-                  ))}
-                </div>
-                <div className="health-date-picker-grid">
-                  {monthCells.map((dateValue, index) => {
-                    if (!dateValue) {
-                      return (
-                        <span
-                          key={`empty-${index}`}
-                          className="health-date-picker-cell is-empty"
-                        />
-                      );
-                    }
-                    const isSelected = dateValue === logDate;
-                    const isLogged = loggedDaysSet.has(dateValue);
-                    const isToday = dateValue === today;
-                    const isFuture = dateValue > today;
-                    return (
-                      <button
-                        key={dateValue}
-                        type="button"
-                        className={`health-date-picker-day${
-                          isSelected ? " is-selected" : ""
-                        }${isLogged ? " is-logged" : ""}${isToday ? " is-today" : ""}${
-                          isFuture ? " is-disabled" : ""
-                        }`}
-                        onClick={() => handleLogDateChange(dateValue)}
-                        disabled={isFuture}
-                        aria-label={`Select ${FormatDayLabel(dateValue)}`}
-                      >
-                        {Number(dateValue.slice(8, 10))}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            ) : null}
-          </div>
-          <div className="module-panel-actions">
-            <button type="button" className="button-pill health-log-add-entry" onClick={openAddEntry}>
-              Add entry
-            </button>
-          </div>
-        </header>
-        {error ? <p className="form-error">{error}</p> : null}
-        {showForm && !editingEntryId ? logForm : null}
-      </section>
 
-      {showForm && editingEntryId ? (
-        <div className="modal-backdrop" onClick={onCancelEdit}>
-          <div
-            className="modal modal--health health-edit-modal"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="modal-header">
-              <div className="health-edit-header">
-                <h3>{selectedLabel}</h3>
-                <p className="health-edit-subtitle">
-                  {FormatAmount(quantityValue)} {NormalizeServingLabel(effectiveLabel) || "serving"} •{" "}
-                  {Number.isFinite(editCalories) ? `${editCalories} kcal` : "kcal"}
-                </p>
+      {saveMealOpen ? (
+        <div
+          className="health-log-overlay"
+          role="dialog"
+          aria-modal="true"
+          data-health-modal-label="Save meal"
+        >
+          <div className="health-log-sheet">
+            <header className="health-sheet-header">
+              <div>
+                <span className="health-sheet-label">Save meal</span>
+                <h3>{FormatMealTypeLabel(activeMealType)}</h3>
               </div>
-              <button type="button" className="icon-button" onClick={onCancelEdit} aria-label="Close">
+              <button
+                type="button"
+                className="icon-button"
+                onClick={() => {
+                  setSaveMealOpen(false);
+                  setSaveMealError("");
+                }}
+                aria-label="Close"
+              >
                 <Icon name="close" className="icon" />
               </button>
+            </header>
+            <div className="health-sheet-body">
+              <label className="health-sheet-inline">
+                <span>Meal name</span>
+                <input
+                  value={saveMealName}
+                  onChange={(event) => setSaveMealName(event.target.value)}
+                  placeholder="Name your meal"
+                />
+              </label>
+              <label className="health-sheet-inline">
+                <span>Servings</span>
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={saveMealServings}
+                  onChange={(event) => setSaveMealServings(event.target.value)}
+                />
+              </label>
+              {saveMealError ? <p className="form-error">{saveMealError}</p> : null}
             </div>
-            {editForm}
+            <footer className="health-sheet-footer">
+              <button type="button" className="button-secondary" onClick={() => setSaveMealOpen(false)}>
+                Cancel
+              </button>
+              <button type="button" className="primary-button" onClick={saveMealFromSlot}>
+                Save meal
+              </button>
+            </footer>
           </div>
         </div>
       ) : null}
 
-      {!showForm ? (
-        <>
-          <section className="module-panel module-panel--stretch">
-            {dailyTotals ? (
-              <div className="health-log-summary">
-                <div className="health-log-summary-header">
-                  <span>Day totals</span>
-                  <span className="health-log-summary-calories">
-                    {dailyTotals.TotalCalories} kcal
-                  </span>
-                </div>
-                {macroRows.length ? (
-                  <div className="health-log-summary-macros">
-                    {macroRows.map((row) => (
-                      <div key={row.label} className="health-log-summary-item">
-                        <div className="health-log-summary-row">
-                          <span>{row.label}</span>
-                          <span>
-                            {FormatAmount(row.value)}
-                            {row.unit}
-                          </span>
-                          <span>{row.percentLabel}</span>
-                          <span>{row.deltaLabel}</span>
-                        </div>
-                        <div
-                          className={`health-log-summary-bar ${row.barClass}`}
-                          aria-hidden="true"
-                        >
-                          <span style={{ width: `${row.percentClamped}%` }} />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
-            <div className="health-log-list">
-              {orderedGroups.length === 0 ? (
-                <p className="health-empty">No entries yet.</p>
-              ) : (
-                orderedGroups.map(({ meal, items }) => (
-                  <div key={meal} className="health-log-group">
-                    <div className="health-log-group-header">
-                      <div className="health-log-group-title">
-                        <Icon name={MealTypeIcons[meal] || "meal"} className="icon" />
-                        <span>{FormatMealTypeLabel(meal)}</span>
-                      </div>
-                      <span className="health-log-group-total">
-                        {Math.round(slotTotals[meal] ?? 0)} kcal
-                      </span>
-                    </div>
-                    <ul>
-                      {items.map((entry) => (
-                        <li key={entry.MealEntryId}>
-                          <div
-                            className="health-log-entry"
-                            role="button"
-                            tabIndex={0}
-                            onClick={() => onEditEntry(entry)}
-                            onKeyDown={(event) => {
-                              if (event.key === "Enter") {
-                                onEditEntry(entry);
-                              }
-                            }}
-                          >
-                            <div className="health-log-entry-main">
-                              <p>{entry.TemplateName || entry.FoodName || "Entry"}</p>
-                            </div>
-                            <div className="health-log-entry-meta">
-                              <span className="health-log-entry-calories">
-                                {Math.round(entry.CaloriesPerServing * entry.Quantity)} kcal
-                              </span>
-                              <span className="health-log-entry-serving">
-                                {FormatAmount(entry.DisplayQuantity ?? entry.Quantity)}{" "}
-                                {NormalizeServingLabel(entry.PortionLabel) ||
-                                  entry.ServingDescription ||
-                                  "serving"}
-                              </span>
-                            </div>
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ))
-              )}
-            </div>
-          </section>
-          {toast ? (
-            <div className="health-toast" role="status" aria-live="polite">
-              <span>{toast.message}</span>
-              <button type="button" onClick={undoDelete}>
-                Undo
-              </button>
-            </div>
-          ) : null}
-        </>
-      ) : null}
+      {error ? <p className="form-error">{error}</p> : null}
+      {status === "loading" ? <p className="health-empty">Loading...</p> : null}
     </div>
   );
 };

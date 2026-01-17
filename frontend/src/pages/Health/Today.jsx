@@ -349,13 +349,13 @@ const Today = () => {
     <div className="health-grid">
       <section className="module-panel">
         <header className="module-panel-header">
-          <div>
+          <div className="health-today-header">
             <h2>{todayLabel}</h2>
+            <Link className="button-pill" to="/health/log">
+              Log a meal
+            </Link>
           </div>
           <div className="health-actions">
-            <Link className="button-pill" to={`/health/log?date=${today}&add=1`}>
-              Log meal
-            </Link>
             <button type="button" className="module-link" onClick={openStepsModal}>
               Log steps
             </button>
@@ -460,6 +460,7 @@ const Today = () => {
       {stepsModalOpen ? (
         <div
           className="modal-backdrop"
+          data-health-modal-label="Log steps"
           onMouseDown={(event) => {
             stepsBackdropDown.current = event.target === event.currentTarget;
           }}
@@ -530,6 +531,7 @@ const Today = () => {
       {weightModalOpen ? (
         <div
           className="modal-backdrop"
+          data-health-modal-label="Log weight"
           onMouseDown={(event) => {
             weightBackdropDown.current = event.target === event.currentTarget;
           }}
