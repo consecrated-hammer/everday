@@ -84,6 +84,17 @@ const FormatAmount = (value) => {
   }
   return Number.isInteger(numeric) ? String(numeric) : String(Number(numeric.toFixed(2)));
 };
+const NormalizeServingLabel = (value) => {
+  const label = (value || "").trim();
+  if (!label) {
+    return "";
+  }
+  const normalized = label.toLowerCase();
+  if (normalized === "serve" || normalized === "meal") {
+    return "serving";
+  }
+  return label;
+};
 const FormatNumber = (value, options = {}) => {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) {
@@ -458,6 +469,71 @@ const Log = ({ InitialDate, InitialAddMode }) => {
   }, [datePickerOpen, pickerMonth]);
 
   useEffect(() => {
+    if (!datePickerOpen) {
+      const currentMonth = today.slice(0, 7);
+      const selectedMonth = logDate.slice(0, 7);
+      setPickerMonth(selectedMonth > currentMonth ? currentMonth : selectedMonth);
+    }
+  }, [datePickerOpen, logDate, today]);
+
+  useEffect(() => {
+    if (!datePickerOpen) {
+      return undefined;
+    }
+    const handleClick = (event) => {
+      if (datePickerRef.current && !datePickerRef.current.contains(event.target)) {
+        setDatePickerOpen(false);
+      }
+    };
+    const handleKey = (event) => {
+      if (event.key === "Escape") {
+        setDatePickerOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClick);
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      document.removeEventListener("mousedown", handleClick);
+      document.removeEventListener("keydown", handleKey);
+    };
+  }, [datePickerOpen]);
+
+  useEffect(() => {
+    if (!datePickerOpen) {
+      return undefined;
+    }
+    let isActive = true;
+    const loadLoggedDays = async () => {
+      const dates = BuildMonthDates(pickerMonth);
+      try {
+        const results = await Promise.all(
+          dates.map(async (date) => {
+            try {
+              const data = await FetchDailyLog(date);
+              return data?.Entries?.length ? date : null;
+            } catch {
+              return null;
+            }
+          })
+        );
+        if (!isActive) {
+          return;
+        }
+        const unique = Array.from(new Set(results.filter(Boolean)));
+        setLoggedDays(unique);
+      } catch {
+        if (isActive) {
+          setLoggedDays([]);
+        }
+      }
+    };
+    loadLoggedDays();
+    return () => {
+      isActive = false;
+    };
+  }, [datePickerOpen, pickerMonth]);
+
+  useEffect(() => {
     let isActive = true;
     const loadShareUsers = async () => {
       try {
@@ -648,24 +724,6 @@ const Log = ({ InitialDate, InitialAddMode }) => {
     return Number.isFinite(servings) && servings > 0 ? servings : 1;
   };
 
-  const templateCalories = useMemo(() => {
-    const totals = {};
-    templates.forEach((template) => {
-      let calories = 0;
-      template.Items.forEach((item) => {
-        const food = foods.find((entry) => entry.FoodId === item.FoodId);
-        if (!food) {
-          return;
-        }
-        const quantity = item.EntryQuantity || item.Quantity || 1;
-        calories += (food.CaloriesPerServing || 0) * quantity;
-      });
-      const servings = resolveTemplateServings(template);
-      totals[template.Template.MealTemplateId] = Math.round(calories / servings);
-    });
-    return totals;
-  }, [templates, foods]);
-
   const groupedEntries = useMemo(() => GroupEntriesByMeal(entries), [entries]);
   const slotTotals = useMemo(() => {
     const totals = {};
@@ -682,6 +740,38 @@ const Log = ({ InitialDate, InitialAddMode }) => {
     }
     return foods.filter((food) => food.FoodName.toLowerCase().includes(query));
   }, [foods, searchQuery]);
+
+  const foodsById = useMemo(
+    () =>
+      foods.reduce((map, food) => {
+        map[food.FoodId] = food;
+        return map;
+      }, {}),
+    [foods]
+  );
+
+  const getTemplateServingLabel = (template) => {
+    const servings = resolveTemplateServings(template);
+    return servings > 1 ? `1 of ${FormatAmount(servings)} servings` : "1 serving";
+  };
+
+  const templateCalories = useMemo(() => {
+    const totals = {};
+    templates.forEach((template) => {
+      let calories = 0;
+      template.Items.forEach((item) => {
+        const food = foodsById[item.FoodId];
+        if (!food) {
+          return;
+        }
+        const quantity = item.EntryQuantity || item.Quantity || 1;
+        calories += (food.CaloriesPerServing || 0) * quantity;
+      });
+      const servings = resolveTemplateServings(template);
+      totals[template.Template.MealTemplateId] = Math.round(calories / servings);
+    });
+    return totals;
+  }, [templates, foodsById]);
 
   const filteredTemplates = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -781,15 +871,32 @@ const Log = ({ InitialDate, InitialAddMode }) => {
     }
     return EstimateNutrition(selectedFood, effectiveBaseAmount * quantityValue, effectiveBaseUnit);
   }, [effectiveBaseAmount, effectiveBaseUnit, quantityValue, selectedFood]);
-
-  const ensureDailyLog = async () => {
-    if (dailyLog) {
-      return dailyLog;
+  const editCalories = useMemo(() => {
+    if (!form.SelectedId || !Number.isFinite(quantityValue)) {
+      return null;
     }
-    const created = await CreateDailyLog({ LogDate: logDate, Steps: 0 });
-    setDailyLog(created.DailyLog);
-    return created.DailyLog;
-  };
+    if (isFoodSelected) {
+      if (Number.isFinite(estimatedCalories)) {
+        return estimatedCalories;
+      }
+      const base = Number(selectedFood?.CaloriesPerServing || 0);
+      return Math.round(base * quantityValue);
+    }
+    if (isTemplateSelected) {
+      const base = Number(templateCalories[selectedValue] || 0);
+      return Math.round(base * quantityValue);
+    }
+    return null;
+  }, [
+    estimatedCalories,
+    form.SelectedId,
+    isFoodSelected,
+    isTemplateSelected,
+    quantityValue,
+    selectedFood,
+    selectedValue,
+    templateCalories
+  ]);
 
   const startMealFlow = (mealType, backTarget = "slots") => {
     setActiveMealType(mealType);

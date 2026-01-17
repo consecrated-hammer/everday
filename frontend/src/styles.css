@@ -6860,6 +6860,10 @@ th {
     display: none;
   }
 
+  .module-shell--health .health-log-add-entry {
+    display: none;
+  }
+
   .health-fab {
     display: flex;
     bottom: 34px;
