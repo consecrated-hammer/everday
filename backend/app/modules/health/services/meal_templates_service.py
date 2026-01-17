@@ -70,6 +70,7 @@ def _BuildMealTemplate(template: MealTemplateModel, items: list[MealTemplateItem
             MealTemplateId=template.MealTemplateId,
             TemplateName=template.TemplateName,
             Servings=float(template.Servings) if template.Servings is not None else 1.0,
+            IsFavourite=bool(template.IsFavourite),
             CreatedAt=template.CreatedAt,
         ),
         Items=items,
@@ -119,6 +120,7 @@ def CreateMealTemplate(db: Session, UserId: int, Input: CreateMealTemplateInput)
         UserId=UserId,
         TemplateName=TemplateName,
         Servings=servings,
+        IsFavourite=bool(Input.IsFavourite),
     )
     db.add(template)
     db.flush()
@@ -217,6 +219,8 @@ def UpdateMealTemplate(
         if servings <= 0:
             raise ValueError("Servings must be greater than zero.")
         template.Servings = servings
+    if Input.IsFavourite is not None:
+        template.IsFavourite = bool(Input.IsFavourite)
 
     if Input.Items is not None:
         db.query(MealTemplateItemModel).filter(

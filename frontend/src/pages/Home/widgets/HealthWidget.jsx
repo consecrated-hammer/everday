@@ -103,7 +103,7 @@ const HealthWidget = ({ IsExpanded }) => {
       if (event.detail?.widgetId !== "health" || event.detail?.actionId !== "log-meal") {
         return;
       }
-      setLogModalOpen(true);
+      window.location.href = "/health/log";
     };
     window.addEventListener("dashboard-widget-action", handler);
     return () => window.removeEventListener("dashboard-widget-action", handler);

@@ -31,6 +31,7 @@ This document is the source of truth for UI and visual style decisions. Use it f
 - Manage Columns: dropdown with checkboxes; include "Reset to default" in overflow menu.
 - Modals: reserved for complex forms; standard forms should be inline.
 - Icons: use a single icon set per theme selection; avoid circled glyphs and prefer crisp outline icons.
+- Checkboxes: do not wrap inputs in a `<label>` inside grid layouts. Use a wrapper container with `<input>` and a `<label htmlFor="...">` to avoid alignment issues. This is the default pattern.
 
 ## Buttons & Actions
 - Default buttons are compact pill styles with clear hover/active states.

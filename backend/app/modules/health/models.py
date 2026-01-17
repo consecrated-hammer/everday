@@ -141,6 +141,7 @@ class MealTemplate(Base):
     UserId = Column(Integer, nullable=False, index=True)
     TemplateName = Column(String(200), nullable=False)
     Servings = Column(Numeric(10, 2), nullable=False, default=1)
+    IsFavourite = Column(Boolean, nullable=False, default=False)
     CreatedAt = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
 
 

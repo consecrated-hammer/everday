@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 import Icon from "../../components/Icon.jsx";
 import { FormatNumber } from "../../lib/formatters.js";
@@ -37,6 +37,7 @@ const EmptyFoodForm = {
 const EmptyTemplateForm = {
   TemplateName: "",
   Servings: "1",
+  IsFavourite: false,
   Items: []
 };
 
@@ -354,6 +355,7 @@ const Foods = () => {
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
   const [filterMenuOpen, setFilterMenuOpen] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const addHandledRef = useRef(null);
   const sortMenuRef = useRef(null);
   const filterMenuRef = useRef(null);
@@ -393,6 +395,19 @@ const Foods = () => {
   const [mealFoodSearch, setMealFoodSearch] = useState("");
   const [mealFoodQuantities, setMealFoodQuantities] = useState({});
   const foodFormRef = useRef(null);
+  const returnTarget = searchParams.get("return");
+  const returnMeal = searchParams.get("meal");
+  const returnLink = useMemo(() => {
+    if (returnTarget !== "log") {
+      return "";
+    }
+    const params = new URLSearchParams();
+    if (returnMeal) {
+      params.set("meal", returnMeal);
+    }
+    params.set("add", "1");
+    return `/health/log?${params.toString()}`;
+  }, [returnMeal, returnTarget]);
 
   const applyMealDraft = (draft) => {
     setActiveTab("meals");
@@ -430,6 +445,12 @@ const Foods = () => {
 
   useEffect(() => {
     loadData();
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      ClearMealDraft();
+    };
   }, []);
 
   useEffect(() => {
@@ -977,6 +998,7 @@ const Foods = () => {
       const payload = {
         TemplateName: templateForm.TemplateName,
         Servings: servingsValue,
+        IsFavourite: !!templateForm.IsFavourite,
         Items: templateForm.Items.map((item, index) => ({
           FoodId: item.FoodId,
           MealType: item.MealType,
@@ -1013,6 +1035,7 @@ const Foods = () => {
     setTemplateForm({
       TemplateName: template.Template.TemplateName,
       Servings: template.Template.Servings ? String(template.Template.Servings) : "1",
+      IsFavourite: !!template.Template.IsFavourite,
       Items: template.Items.map((item) => ({
         FoodId: item.FoodId,
         MealType: item.MealType,
@@ -1863,8 +1886,20 @@ const Foods = () => {
       {activeTab === "foods" && showFoodForm ? (
         <section className="module-panel" ref={foodFormRef}>
           <header className="module-panel-header">
-            <div>
-              <h3>{selectedFoodId ? "Edit food" : "Add food"}</h3>
+            <div className="health-panel-title-block">
+              <div className="health-panel-title-row">
+                {returnLink ? (
+                  <button
+                    type="button"
+                    className="icon-button"
+                    onClick={() => navigate(returnLink)}
+                    aria-label="Back to log"
+                  >
+                    <Icon name="chevronLeft" className="icon" />
+                  </button>
+                ) : null}
+                <h3>{selectedFoodId ? "Edit food" : "Add food"}</h3>
+              </div>
               <p>{headerNote}</p>
             </div>
           </header>
@@ -2023,7 +2058,12 @@ const Foods = () => {
       ) : null}
 
       {lookupModalOpen ? (
-        <div className="modal-backdrop" role="dialog" aria-modal="true">
+        <div
+          className="modal-backdrop"
+          role="dialog"
+          aria-modal="true"
+          data-health-modal-label="Lookup results"
+        >
           <div className="modal health-edit-modal" onClick={(event) => event.stopPropagation()}>
             <div className="modal-header">
               <div>
@@ -2209,9 +2249,19 @@ const Foods = () => {
                     ? mealParseResult
                       ? "Review suggestion and save."
                       : "Describe a meal to get a suggestion."
-                    : "Build a meal from foods and save."}
+                  : "Build a meal from foods and save."}
               </p>
             </div>
+            {returnLink ? (
+              <button
+                type="button"
+                className="icon-button"
+                onClick={() => navigate(returnLink)}
+                aria-label="Back to log"
+              >
+                <Icon name="chevronLeft" className="icon" />
+              </button>
+            ) : null}
           </header>
 
           {!editingTemplateId ? (
@@ -2260,6 +2310,22 @@ const Foods = () => {
                     }
                   />
                 </label>
+                {editingTemplateId ? (
+                  <div className="health-toggle-inline health-toggle-inline--meal">
+                    <input
+                      id="meal-favourite"
+                      type="checkbox"
+                      checked={templateForm.IsFavourite}
+                      onChange={(event) =>
+                        setTemplateForm((prev) => ({
+                          ...prev,
+                          IsFavourite: event.target.checked
+                        }))
+                      }
+                    />
+                    <label htmlFor="meal-favourite">Favourite</label>
+                  </div>
+                ) : null}
               </div>
               <div className="form-actions">
                 <button type="button" onClick={saveTemplate}>

@@ -396,6 +396,7 @@ class MealTemplate(BaseModel):
     MealTemplateId: str
     TemplateName: str
     Servings: float
+    IsFavourite: bool = False
     CreatedAt: datetime
 
 
@@ -455,12 +456,14 @@ class MealTemplateItemInput(BaseModel):
 class CreateMealTemplateInput(BaseModel):
     TemplateName: str = Field(min_length=1)
     Servings: float = Field(default=1.0, gt=0)
+    IsFavourite: bool = False
     Items: list[MealTemplateItemInput]
 
 
 class UpdateMealTemplateInput(BaseModel):
     TemplateName: str | None = Field(default=None, min_length=1)
     Servings: float | None = Field(default=None, gt=0)
+    IsFavourite: bool | None = None
     Items: list[MealTemplateItemInput] | None = None
 
 
