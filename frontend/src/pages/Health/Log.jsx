@@ -11,6 +11,7 @@ import {
   FetchDailyLog,
   FetchFoods,
   FetchHealthProfile,
+  FetchHealthSettings,
   FetchMealTemplates,
   FetchPortionOptions,
   ParseMealTemplateText,
@@ -361,6 +362,7 @@ const Log = ({ InitialDate, InitialAddMode }) => {
   const [shareUsers, setShareUsers] = useState([]);
   const [shareTargetUserId, setShareTargetUserId] = useState("");
   const [shareSummaryUserId, setShareSummaryUserId] = useState("");
+  const [targets, setTargets] = useState(null);
 
   const [datePickerOpen, setDatePickerOpen] = useState(false);
   const [loggedDays, setLoggedDays] = useState([]);
@@ -372,6 +374,8 @@ const Log = ({ InitialDate, InitialAddMode }) => {
   const [saveMealServings, setSaveMealServings] = useState("1");
   const [saveMealError, setSaveMealError] = useState("");
   const [summaryDetailsOpen, setSummaryDetailsOpen] = useState(false);
+  const [shareSummaryOpen, setShareSummaryOpen] = useState(false);
+  const [dayDetailsOpen, setDayDetailsOpen] = useState(false);
 
   const loadData = async (dateValue) => {
     try {
@@ -391,6 +395,15 @@ const Log = ({ InitialDate, InitialAddMode }) => {
       setStatus("error");
       setError(err?.message || "Failed to load log");
     }
+  };
+
+  const ensureDailyLog = async () => {
+    if (dailyLog?.DailyLogId) {
+      return dailyLog;
+    }
+    const created = await CreateDailyLog({ LogDate: logDate, Steps: 0 });
+    setDailyLog(created.DailyLog);
+    return created.DailyLog;
   };
 
   useEffect(() => {
@@ -537,7 +550,11 @@ const Log = ({ InitialDate, InitialAddMode }) => {
     let isActive = true;
     const loadShareUsers = async () => {
       try {
-        const [profile, users] = await Promise.all([FetchHealthProfile(), FetchUsers()]);
+        const [profile, users, settings] = await Promise.all([
+          FetchHealthProfile(),
+          FetchUsers(),
+          FetchHealthSettings()
+        ]);
         if (!isActive) {
           return;
         }
@@ -548,9 +565,11 @@ const Log = ({ InitialDate, InitialAddMode }) => {
             )
           : [];
         setShareUsers(filtered);
+        setTargets(settings?.Targets || null);
       } catch {
         if (isActive) {
           setShareUsers([]);
+          setTargets(null);
         }
       }
     };
@@ -732,6 +751,66 @@ const Log = ({ InitialDate, InitialAddMode }) => {
     });
     return totals;
   }, [groupedEntries]);
+  const dayTotals = useMemo(
+    () =>
+      entries.reduce(
+        (totals, entry) => {
+          const quantity = Number(entry.Quantity || 1);
+          return {
+            calories: totals.calories + CalculateEntryCalories(entry),
+            protein: totals.protein + Number(entry.ProteinPerServing || 0) * quantity,
+            carbs: totals.carbs + Number(entry.CarbsPerServing || 0) * quantity,
+            fat: totals.fat + Number(entry.FatPerServing || 0) * quantity,
+            fibre: totals.fibre + Number(entry.FibrePerServing || 0) * quantity,
+            sugar: totals.sugar + Number(entry.SugarPerServing || 0) * quantity,
+            saturatedFat:
+              totals.saturatedFat + Number(entry.SaturatedFatPerServing || 0) * quantity,
+            sodium: totals.sodium + Number(entry.SodiumPerServing || 0) * quantity
+          };
+        },
+        {
+          calories: 0,
+          protein: 0,
+          carbs: 0,
+          fat: 0,
+          fibre: 0,
+          sugar: 0,
+          saturatedFat: 0,
+          sodium: 0
+        }
+      ),
+    [entries]
+  );
+  const dayCaloriesLabel = FormatNumber(Math.round(dayTotals.calories));
+  const dayCalorieTarget = Number(targets?.DailyCalorieTarget ?? 0);
+  const dayMacroRows = useMemo(() => {
+    const resolveTarget = (key) => {
+      if (!targets) {
+        return 0;
+      }
+      if (key === "Protein") {
+        return targets.ProteinTargetMax ?? targets.ProteinTargetMin ?? 0;
+      }
+      if (key === "Fibre") return targets.FibreTarget ?? 0;
+      if (key === "Carbs") return targets.CarbsTarget ?? 0;
+      if (key === "Fat") return targets.FatTarget ?? 0;
+      if (key === "Sugar") return targets.SugarTarget ?? 0;
+      if (key === "Saturated fat") return targets.SaturatedFatTarget ?? 0;
+      if (key === "Sodium") return targets.SodiumTarget ?? 0;
+      return 0;
+    };
+    return [
+      { key: "Protein", value: dayTotals.protein, unit: "g" },
+      { key: "Carbs", value: dayTotals.carbs, unit: "g" },
+      { key: "Fat", value: dayTotals.fat, unit: "g" },
+      { key: "Fibre", value: dayTotals.fibre, unit: "g" },
+      { key: "Sugar", value: dayTotals.sugar, unit: "g" },
+      { key: "Saturated fat", value: dayTotals.saturatedFat, unit: "g" },
+      { key: "Sodium", value: dayTotals.sodium, unit: "mg" }
+    ]
+      .map((row) => ({ ...row, target: resolveTarget(row.key) }))
+      .filter((row) => row.value > 0);
+  }, [dayTotals, targets]);
 
   const filteredFoods = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -919,11 +998,13 @@ const Log = ({ InitialDate, InitialAddMode }) => {
     setEditingEntryId(null);
     setEditContext(null);
     setShowNotes(false);
+    setShareSummaryOpen(false);
   };
 
   const openSummary = (mealType) => {
     setActiveMealType(mealType);
     setView("summary");
+    setShareSummaryOpen(false);
   };
 
   const handleSelectItem = (item) => {
@@ -998,6 +1079,7 @@ const Log = ({ InitialDate, InitialAddMode }) => {
         });
       }
       setShareSummaryUserId("");
+      setShareSummaryOpen(false);
       setStatus("ready");
     } catch (err) {
       setStatus("error");
@@ -1070,6 +1152,7 @@ const Log = ({ InitialDate, InitialAddMode }) => {
       setEditingEntryId(null);
       setEditContext(null);
       setShareTargetUserId("");
+      setShareSummaryOpen(false);
       if (closeToSummary) {
         openSummary(form.MealType);
       }
@@ -1488,6 +1571,49 @@ const Log = ({ InitialDate, InitialAddMode }) => {
               </div>
             ) : null}
           </div>
+          <div className="health-log-day-summary">
+            <div className="health-log-summary-header">
+              <span>Day total</span>
+              <span className="health-log-summary-calories">
+                {dayCalorieTarget
+                  ? `${dayCaloriesLabel} / ${FormatNumber(dayCalorieTarget)} kcal`
+                  : `${dayCaloriesLabel} kcal`}
+              </span>
+            </div>
+            <button
+              type="button"
+              className="health-summary-toggle"
+              onClick={() => setDayDetailsOpen((prev) => !prev)}
+            >
+              Show details
+              <Icon
+                name="chevronDown"
+                className={`icon${dayDetailsOpen ? " is-rotated" : ""}`}
+              />
+            </button>
+            {dayDetailsOpen ? (
+              <div className="health-summary-macro-list">
+                {dayMacroRows.length ? (
+                  dayMacroRows.map((row) => (
+                    <div key={row.key} className="health-summary-macro-row">
+                      <span>{row.key}</span>
+                      <span>
+                        {row.target
+                          ? `${FormatNumber(row.value, {
+                              maximumFractionDigits: 2
+                            })} / ${FormatNumber(row.target, {
+                              maximumFractionDigits: 2
+                            })} ${row.unit}`
+                          : `${FormatNumber(row.value, { maximumFractionDigits: 2 })} ${row.unit}`}
+                      </span>
+                    </div>
+                  ))
+                ) : (
+                  <span className="health-empty">No macros logged yet.</span>
+                )}
+              </div>
+            ) : null}
+          </div>
           <div className="health-slot-list">
             {MealOrder.map((meal) => (
               <div key={meal} className="health-slot-row">
@@ -1639,6 +1765,17 @@ const Log = ({ InitialDate, InitialAddMode }) => {
               </button>
             ))}
           </div>
+          {searchTab === "search" ? (
+            <div className="health-add-cta-group">
+              <Link
+                className="health-add-cta"
+                to={`/health/foods?add=food&return=log&meal=${encodeURIComponent(activeMealType)}`}
+              >
+                <Icon name="plus" className="icon" />
+                <span>Can't find it? Let's add it!</span>
+              </Link>
+            </div>
+          ) : null}
           {showSearchList ? (
             <ul className="health-result-list">
               {searchItems.length ? (
@@ -1657,13 +1794,6 @@ const Log = ({ InitialDate, InitialAddMode }) => {
                     </button>
                   </li>
                 ))
-              ) : searchQuery.trim() && searchTab === "search" ? (
-                <li>
-                  <Link className="health-add-cta" to="/health/foods?add=food">
-                    <Icon name="plus" className="icon" />
-                    <span>Can't find it? Let's add it!</span>
-                  </Link>
-                </li>
               ) : (
                 <li className="health-empty">{emptyListLabel}</li>
               )}
@@ -1741,33 +1871,6 @@ const Log = ({ InitialDate, InitialAddMode }) => {
             </div>
           ) : null}
           <div className="health-summary-actions">
-            {shareUsers.length ? (
-              <div className="health-summary-share">
-                <label htmlFor="share-summary">Share with</label>
-                <div className="health-summary-share-row">
-                  <select
-                    id="share-summary"
-                    value={shareSummaryUserId}
-                    onChange={(event) => setShareSummaryUserId(event.target.value)}
-                  >
-                    <option value="">Select a user</option>
-                    {shareUsers.map((user) => (
-                      <option key={user.Id} value={user.Id}>
-                        {FormatUserLabel(user)}
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    type="button"
-                    className="button-secondary"
-                    onClick={shareSlotEntries}
-                    disabled={!shareSummaryUserId}
-                  >
-                    Share
-                  </button>
-                </div>
-              </div>
-            ) : null}
             <button
               type="button"
               className="primary-button health-summary-button"
@@ -1783,6 +1886,55 @@ const Log = ({ InitialDate, InitialAddMode }) => {
               >
                 Save this meal
               </button>
+            ) : null}
+            {shareUsers.length ? (
+              <div className="health-summary-share">
+                {!shareSummaryOpen ? (
+                  <button
+                    type="button"
+                    className="button-secondary health-summary-button"
+                    onClick={() => setShareSummaryOpen(true)}
+                  >
+                    Share this meal
+                  </button>
+                ) : (
+                  <>
+                    <label htmlFor="share-summary">Share with</label>
+                    <div className="health-summary-share-row">
+                      <select
+                        id="share-summary"
+                        value={shareSummaryUserId}
+                        onChange={(event) => setShareSummaryUserId(event.target.value)}
+                      >
+                        <option value="">Select a user</option>
+                        {shareUsers.map((user) => (
+                          <option key={user.Id} value={user.Id}>
+                            {FormatUserLabel(user)}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        className="button-secondary"
+                        onClick={shareSlotEntries}
+                        disabled={!shareSummaryUserId}
+                      >
+                        Share
+                      </button>
+                      <button
+                        type="button"
+                        className="button-secondary"
+                        onClick={() => {
+                          setShareSummaryOpen(false);
+                          setShareSummaryUserId("");
+                        }}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
             ) : null}
           </div>
         </section>

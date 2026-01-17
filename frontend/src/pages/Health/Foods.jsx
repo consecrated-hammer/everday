@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 import Icon from "../../components/Icon.jsx";
 import { FormatNumber } from "../../lib/formatters.js";
@@ -355,6 +355,7 @@ const Foods = () => {
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
   const [filterMenuOpen, setFilterMenuOpen] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const addHandledRef = useRef(null);
   const sortMenuRef = useRef(null);
   const filterMenuRef = useRef(null);
@@ -394,6 +395,19 @@ const Foods = () => {
   const [mealFoodSearch, setMealFoodSearch] = useState("");
   const [mealFoodQuantities, setMealFoodQuantities] = useState({});
   const foodFormRef = useRef(null);
+  const returnTarget = searchParams.get("return");
+  const returnMeal = searchParams.get("meal");
+  const returnLink = useMemo(() => {
+    if (returnTarget !== "log") {
+      return "";
+    }
+    const params = new URLSearchParams();
+    if (returnMeal) {
+      params.set("meal", returnMeal);
+    }
+    params.set("add", "1");
+    return `/health/log?${params.toString()}`;
+  }, [returnMeal, returnTarget]);
 
   const applyMealDraft = (draft) => {
     setActiveTab("meals");
@@ -1872,8 +1886,20 @@ const Foods = () => {
       {activeTab === "foods" && showFoodForm ? (
         <section className="module-panel" ref={foodFormRef}>
           <header className="module-panel-header">
-            <div>
-              <h3>{selectedFoodId ? "Edit food" : "Add food"}</h3>
+            <div className="health-panel-title-block">
+              <div className="health-panel-title-row">
+                {returnLink ? (
+                  <button
+                    type="button"
+                    className="icon-button"
+                    onClick={() => navigate(returnLink)}
+                    aria-label="Back to log"
+                  >
+                    <Icon name="chevronLeft" className="icon" />
+                  </button>
+                ) : null}
+                <h3>{selectedFoodId ? "Edit food" : "Add food"}</h3>
+              </div>
               <p>{headerNote}</p>
             </div>
           </header>
@@ -2223,9 +2249,19 @@ const Foods = () => {
                     ? mealParseResult
                       ? "Review suggestion and save."
                       : "Describe a meal to get a suggestion."
-                    : "Build a meal from foods and save."}
+                  : "Build a meal from foods and save."}
               </p>
             </div>
+            {returnLink ? (
+              <button
+                type="button"
+                className="icon-button"
+                onClick={() => navigate(returnLink)}
+                aria-label="Back to log"
+              >
+                <Icon name="chevronLeft" className="icon" />
+              </button>
+            ) : null}
           </header>
 
           {!editingTemplateId ? (

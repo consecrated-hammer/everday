@@ -1582,6 +1582,17 @@ iconify-icon {
   margin-bottom: 16px;
 }
 
+.health-panel-title-block {
+  display: grid;
+  gap: 4px;
+}
+
+.health-panel-title-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .module-panel-actions {
   display: flex;
   flex-wrap: wrap;
@@ -4376,6 +4387,15 @@ th {
   color: var(--text);
 }
 
+.health-log-day-summary {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+}
+
 .health-edit-modal {
   width: min(560px, 94vw);
   background: var(--surface-strong);
@@ -4919,6 +4939,11 @@ th {
   color: var(--accent);
 }
 
+.health-add-cta-group {
+  display: grid;
+  gap: 6px;
+}
+
 .health-log-summary-screen .health-summary-header {
   display: grid;
   grid-template-columns: auto 1fr auto;
@@ -5012,11 +5037,11 @@ th {
 .health-summary-share {
   display: grid;
   gap: 6px;
-  font-size: 0.8rem;
   color: var(--text-soft);
 }
 
 .health-summary-share label {
+  font-size: 0.8rem;
   font-weight: 600;
   color: var(--text);
 }
