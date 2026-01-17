@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   Bar,
   CartesianGrid,
@@ -46,6 +46,20 @@ const FormatNumber = (value) => {
   return Number(value).toLocaleString();
 };
 
+const FormatMetricValue = (value, key) => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return "";
+  }
+  if (key === "Steps") {
+    return `${FormatNumber(numeric)} steps`;
+  }
+  if (key === "Calories") {
+    return `${FormatNumber(numeric)}kcal`;
+  }
+  return `${FormatNumber(numeric)}g`;
+};
+
 const NutrientLabels = {
   Calories: "Calories",
   Protein: "Protein",
@@ -60,7 +74,7 @@ const NutrientLabels = {
 
 const GetBarValue = (totals, log, key) => {
   if (!totals) return 0;
-  if (key === "Calories") return totals.NetCalories ?? totals.TotalCalories ?? 0;
+  if (key === "Calories") return totals.TotalCalories ?? totals.NetCalories ?? 0;
   if (key === "Protein") return totals.TotalProtein ?? 0;
   if (key === "Steps") return log?.Steps ?? 0;
   if (key === "Fibre") return totals.TotalFibre ?? 0;
@@ -72,9 +86,19 @@ const GetBarValue = (totals, log, key) => {
   return 0;
 };
 
-const GetBarTarget = (targets, key) => {
+const GetAdjustedCalorieTarget = (targets, log) => {
+  const baseTarget = Number(targets?.DailyCalorieTarget ?? 0);
+  if (!baseTarget) return 0;
+  const steps = Number(log?.Steps ?? 0);
+  const stepFactor =
+    log?.StepKcalFactorOverride ?? Number(targets?.StepKcalFactor ?? 0);
+  const adjustment = steps > 0 && stepFactor > 0 ? steps * stepFactor : 0;
+  return Math.max(0, Math.round(baseTarget + adjustment));
+};
+
+const GetBarTarget = (targets, log, key) => {
   if (!targets) return 0;
-  if (key === "Calories") return targets.DailyCalorieTarget ?? 0;
+  if (key === "Calories") return GetAdjustedCalorieTarget(targets, log);
   if (key === "Protein") return targets.ProteinTargetMax ?? targets.ProteinTargetMin ?? 0;
   if (key === "Steps") return targets.StepTarget ?? 0;
   if (key === "Fibre") return targets.FibreTarget ?? 0;
@@ -122,7 +146,12 @@ const BuildWeeklySeries = (startDate, summary, target) => {
 };
 
 const Today = () => {
+  const [searchParams] = useSearchParams();
   const today = useMemo(() => FormatDate(new Date()), []);
+  const todayLabel = useMemo(() => {
+    const parsed = ParseLocalDate(today);
+    return parsed.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+  }, [today]);
   const startDate = useMemo(() => {
     const date = new Date();
     date.setDate(date.getDate() - 6);
@@ -144,6 +173,8 @@ const Today = () => {
   const [weightLog, setWeightLog] = useState(null);
   const [stepsModalOpen, setStepsModalOpen] = useState(false);
   const [weightModalOpen, setWeightModalOpen] = useState(false);
+  const stepsBackdropDown = useRef(false);
+  const weightBackdropDown = useRef(false);
   const [trendsOpen, setTrendsOpen] = useState(() => {
     const stored = localStorage.getItem("health.trendsOpen");
     if (stored === "true") return true;
@@ -174,6 +205,23 @@ const Today = () => {
   useEffect(() => {
     loadData();
   }, []);
+
+  useEffect(() => {
+    const shouldOpenSteps = searchParams.get("steps") === "1";
+    const shouldOpenWeight = searchParams.get("weight") === "1";
+    if (shouldOpenSteps) {
+      setError("");
+      setStepsDate(today);
+      setStepsModalOpen(true);
+      loadStepsLog(today);
+    }
+    if (shouldOpenWeight) {
+      setError("");
+      setWeightDate(today);
+      setWeightModalOpen(true);
+      loadWeightLog(today);
+    }
+  }, [searchParams, today]);
 
   useEffect(() => {
     localStorage.setItem("health.trendsOpen", String(trendsOpen));
@@ -302,10 +350,10 @@ const Today = () => {
       <section className="module-panel">
         <header className="module-panel-header">
           <div>
-            <h2>{today}</h2>
+            <h2>{todayLabel}</h2>
           </div>
           <div className="health-actions">
-            <Link className="button-pill" to={`/health/log?date=${today}`}>
+            <Link className="button-pill" to={`/health/log?date=${today}&add=1`}>
               Log meal
             </Link>
             <button type="button" className="module-link" onClick={openStepsModal}>
@@ -320,8 +368,17 @@ const Today = () => {
         <div className="health-progress-list">
           {barOrder.filter((key) => ShouldShowBar(targets, key)).map((key) => {
             const value = GetBarValue(totals, log, key);
-            const target = GetBarTarget(targets, key);
+            const target = GetBarTarget(targets, log, key);
             const { percent, over } = ProgressClamp(value, target);
+            const deltaValue = target > 0 ? target - value : 0;
+            const deltaLabel =
+              target > 0
+                ? `${FormatMetricValue(Math.abs(deltaValue), key)} ${deltaValue >= 0 ? "under" : "over"}`
+                : "";
+            const metaParts = [
+              target > 0 ? `${Math.round((value / target) * 100)}% of target` : "",
+              target > 0 ? deltaLabel : ""
+            ].filter(Boolean);
             return (
               <div key={key} className="health-progress">
                 <div className="health-progress-header">
@@ -330,6 +387,11 @@ const Today = () => {
                     <p className="health-progress-value">
                       {FormatNumber(value)}
                       {target ? ` / ${FormatNumber(target)}` : ""}
+                      {metaParts.length ? (
+                        <span className="health-progress-meta-inline">
+                          {metaParts.join(" • ")}
+                        </span>
+                      ) : null}
                     </p>
                   </div>
                   {over > 0 ? <span className="health-over">+{FormatNumber(over)}</span> : null}
@@ -395,22 +457,20 @@ const Today = () => {
           </div>
         ) : null}
       </section>
-      <div className="health-fab">
-        <div className="health-fab-row">
-          <Link className="health-fab-primary" to={`/health/log?date=${today}&add=1`}>
-            Log meal
-          </Link>
-          <button type="button" className="health-fab-primary" onClick={openStepsModal}>
-            Log steps
-          </button>
-          <button type="button" className="health-fab-primary" onClick={openWeightModal}>
-            Log weight
-          </button>
-        </div>
-      </div>
       {stepsModalOpen ? (
-        <div className="modal-backdrop" onClick={() => setStepsModalOpen(false)}>
-          <div className="modal modal--health" onClick={(event) => event.stopPropagation()}>
+        <div
+          className="modal-backdrop"
+          onMouseDown={(event) => {
+            stepsBackdropDown.current = event.target === event.currentTarget;
+          }}
+          onMouseUp={(event) => {
+            if (stepsBackdropDown.current && event.target === event.currentTarget) {
+              setStepsModalOpen(false);
+            }
+            stepsBackdropDown.current = false;
+          }}
+        >
+          <div className="modal health-edit-modal" onClick={(event) => event.stopPropagation()}>
             <form onSubmit={submitSteps}>
               <div className="modal-header">
                 <h3>Log steps</h3>
@@ -468,8 +528,19 @@ const Today = () => {
         </div>
       ) : null}
       {weightModalOpen ? (
-        <div className="modal-backdrop" onClick={() => setWeightModalOpen(false)}>
-          <div className="modal modal--health" onClick={(event) => event.stopPropagation()}>
+        <div
+          className="modal-backdrop"
+          onMouseDown={(event) => {
+            weightBackdropDown.current = event.target === event.currentTarget;
+          }}
+          onMouseUp={(event) => {
+            if (weightBackdropDown.current && event.target === event.currentTarget) {
+              setWeightModalOpen(false);
+            }
+            weightBackdropDown.current = false;
+          }}
+        >
+          <div className="modal health-edit-modal" onClick={(event) => event.stopPropagation()}>
             <form onSubmit={submitWeight}>
               <div className="modal-header">
                 <h3>Log weight</h3>

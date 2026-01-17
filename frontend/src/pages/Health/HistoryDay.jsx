@@ -5,6 +5,8 @@ import Icon from "../../components/Icon.jsx";
 import SwipeableEntryRow from "../../components/SwipeableEntryRow.jsx";
 import { DeleteMealEntry, FetchDailyLog } from "../../lib/healthApi.js";
 
+const FormatDate = (value) => value.toISOString().slice(0, 10);
+
 const FormatDayLabel = (value) => {
   const date = new Date(`${value}T00:00:00`);
   return date
@@ -19,6 +21,17 @@ const FormatAmount = (value) => {
   }
   return Number.isInteger(numeric) ? String(numeric) : String(Number(numeric.toFixed(2)));
 };
+const NormalizeServingLabel = (value) => {
+  const label = (value || "").trim();
+  if (!label) {
+    return "";
+  }
+  const normalized = label.toLowerCase();
+  if (normalized === "serve" || normalized === "meal") {
+    return "serving";
+  }
+  return label;
+};
 
 const CalculateEntryCalories = (entry) => {
   const calories = Number(entry?.CaloriesPerServing) * Number(entry?.Quantity);
@@ -28,6 +41,16 @@ const CalculateEntryCalories = (entry) => {
 const MealOrder = ["Breakfast", "Snack1", "Lunch", "Snack2", "Dinner", "Snack3"];
 
 const FormatMealLabel = (value) => value.replace(/Snack(\d)/, "Snack $1");
+
+const MealFilterOptions = [
+  { key: "all", label: "All meals" },
+  { key: "Breakfast", label: "Breakfast" },
+  { key: "Snack1", label: "Morning snack" },
+  { key: "Lunch", label: "Lunch" },
+  { key: "Snack2", label: "Afternoon snack" },
+  { key: "Dinner", label: "Dinner" },
+  { key: "Snack3", label: "Evening snack" }
+];
 
 const GroupEntriesByMeal = (entries) => {
   const grouped = entries.reduce((acc, entry) => {
@@ -47,6 +70,7 @@ const HistoryDay = () => {
   const [status, setStatus] = useState("idle");
   const [error, setError] = useState("");
   const [toast, setToast] = useState(null);
+  const [slotFilter, setSlotFilter] = useState("all");
   const pendingDeletesRef = useRef(new Map());
 
   const loadData = async () => {
@@ -67,6 +91,7 @@ const HistoryDay = () => {
 
   useEffect(() => {
     loadData();
+    setSlotFilter("all");
     return () => {
       pendingDeletesRef.current.forEach((pending) => clearTimeout(pending.timeoutId));
       pendingDeletesRef.current.clear();
@@ -115,7 +140,14 @@ const HistoryDay = () => {
     setToast(null);
   };
 
-  const groupedEntries = useMemo(() => GroupEntriesByMeal(entries), [entries]);
+  const filteredEntries = useMemo(() => {
+    if (!slotFilter || slotFilter === "all") {
+      return entries;
+    }
+    return entries.filter((entry) => entry.MealType === slotFilter);
+  }, [entries, slotFilter]);
+
+  const groupedEntries = useMemo(() => GroupEntriesByMeal(filteredEntries), [filteredEntries]);
   const orderedGroups = useMemo(() => {
     const ordered = MealOrder.filter((meal) => groupedEntries[meal]?.length).map((meal) => ({
       meal,
@@ -130,8 +162,8 @@ const HistoryDay = () => {
   }, [groupedEntries]);
 
   const totalCalories = useMemo(
-    () => entries.reduce((sum, entry) => sum + CalculateEntryCalories(entry), 0),
-    [entries]
+    () => filteredEntries.reduce((sum, entry) => sum + CalculateEntryCalories(entry), 0),
+    [filteredEntries]
   );
 
   const onEditEntry = (entry) => {
@@ -140,6 +172,14 @@ const HistoryDay = () => {
     }
     navigate(`/health/log?date=${encodeURIComponent(date)}&edit=${entry.MealEntryId}&add=1`);
   };
+
+  const parsedDate = date ? new Date(`${date}T00:00:00`) : null;
+  const previousDate = parsedDate
+    ? FormatDate(new Date(parsedDate.getFullYear(), parsedDate.getMonth(), parsedDate.getDate() - 1))
+    : null;
+  const nextDate = parsedDate
+    ? FormatDate(new Date(parsedDate.getFullYear(), parsedDate.getMonth(), parsedDate.getDate() + 1))
+    : null;
 
   return (
     <section className="module-panel health-history-detail">
@@ -170,6 +210,48 @@ const HistoryDay = () => {
           </button>
         </div>
       </header>
+      <div className="health-history-controls">
+        <div className="health-history-date-nav">
+          <button
+            type="button"
+            className="icon-button is-secondary"
+            onClick={() => previousDate && navigate(`/health/history/${encodeURIComponent(previousDate)}`)}
+            aria-label="Previous day"
+            disabled={!previousDate}
+          >
+            <Icon name="chevronLeft" className="icon" />
+          </button>
+          <input
+            type="date"
+            value={date || ""}
+            onChange={(event) =>
+              navigate(`/health/history/${encodeURIComponent(event.target.value || "")}`)
+            }
+            aria-label="Select day"
+          />
+          <button
+            type="button"
+            className="icon-button is-secondary"
+            onClick={() => nextDate && navigate(`/health/history/${encodeURIComponent(nextDate)}`)}
+            aria-label="Next day"
+            disabled={!nextDate}
+          >
+            <Icon name="chevronRight" className="icon" />
+          </button>
+        </div>
+        <select
+          className="health-history-filter"
+          value={slotFilter}
+          onChange={(event) => setSlotFilter(event.target.value)}
+          aria-label="Filter by meal slot"
+        >
+          {MealFilterOptions.map((option) => (
+            <option key={option.key} value={option.key}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </div>
       {error ? <p className="form-error">{error}</p> : null}
       {status === "loading" ? <p className="health-empty">Loading day...</p> : null}
       <div className="health-meal-list">
@@ -194,7 +276,9 @@ const HistoryDay = () => {
                           <p>{entry.TemplateName || entry.FoodName || "Entry"}</p>
                           <span className="health-detail">
                             {FormatAmount(entry.DisplayQuantity ?? entry.Quantity)}{" "}
-                            {entry.PortionLabel || entry.ServingDescription || "serving"}
+                            {NormalizeServingLabel(entry.PortionLabel) ||
+                              entry.ServingDescription ||
+                              "serving"}
                           </span>
                         </div>
                         <div className="health-entry-metrics">

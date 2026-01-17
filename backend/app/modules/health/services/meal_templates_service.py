@@ -1,5 +1,6 @@
 import uuid
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.modules.health.models import (
@@ -68,6 +69,7 @@ def _BuildMealTemplate(template: MealTemplateModel, items: list[MealTemplateItem
         Template=MealTemplate(
             MealTemplateId=template.MealTemplateId,
             TemplateName=template.TemplateName,
+            Servings=float(template.Servings) if template.Servings is not None else 1.0,
             CreatedAt=template.CreatedAt,
         ),
         Items=items,
@@ -76,12 +78,28 @@ def _BuildMealTemplate(template: MealTemplateModel, items: list[MealTemplateItem
 
 def _FetchMealTemplateRecord(db: Session, MealTemplateId: str, UserId: int, IsAdmin: bool) -> MealTemplateModel:
     query = db.query(MealTemplateModel).filter(MealTemplateModel.MealTemplateId == MealTemplateId)
-    if not IsAdmin:
-        query = query.filter(MealTemplateModel.UserId == UserId)
     record = query.first()
     if not record:
         raise ValueError("Template not found.")
     return record
+
+
+def _NormalizeName(value: str) -> str:
+    return value.strip().lower()
+
+
+def _EnsureUniqueName(db: Session, name: str, MealTemplateId: str | None = None) -> None:
+    normalized = _NormalizeName(name)
+    template_query = db.query(MealTemplateModel).filter(
+        func.lower(MealTemplateModel.TemplateName) == normalized
+    )
+    if MealTemplateId:
+        template_query = template_query.filter(MealTemplateModel.MealTemplateId != MealTemplateId)
+    if template_query.first() is not None:
+        raise ValueError("Name already exists.")
+    food_query = db.query(FoodModel).filter(func.lower(FoodModel.FoodName) == normalized)
+    if food_query.first() is not None:
+        raise ValueError("Name already exists.")
 
 
 def CreateMealTemplate(db: Session, UserId: int, Input: CreateMealTemplateInput) -> MealTemplateWithItems:
@@ -90,19 +108,17 @@ def CreateMealTemplate(db: Session, UserId: int, Input: CreateMealTemplateInput)
         raise ValueError("Template name is required.")
     if not Input.Items:
         raise ValueError("Template items are required.")
+    servings = float(Input.Servings or 1.0)
+    if servings <= 0:
+        raise ValueError("Servings must be greater than zero.")
 
-    existing = (
-        db.query(MealTemplateModel)
-        .filter(MealTemplateModel.UserId == UserId, MealTemplateModel.TemplateName == TemplateName)
-        .first()
-    )
-    if existing is not None:
-        raise ValueError("Template name already exists.")
+    _EnsureUniqueName(db, TemplateName)
 
     template = MealTemplateModel(
         MealTemplateId=str(uuid.uuid4()),
         UserId=UserId,
         TemplateName=TemplateName,
+        Servings=servings,
     )
     db.add(template)
     db.flush()
@@ -152,7 +168,6 @@ def GetMealTemplate(db: Session, UserId: int, MealTemplateId: str, IsAdmin: bool
 def GetMealTemplates(db: Session, UserId: int) -> list[MealTemplateWithItems]:
     templates = (
         db.query(MealTemplateModel)
-        .filter(MealTemplateModel.UserId == UserId)
         .order_by(MealTemplateModel.CreatedAt.desc())
         .all()
     )
@@ -194,18 +209,14 @@ def UpdateMealTemplate(
         TemplateName = Input.TemplateName.strip()
         if not TemplateName:
             raise ValueError("Template name is required.")
-        existing = (
-            db.query(MealTemplateModel)
-            .filter(
-                MealTemplateModel.UserId == template.UserId,
-                MealTemplateModel.TemplateName == TemplateName,
-                MealTemplateModel.MealTemplateId != template.MealTemplateId,
-            )
-            .first()
-        )
-        if existing is not None:
-            raise ValueError("Template name already exists.")
+        if _NormalizeName(TemplateName) != _NormalizeName(template.TemplateName):
+            _EnsureUniqueName(db, TemplateName, MealTemplateId=template.MealTemplateId)
         template.TemplateName = TemplateName
+    if Input.Servings is not None:
+        servings = float(Input.Servings)
+        if servings <= 0:
+            raise ValueError("Servings must be greater than zero.")
+        template.Servings = servings
 
     if Input.Items is not None:
         db.query(MealTemplateItemModel).filter(
@@ -264,6 +275,10 @@ def ApplyMealTemplate(
 ) -> ApplyMealTemplateResponse:
     template = GetMealTemplate(db, UserId, MealTemplateId)
     daily_log = EnsureDailyLogForDate(db, UserId, LogDate)
+    servings = float(template.Template.Servings or 1.0)
+    if servings <= 0:
+        servings = 1.0
+    per_serving_multiplier = 1.0 / servings
 
     existing_entries = (
         db.query(MealEntryModel)
@@ -281,17 +296,18 @@ def ApplyMealTemplate(
         if food_row is None:
             raise ValueError("Food not found.")
 
-        portion_label = "serve"
+        portion_label = "serving"
         portion_unit = None
         portion_amount = None
-        display_quantity = Item.Quantity
+        item_quantity = Item.Quantity * per_serving_multiplier
+        display_quantity = item_quantity
 
         if Item.EntryQuantity is not None and Item.EntryUnit:
             portion_label = Item.EntryUnit
             portion_unit, portion_amount = ResolvePortionBase(food_row, Item.EntryUnit, 1.0)
-            display_quantity = Item.EntryQuantity
+            display_quantity = Item.EntryQuantity * per_serving_multiplier
         else:
-            portion_unit, portion_amount, _base_total = BuildServePortion(food_row, Item.Quantity)
+            portion_unit, portion_amount, _base_total = BuildServePortion(food_row, item_quantity)
 
         if portion_unit is None or portion_amount is None:
             raise ValueError("Portion data is required.")

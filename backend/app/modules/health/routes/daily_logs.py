@@ -14,6 +14,7 @@ from app.modules.health.schemas import (
     DailyTotals,
     MealEntry,
     MealEntryWithFood,
+    ShareMealEntryInput,
     StepUpdateInput,
     Targets,
     UpdateMealEntryInput,
@@ -24,6 +25,7 @@ from app.modules.health.services.daily_logs_service import (
     DeleteMealEntry,
     GetDailyLogByDate,
     GetEntriesForLog,
+    ShareMealEntry,
     UpdateMealEntry,
     UpdateSteps,
     UpsertDailyLog,
@@ -133,6 +135,27 @@ def CreateMealEntryRoute(
         return MealEntryResponse(MealEntry=meal_entry)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.post("/meal-entries/share", response_model=MealEntryResponse, status_code=status.HTTP_201_CREATED)
+def ShareMealEntryRoute(
+    payload: ShareMealEntryInput,
+    db: Session = Depends(GetDb),
+    user: UserContext = Depends(RequireModuleRole("health", write=True)),
+) -> MealEntryResponse:
+    try:
+        meal_entry = ShareMealEntry(db, user.Id, payload, IsAdmin=IsParent(user))
+        return MealEntryResponse(MealEntry=meal_entry)
+    except ValueError as exc:
+        detail = str(exc)
+        status_code = (
+            status.HTTP_403_FORBIDDEN
+            if "Unauthorized" in detail
+            else status.HTTP_404_NOT_FOUND
+            if "not found" in detail.lower()
+            else status.HTTP_400_BAD_REQUEST
+        )
+        raise HTTPException(status_code=status_code, detail=detail) from exc
 
 
 @router.patch("/meal-entries/{meal_entry_id}", response_model=MealEntryResponse)

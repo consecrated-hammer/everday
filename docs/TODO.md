@@ -1,2 +1,4 @@
 Reminders system
-Food/meal/logging/creation simplification
+
+- [ ] Context menu: Add to shopping list (Phase 1), 
+- [ ] Context menu: Auto-logging (Phase 2)

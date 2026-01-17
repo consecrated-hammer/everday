@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 
 import Icon from "../../components/Icon.jsx";
-import SwipeableEntryRow from "../../components/SwipeableEntryRow.jsx";
 import { FormatNumber } from "../../lib/formatters.js";
 import {
   CreateFood,
@@ -34,7 +34,42 @@ const EmptyFoodForm = {
   IsFavourite: false
 };
 
+const EmptyTemplateForm = {
+  TemplateName: "",
+  Servings: "1",
+  Items: []
+};
+
 const DefaultMealType = "Breakfast";
+const MealDraftKey = "health.mealDraft";
+
+const LoadMealDraft = () => {
+  try {
+    const raw = sessionStorage.getItem(MealDraftKey);
+    if (!raw) {
+      return null;
+    }
+    return JSON.parse(raw);
+  } catch (error) {
+    return null;
+  }
+};
+
+const SaveMealDraft = (draft) => {
+  try {
+    sessionStorage.setItem(MealDraftKey, JSON.stringify(draft));
+  } catch (error) {
+    // Ignore storage failures.
+  }
+};
+
+const ClearMealDraft = () => {
+  try {
+    sessionStorage.removeItem(MealDraftKey);
+  } catch (error) {
+    // Ignore storage failures.
+  }
+};
 
 const ParseServingDescription = (value) => {
   if (!value) {
@@ -309,15 +344,19 @@ const Foods = () => {
   const [templates, setTemplates] = useState([]);
   const [status, setStatus] = useState("idle");
   const [error, setError] = useState("");
-  const [activeTab, setActiveTab] = useState("foods");
+  const [activeTab, setActiveTab] = useState("all");
 
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState("name");
   const [sortDirection, setSortDirection] = useState("asc");
   const [onlyFavourites, setOnlyFavourites] = useState(false);
-  const [mobileFilter, setMobileFilter] = useState("foods");
-  const [mobileAddOpen, setMobileAddOpen] = useState(false);
-  const mobileAddRef = useRef(null);
+  const [mobileFilter, setMobileFilter] = useState("all");
+  const [sortMenuOpen, setSortMenuOpen] = useState(false);
+  const [filterMenuOpen, setFilterMenuOpen] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const addHandledRef = useRef(null);
+  const sortMenuRef = useRef(null);
+  const filterMenuRef = useRef(null);
 
   const [foodForm, setFoodForm] = useState(EmptyFoodForm);
   const [selectedFoodId, setSelectedFoodId] = useState(null);
@@ -339,13 +378,11 @@ const Foods = () => {
   const [lookupModalOpen, setLookupModalOpen] = useState(false);
   const [dataSourceUsed, setDataSourceUsed] = useState(null);
 
-  const [templateForm, setTemplateForm] = useState({
-    TemplateName: "",
-    Items: []
-  });
+  const [templateForm, setTemplateForm] = useState(EmptyTemplateForm);
   const [editingTemplateId, setEditingTemplateId] = useState(null);
   const [showMealForm, setShowMealForm] = useState(false);
   const [mealEntryMode, setMealEntryMode] = useState("assistant");
+  const [expandedItemKey, setExpandedItemKey] = useState(null);
 
   const [mealParseText, setMealParseText] = useState("");
   const [mealParseResult, setMealParseResult] = useState(null);
@@ -356,6 +393,23 @@ const Foods = () => {
   const [mealFoodSearch, setMealFoodSearch] = useState("");
   const [mealFoodQuantities, setMealFoodQuantities] = useState({});
   const foodFormRef = useRef(null);
+
+  const applyMealDraft = (draft) => {
+    setActiveTab("meals");
+    setMobileFilter("meals");
+    setShowMealForm(true);
+    setMealEntryMode(draft?.MealEntryMode || "assistant");
+    setTemplateForm({ ...EmptyTemplateForm, ...(draft?.TemplateForm || {}) });
+    setMealParseText(draft?.MealParseText || "");
+    setMealParseResult(draft?.MealParseResult || null);
+    setMealFoodSearch(draft?.MealFoodSearch || "");
+    setMealFoodQuantities(draft?.MealFoodQuantities || {});
+    setAiMealNutrition(draft?.AiMealNutrition || null);
+    setAiMealDescription(draft?.AiMealDescription || "");
+    if (draft?.EditingTemplateId) {
+      setEditingTemplateId(draft.EditingTemplateId);
+    }
+  };
 
   const loadData = async () => {
     try {
@@ -379,6 +433,61 @@ const Foods = () => {
   }, []);
 
   useEffect(() => {
+    if (!showMealForm) {
+      return;
+    }
+    SaveMealDraft({
+      TemplateForm: templateForm,
+      MealEntryMode: mealEntryMode,
+      MealParseText: mealParseText,
+      MealParseResult: mealParseResult,
+      MealFoodSearch: mealFoodSearch,
+      MealFoodQuantities: mealFoodQuantities,
+      AiMealNutrition: aiMealNutrition,
+      AiMealDescription: aiMealDescription,
+      EditingTemplateId: editingTemplateId
+    });
+  }, [
+    showMealForm,
+    templateForm,
+    mealEntryMode,
+    mealParseText,
+    mealParseResult,
+    mealFoodSearch,
+    mealFoodQuantities,
+    aiMealNutrition,
+    aiMealDescription,
+    editingTemplateId
+  ]);
+
+  useEffect(() => {
+    const addMode = searchParams.get("add");
+    const draft = LoadMealDraft();
+    if (!addMode) {
+      addHandledRef.current = null;
+      if (draft && !showMealForm) {
+        applyMealDraft(draft);
+      }
+      return;
+    }
+    if (addHandledRef.current === addMode) {
+      return;
+    }
+    if (addMode === "meal" && draft) {
+      applyMealDraft(draft);
+      addHandledRef.current = addMode;
+      return;
+    }
+    if (addMode === "food") {
+      startAddFood();
+    }
+    if (addMode === "meal") {
+      startAddMeal();
+    }
+    addHandledRef.current = addMode;
+  }, [searchParams, showMealForm]);
+
+  useEffect(() => {
     if (!lookupModalOpen) {
       return undefined;
     }
@@ -394,17 +503,21 @@ const Foods = () => {
   }, [lookupModalOpen]);
 
   useEffect(() => {
-    if (!mobileAddOpen) {
+    if (!sortMenuOpen && !filterMenuOpen) {
       return undefined;
     }
     const handleClick = (event) => {
-      if (mobileAddRef.current && !mobileAddRef.current.contains(event.target)) {
-        setMobileAddOpen(false);
+      if (sortMenuRef.current && !sortMenuRef.current.contains(event.target)) {
+        setSortMenuOpen(false);
+      }
+      if (filterMenuRef.current && !filterMenuRef.current.contains(event.target)) {
+        setFilterMenuOpen(false);
       }
     };
     const handleKey = (event) => {
       if (event.key === "Escape") {
-        setMobileAddOpen(false);
+        setSortMenuOpen(false);
+        setFilterMenuOpen(false);
       }
     };
     document.addEventListener("mousedown", handleClick);
@@ -413,7 +526,8 @@ const Foods = () => {
       document.removeEventListener("mousedown", handleClick);
       document.removeEventListener("keydown", handleKey);
     };
-  }, [mobileAddOpen]);
+  }, [sortMenuOpen, filterMenuOpen]);
+
 
   useEffect(() => {
     if (!showFoodForm || !foodFormRef.current) {
@@ -470,6 +584,16 @@ const Foods = () => {
     }
     return foods.filter((food) => food.FoodName.toLowerCase().includes(query));
   }, [foods, mealFoodSearch]);
+
+  const filteredMealTemplates = useMemo(() => {
+    const query = mealFoodSearch.trim().toLowerCase();
+    if (!query) {
+      return templates;
+    }
+    return templates.filter((template) =>
+      template.Template.TemplateName.toLowerCase().includes(query)
+    );
+  }, [templates, mealFoodSearch]);
 
   const sortedFoods = useMemo(() => {
     const list = [...filteredFoods];
@@ -533,7 +657,25 @@ const Foods = () => {
     setDataSourceUsed(null);
   };
 
+  const clearAddModeParam = () => {
+    if (!searchParams.get("add")) {
+      return;
+    }
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete("add");
+      return next;
+    }, { replace: true });
+  };
+
   const startAddFood = () => {
+    if (searchParams.get("add") !== "food") {
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        next.set("add", "food");
+        return next;
+      }, { replace: true });
+    }
     handleTabChange("foods");
     resetFoodForm();
     setShowFoodForm(true);
@@ -545,6 +687,7 @@ const Foods = () => {
     resetFoodForm();
     setShowFoodForm(false);
     setShowAdvanced(false);
+    clearAddModeParam();
   };
 
   const saveFood = async (event) => {
@@ -685,36 +828,103 @@ const Foods = () => {
         ? "Review suggestion and save."
         : "Enter serving and nutrition details.";
 
+  const buildMealQuantityKey = (type, id) => `${type}:${id}`;
+  const getMealQuantity = (type, id) =>
+    mealFoodQuantities[buildMealQuantityKey(type, id)] ?? "1";
+
+  const mergeTemplateItem = (items, nextItem) => {
+    const matchIndex = items.findIndex((item) => item.FoodId === nextItem.FoodId);
+    if (matchIndex === -1) {
+      return [...items, nextItem];
+    }
+    const existing = items[matchIndex];
+    const nextQuantity = Number(existing.Quantity || 0) + Number(nextItem.Quantity || 0);
+    const merged = { ...existing, Quantity: String(nextQuantity) };
+    if (
+      existing.EntryUnit &&
+      nextItem.EntryUnit &&
+      existing.EntryUnit === nextItem.EntryUnit
+    ) {
+      const existingEntry = Number(existing.EntryQuantity || 0);
+      const incomingEntry = Number(nextItem.EntryQuantity || 0);
+      merged.EntryQuantity = existingEntry + incomingEntry;
+    }
+    return items.map((item, index) => (index === matchIndex ? merged : item));
+  };
+
   const addTemplateItem = (food, quantityValue) => {
     if (!food?.FoodId) {
       setError("Select a food for the meal.");
       return;
     }
-    const quantity = Number(quantityValue || mealFoodQuantities[food.FoodId] || 1);
+    const quantity = Number(quantityValue || getMealQuantity("food", food.FoodId));
     if (!Number.isFinite(quantity) || quantity <= 0) {
       setError("Quantity must be greater than zero.");
       return;
     }
+    const nextItem = {
+      FoodId: food.FoodId,
+      MealType: DefaultMealType,
+      Quantity: String(quantity),
+      EntryQuantity: null,
+      EntryUnit: null,
+      EntryNotes: ""
+    };
     setTemplateForm((prev) => ({
       ...prev,
-      Items: [
-        ...prev.Items,
-        {
-          FoodId: food.FoodId,
-          MealType: DefaultMealType,
-          Quantity: String(quantity),
-          EntryQuantity: null,
-          EntryUnit: null,
-          EntryNotes: ""
-        }
-      ]
+      Items: mergeTemplateItem(prev.Items, nextItem)
     }));
     setError("");
-    setMealFoodQuantities((prev) => ({ ...prev, [food.FoodId]: "1" }));
+    setMealFoodQuantities((prev) => ({
+      ...prev,
+      [buildMealQuantityKey("food", food.FoodId)]: "1"
+    }));
   };
 
-  const updateMealFoodQuantity = (foodId, value) => {
-    setMealFoodQuantities((prev) => ({ ...prev, [foodId]: value }));
+  const addMealTemplateItems = (template, quantityValue) => {
+    if (!template?.Template?.MealTemplateId) {
+      setError("Select a meal to add.");
+      return;
+    }
+    const servings = resolveTemplateServings(template);
+    const quantity = Number(
+      quantityValue || getMealQuantity("meal", template.Template.MealTemplateId)
+    );
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+      setError("Quantity must be greater than zero.");
+      return;
+    }
+    const newItems = template.Items.map((item) => {
+      const baseQuantity = Number(item.Quantity || 1);
+      const baseEntryQuantity = item.EntryQuantity ?? baseQuantity;
+      const perServingQuantity = baseQuantity / servings;
+      const perServingEntryQuantity = baseEntryQuantity / servings;
+      const entryUnit = item.EntryUnit || "serving";
+      return {
+        FoodId: item.FoodId,
+        MealType: DefaultMealType,
+        Quantity: String(perServingQuantity * quantity),
+        EntryQuantity: perServingEntryQuantity * quantity,
+        EntryUnit: entryUnit,
+        EntryNotes: item.EntryNotes || ""
+      };
+    });
+    setTemplateForm((prev) => ({
+      ...prev,
+      Items: newItems.reduce((items, item) => mergeTemplateItem(items, item), prev.Items)
+    }));
+    setError("");
+    setMealFoodQuantities((prev) => ({
+      ...prev,
+      [buildMealQuantityKey("meal", template.Template.MealTemplateId)]: "1"
+    }));
+  };
+
+  const updateMealFoodQuantity = (type, id, value) => {
+    setMealFoodQuantities((prev) => ({
+      ...prev,
+      [buildMealQuantityKey(type, id)]: value
+    }));
   };
 
   const removeTemplateItem = (index) => {
@@ -731,6 +941,11 @@ const Foods = () => {
     }
     if (!templateForm.Items.length) {
       setError("Add at least one meal item.");
+      return;
+    }
+    const servingsValue = Number(templateForm.Servings || 1);
+    if (!Number.isFinite(servingsValue) || servingsValue <= 0) {
+      setError("Servings must be greater than zero.");
       return;
     }
     try {
@@ -761,6 +976,7 @@ const Foods = () => {
       }
       const payload = {
         TemplateName: templateForm.TemplateName,
+        Servings: servingsValue,
         Items: templateForm.Items.map((item, index) => ({
           FoodId: item.FoodId,
           MealType: item.MealType,
@@ -781,9 +997,11 @@ const Foods = () => {
         await CreateMealTemplate(payload);
       }
       await loadData();
-      setTemplateForm({ TemplateName: "", Items: [] });
+      setTemplateForm({ ...EmptyTemplateForm });
       setEditingTemplateId(null);
       setShowMealForm(false);
+      clearAddModeParam();
+      ClearMealDraft();
     } catch (err) {
       setStatus("error");
       setError(err?.message || "Failed to save meal");
@@ -794,6 +1012,7 @@ const Foods = () => {
     setEditingTemplateId(template.Template.MealTemplateId);
     setTemplateForm({
       TemplateName: template.Template.TemplateName,
+      Servings: template.Template.Servings ? String(template.Template.Servings) : "1",
       Items: template.Items.map((item) => ({
         FoodId: item.FoodId,
         MealType: item.MealType,
@@ -837,7 +1056,7 @@ const Foods = () => {
       await loadData();
       if (editingTemplateId === templateId) {
         setEditingTemplateId(null);
-        setTemplateForm({ TemplateName: "", Items: [] });
+        setTemplateForm({ ...EmptyTemplateForm });
         setShowMealForm(false);
       }
     } catch (err) {
@@ -892,6 +1111,7 @@ const Foods = () => {
       });
       await CreateMealTemplate({
         TemplateName: mealParseResult.MealName,
+        Servings: 1,
         Items: [
           {
             FoodId: newFood.FoodId,
@@ -915,31 +1135,60 @@ const Foods = () => {
 
   const handleTabChange = (nextTab) => {
     setActiveTab(nextTab);
+    const keepMealDraft = showMealForm;
+    if (nextTab === "all") {
+      setMobileFilter("all");
+      closeFoodForm();
+      if (!keepMealDraft) {
+        setShowMealForm(false);
+        clearAddModeParam();
+        setEditingTemplateId(null);
+        setTemplateForm({ ...EmptyTemplateForm });
+        setMealEntryMode("assistant");
+        setMealParseText("");
+        setMealParseResult(null);
+        setMealFoodSearch("");
+        setMealFoodQuantities({});
+        setAiMealNutrition(null);
+        setAiMealDescription("");
+      }
+      return;
+    }
     if (nextTab === "foods" || nextTab === "meals") {
       setMobileFilter(nextTab);
     }
     if (nextTab === "foods") {
-      setShowMealForm(false);
-      setEditingTemplateId(null);
-      setTemplateForm({ TemplateName: "", Items: [] });
-      setMealEntryMode("assistant");
-      setMealParseText("");
-      setMealParseResult(null);
-      setMealFoodSearch("");
-      setMealFoodQuantities({});
-      setAiMealNutrition(null);
-      setAiMealDescription("");
+      if (!keepMealDraft) {
+        setShowMealForm(false);
+        clearAddModeParam();
+        setEditingTemplateId(null);
+        setTemplateForm({ ...EmptyTemplateForm });
+        setMealEntryMode("assistant");
+        setMealParseText("");
+        setMealParseResult(null);
+        setMealFoodSearch("");
+        setMealFoodQuantities({});
+        setAiMealNutrition(null);
+        setAiMealDescription("");
+      }
     } else {
       closeFoodForm();
     }
   };
 
   const startAddMeal = () => {
+    if (searchParams.get("add") !== "meal") {
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        next.set("add", "meal");
+        return next;
+      }, { replace: true });
+    }
     handleTabChange("meals");
     setShowMealForm(true);
     setMealEntryMode("assistant");
     setEditingTemplateId(null);
-    setTemplateForm({ TemplateName: "", Items: [] });
+    setTemplateForm({ ...EmptyTemplateForm });
     setMealParseResult(null);
     setMealParseText("");
     setMealFoodSearch("");
@@ -951,7 +1200,7 @@ const Foods = () => {
   const closeMealForm = () => {
     setShowMealForm(false);
     setEditingTemplateId(null);
-    setTemplateForm({ TemplateName: "", Items: [] });
+    setTemplateForm({ ...EmptyTemplateForm });
     setMealParseResult(null);
     setMealParseText("");
     setMealEntryMode("assistant");
@@ -959,6 +1208,8 @@ const Foods = () => {
     setMealFoodQuantities({});
     setAiMealNutrition(null);
     setAiMealDescription("");
+    clearAddModeParam();
+    ClearMealDraft();
   };
 
   const isEditingMeal = Boolean(editingTemplateId);
@@ -970,22 +1221,29 @@ const Foods = () => {
       : null;
   const isEditingAiMeal = Boolean(aiMealFood && (aiMealFood.DataSource || "manual") === "ai");
   const showMealsInline = mobileFilter === "all";
+  const showCombinedList = showMealsInline && !showMealForm && (!showFoodForm || selectedFoodId);
   const showFoodsList =
-    (activeTab === "foods" || showMealsInline) && (!showFoodForm || selectedFoodId) && !showMealForm;
-  const showMealsList =
-    (activeTab === "meals" || showMealsInline) && !showMealForm && !showFoodForm;
+    !showCombinedList && activeTab === "foods" && (!showFoodForm || selectedFoodId) && !showMealForm;
+  const showMealsList = !showCombinedList && activeTab === "meals" && !showMealForm && !showFoodForm;
 
   const applyMobileFilter = (value) => {
     if (value === "meals") {
       handleTabChange("meals");
+    } else if (value === "all") {
+      handleTabChange("all");
     } else {
       handleTabChange("foods");
     }
     setMobileFilter(value);
   };
 
-  const getMealTotals = (template) =>
-    template.Items.reduce(
+  const resolveTemplateServings = (template) => {
+    const servings = Number(template?.Template?.Servings || 1);
+    return Number.isFinite(servings) && servings > 0 ? servings : 1;
+  };
+
+  const getMealTotals = (template) => {
+    const totals = template.Items.reduce(
       (acc, item) => {
         const food = foodsById[item.FoodId];
         if (!food) {
@@ -994,58 +1252,142 @@ const Foods = () => {
         const quantity = item.EntryQuantity || item.Quantity || 1;
         return {
           calories: acc.calories + (food.CaloriesPerServing || 0) * quantity,
-          protein: acc.protein + (food.ProteinPerServing || 0) * quantity
+          protein: acc.protein + (food.ProteinPerServing || 0) * quantity,
+          carbs: acc.carbs + (food.CarbsPerServing || 0) * quantity,
+          fat: acc.fat + (food.FatPerServing || 0) * quantity,
+          fibre: acc.fibre + (food.FibrePerServing || 0) * quantity
         };
       },
-      { calories: 0, protein: 0 }
+      {
+        calories: 0,
+        protein: 0,
+        carbs: 0,
+        fat: 0,
+        fibre: 0
+      }
     );
+    const servings = resolveTemplateServings(template);
+    return {
+      calories: totals.calories / servings,
+      protein: totals.protein / servings,
+      carbs: totals.carbs / servings,
+      fat: totals.fat / servings,
+      fibre: totals.fibre / servings
+    };
+  };
+
+  const addedMealCalories = useMemo(
+    () =>
+      templateForm.Items.reduce((sum, item) => {
+        const food = foodsById[item.FoodId];
+        if (!food) {
+          return sum;
+        }
+        const quantity = Number(item.Quantity || 0);
+        return sum + (food.CaloriesPerServing || 0) * quantity;
+      }, 0),
+    [templateForm.Items, foodsById]
+  );
+
+  const manualSelectItems = useMemo(() => {
+    const foodItems = filteredMealFoods.map((food) => ({
+      type: "food",
+      id: food.FoodId,
+      name: food.FoodName,
+      calories: Number(food.CaloriesPerServing || 0),
+      servingLabel: food.ServingDescription || `${food.ServingQuantity} ${food.ServingUnit}`,
+      food
+    }));
+    const mealItems = filteredMealTemplates.map((template) => {
+      const totals = getMealTotals(template);
+      const servings = resolveTemplateServings(template);
+      return {
+        type: "meal",
+        id: template.Template.MealTemplateId,
+        name: template.Template.TemplateName,
+        calories: Number(totals.calories || 0),
+        servingLabel: servings > 1 ? `1 of ${FormatNumber(servings)} servings` : "1 serving",
+        template,
+        totals
+      };
+    });
+    return [...foodItems, ...mealItems];
+  }, [filteredMealFoods, filteredMealTemplates, foodsById]);
+
+  const combinedItems = showMealsInline
+    ? (() => {
+        const items = [
+          ...filteredFoods.map((food) => ({
+            type: "food",
+            id: food.FoodId,
+            name: food.FoodName,
+            calories: Number(food.CaloriesPerServing || 0),
+            protein: Number(food.ProteinPerServing || 0),
+            carbs: Number(food.CarbsPerServing || 0),
+            fat: Number(food.FatPerServing || 0),
+            fibre: Number(food.FibrePerServing || 0),
+            servingLabel:
+              food.ServingDescription || `${food.ServingQuantity} ${food.ServingUnit}`,
+            createdAt: food.CreatedAt,
+            source: food.DataSource || "manual",
+            addedBy:
+              food.CreatedByName ||
+              (food.OwnerUserId ? `User ${food.OwnerUserId}` : "Unknown"),
+            food
+          })),
+          ...filteredTemplates.map((template) => {
+            const totals = getMealTotals(template);
+            const servings = resolveTemplateServings(template);
+            const sourceFood =
+              template.Items.length === 1 ? foodsById[template.Items[0].FoodId] : null;
+            const sourceLabel =
+              sourceFood && (sourceFood.DataSource || "manual") === "ai" ? "ai" : "manual";
+            return {
+              type: "meal",
+              id: template.Template.MealTemplateId,
+              name: template.Template.TemplateName,
+              calories: Number(totals.calories || 0),
+              protein: Number(totals.protein || 0),
+              carbs: Number(totals.carbs || 0),
+              fat: Number(totals.fat || 0),
+              fibre: Number(totals.fibre || 0),
+              servingLabel: servings > 1 ? `1 of ${FormatNumber(servings)} servings` : "1 serving",
+              createdAt: template.Template.CreatedAt,
+              source: sourceLabel,
+              itemsCount: template.Items.length,
+              template
+            };
+          })
+        ];
+        const direction = sortDirection === "asc" ? 1 : -1;
+        items.sort((a, b) => {
+          if (sortBy === "name") {
+            return direction * a.name.localeCompare(b.name);
+          }
+          if (sortBy === "calories") {
+            return direction * (a.calories - b.calories);
+          }
+          if (sortBy === "protein") {
+            return direction * ((a.protein || 0) - (b.protein || 0));
+          }
+          if (sortBy === "date") {
+            const left = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+            const right = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+            return direction * (left - right);
+          }
+          return 0;
+        });
+        return items;
+      })()
+    : [];
+
+  const toggleItemDetails = (type, id) => {
+    const key = `${type}:${id}`;
+    setExpandedItemKey((prev) => (prev === key ? null : key));
+  };
 
   return (
     <div className="health-foods">
-      <div className="health-foods-mobile-header">
-        <div>
-          <h2>Foods</h2>
-          <p>
-            {foods.length} {foods.length === 1 ? "food" : "foods"} • {templates.length}{" "}
-            {templates.length === 1 ? "meal" : "meals"}
-          </p>
-        </div>
-        <div className="health-foods-mobile-actions" ref={mobileAddRef}>
-          <button
-            type="button"
-            className="icon-button is-primary"
-            aria-label="Add food or meal"
-            onClick={() => setMobileAddOpen((prev) => !prev)}
-          >
-            <Icon name="plus" className="icon" />
-          </button>
-          {mobileAddOpen ? (
-            <div className="dropdown dropdown-right">
-              <button
-                type="button"
-                className="dropdown-item"
-                onClick={() => {
-                  setMobileAddOpen(false);
-                  startAddFood();
-                }}
-              >
-                Add food
-              </button>
-              <button
-                type="button"
-                className="dropdown-item"
-                onClick={() => {
-                  setMobileAddOpen(false);
-                  startAddMeal();
-                }}
-              >
-                Add meal
-              </button>
-            </div>
-          ) : null}
-        </div>
-      </div>
-
       {!showFoodForm && !showMealForm ? (
         <div className="health-foods-toolbar">
           <input
@@ -1056,66 +1398,109 @@ const Foods = () => {
             onChange={(event) => setSearch(event.target.value)}
           />
           <div className="health-foods-toolbar-row">
-            <select
-              className="health-foods-sort"
-              value={sortBy}
-              onChange={(event) => setSortBy(event.target.value)}
-            >
-              <option value="name">Sort by name</option>
-              <option value="calories">Sort by calories</option>
-              <option value="protein">Sort by protein</option>
-              <option value="date">Sort by date</option>
-            </select>
-            <button
-              type="button"
-              className="icon-button is-secondary"
-              onClick={() => setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"))}
-              aria-label="Toggle sort direction"
-            >
-              <Icon name={sortDirection === "asc" ? "sortUp" : "sortDown"} className="icon" />
-            </button>
-          </div>
-          <div className="health-foods-chips" role="tablist" aria-label="Filter foods and meals">
-            {[
-              { key: "all", label: "All" },
-              { key: "foods", label: "Foods" },
-              { key: "meals", label: "Meals" },
-              { key: "favourites", label: "Favourites" },
-              { key: "seed", label: "Seed" },
-              { key: "ai", label: "AI" }
-            ].map((chip) => (
+            <div className="health-sort-control" ref={sortMenuRef}>
               <button
-                key={chip.key}
                 type="button"
-                className={`health-filter-chip${mobileFilter === chip.key ? " is-active" : ""}`}
-                onClick={() => applyMobileFilter(chip.key)}
+                className="health-sort-button"
+                onClick={() => setSortMenuOpen((prev) => !prev)}
+                aria-expanded={sortMenuOpen}
               >
-                {chip.label}
+                Sort: {sortBy === "name" ? "Name" : sortBy === "calories" ? "Calories" : sortBy === "protein" ? "Protein" : "Date"}
+                <Icon name="chevronDown" className="icon" />
               </button>
-            ))}
+              {sortMenuOpen ? (
+                <div className="dropdown dropdown-right health-toolbar-dropdown">
+                  {[
+                    { key: "name", label: "Name" },
+                    { key: "calories", label: "Calories" },
+                    { key: "protein", label: "Protein" },
+                    { key: "date", label: "Date" }
+                  ].map((option) => (
+                    <button
+                      key={option.key}
+                      type="button"
+                      className="dropdown-item"
+                      onClick={() => {
+                        setSortBy(option.key);
+                        setSortMenuOpen(false);
+                      }}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    className="dropdown-item"
+                    onClick={() => {
+                      setSortDirection("asc");
+                      setSortMenuOpen(false);
+                    }}
+                  >
+                    Ascending
+                  </button>
+                  <button
+                    type="button"
+                    className="dropdown-item"
+                    onClick={() => {
+                      setSortDirection("desc");
+                      setSortMenuOpen(false);
+                    }}
+                  >
+                    Descending
+                  </button>
+                </div>
+              ) : null}
+            </div>
+            <div className="health-filter-control" ref={filterMenuRef}>
+              <button
+                type="button"
+                className={`button-secondary health-filter-button${
+                  mobileFilter !== "all" ? " is-active" : ""
+                }`}
+                onClick={() => setFilterMenuOpen((prev) => !prev)}
+                aria-expanded={filterMenuOpen}
+              >
+                <Icon name="filter" className="icon" />
+                Filter
+              </button>
+              {filterMenuOpen ? (
+                <div className="dropdown dropdown-right health-toolbar-dropdown">
+                  {[
+                    { key: "all", label: "All" },
+                    { key: "foods", label: "Foods" },
+                    { key: "meals", label: "Meals" },
+                    { key: "favourites", label: "Favourites" },
+                    { key: "seed", label: "Seed" },
+                    { key: "ai", label: "AI" }
+                  ].map((option) => (
+                    <button
+                      key={option.key}
+                      type="button"
+                      className="dropdown-item"
+                      onClick={() => {
+                        applyMobileFilter(option.key);
+                        setFilterMenuOpen(false);
+                      }}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
           </div>
         </div>
       ) : null}
 
-      <section className="module-panel foods-hero-card">
-        <header className="module-panel-header">
-          <div>
-            <h2>Foods and meals</h2>
-            <p>
-              {foods.length} {foods.length === 1 ? "food" : "foods"}, {templates.length}{" "}
-              {templates.length === 1 ? "meal" : "meals"}
-            </p>
-          </div>
-          <div className="module-panel-actions">
-            <button type="button" className="primary-button" onClick={startAddFood}>
-              Add food
-            </button>
-            <button type="button" className="button-secondary" onClick={startAddMeal}>
-              Add meal
-            </button>
-          </div>
-        </header>
+      <div className="health-foods-tabs">
         <div className="module-nav" aria-label="Foods and meals">
+          <button
+            type="button"
+            className={`module-link${activeTab === "all" ? " is-active" : ""}`}
+            onClick={() => handleTabChange("all")}
+          >
+            All
+          </button>
           <button
             type="button"
             className={`module-link${activeTab === "foods" ? " is-active" : ""}`}
@@ -1131,9 +1516,211 @@ const Foods = () => {
             Meals
           </button>
         </div>
-      </section>
+      </div>
 
       {error ? <p className="form-error">{error}</p> : null}
+
+      {showCombinedList ? (
+        <section className="module-panel">
+          <header className="module-panel-header food-library-header">
+            <div>
+              <h3>Foods and meals</h3>
+              <p>{combinedItems.length} items</p>
+            </div>
+            <div className="module-panel-actions">
+              <input
+                className="health-search"
+                type="search"
+                placeholder="Search foods or meals"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+              />
+              <select value={sortBy} onChange={(event) => setSortBy(event.target.value)}>
+                <option value="name">Sort by name</option>
+                <option value="calories">Sort by calories</option>
+                <option value="protein">Sort by protein</option>
+                <option value="date">Sort by date</option>
+              </select>
+              <button
+                type="button"
+                className="icon-button is-secondary"
+                onClick={() => setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"))}
+                aria-label="Toggle sort direction"
+              >
+                <Icon name={sortDirection === "asc" ? "sortUp" : "sortDown"} className="icon" />
+              </button>
+              <button
+                type="button"
+                className="button-secondary"
+                onClick={() => setOnlyFavourites((prev) => !prev)}
+              >
+                {onlyFavourites ? "Favourites only" : "All foods"}
+              </button>
+            </div>
+          </header>
+          {status === "loading" ? (
+            <p className="health-empty">Loading foods...</p>
+          ) : null}
+          {status !== "loading" && combinedItems.length === 0 ? (
+            <p className="health-empty">No foods or meals yet.</p>
+          ) : null}
+          {combinedItems.length ? (
+            <ul className="health-food-summary-list">
+              {combinedItems.map((item) => {
+                const isFood = item.type === "food";
+                const isExpanded =
+                  expandedItemKey === `${isFood ? "food" : "meal"}:${item.id}`;
+                const toggleDetails = () => toggleItemDetails(isFood ? "food" : "meal", item.id);
+                const servings = isFood ? 1 : resolveTemplateServings(item.template);
+                return (
+                  <li key={`${item.type}-${item.id}`}>
+                    <div
+                      className="health-food-summary-row"
+                      role="button"
+                      tabIndex={0}
+                      onClick={toggleDetails}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          toggleDetails();
+                        }
+                      }}
+                    >
+                      <span
+                        className={`health-food-summary-icon ${isFood ? "is-food" : "is-meal"}`}
+                        aria-hidden="true"
+                      >
+                        <Icon name={isFood ? "food" : "meal"} className="icon" />
+                      </span>
+                      <div className="health-food-summary-main">
+                        <p>{item.name}</p>
+                      </div>
+                      <div className="health-food-summary-meta">
+                        <span className="health-food-summary-calories">
+                          {FormatNumber(item.calories || 0)} kcal
+                        </span>
+                        <span className="health-food-summary-serving">{item.servingLabel}</span>
+                      </div>
+                      <button
+                        type="button"
+                        className="health-food-summary-toggle"
+                        aria-label={isExpanded ? "Hide details" : "Show details"}
+                        aria-expanded={isExpanded}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          toggleDetails();
+                        }}
+                      >
+                        <Icon name={isExpanded ? "chevronUp" : "chevronDown"} className="icon" />
+                      </button>
+                    </div>
+                    {isExpanded ? (
+                      <div className="health-food-summary-details">
+                        {isFood ? (
+                          <>
+                            <div className="health-food-summary-detail">
+                              <span>Protein</span>
+                              <span>{FormatNumber(item.protein || 0)} g</span>
+                            </div>
+                            <div className="health-food-summary-detail">
+                              <span>Carbs</span>
+                              <span>{FormatNumber(item.carbs || 0)} g</span>
+                            </div>
+                            <div className="health-food-summary-detail">
+                              <span>Fat</span>
+                              <span>{FormatNumber(item.fat || 0)} g</span>
+                            </div>
+                            <div className="health-food-summary-detail">
+                              <span>Fibre</span>
+                              <span>{FormatNumber(item.fibre || 0)} g</span>
+                            </div>
+                            <div className="health-food-summary-detail">
+                              <span>Source</span>
+                              <span>{item.source}</span>
+                            </div>
+                            <div className="health-food-summary-detail">
+                              <span>Added by</span>
+                              <span>{item.addedBy}</span>
+                            </div>
+                            <div className="health-food-summary-actions">
+                              <button
+                                type="button"
+                                className="button-secondary"
+                                onClick={() => {
+                                  handleTabChange("foods");
+                                  selectFood(item.food);
+                                }}
+                              >
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                className="button-secondary button-danger"
+                                onClick={() => deleteFood(item.id)}
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div className="health-food-summary-detail">
+                              <span>Items</span>
+                              <span>{item.itemsCount}</span>
+                            </div>
+                            <div className="health-food-summary-detail">
+                              <span>Servings</span>
+                              <span>{FormatNumber(servings)}</span>
+                            </div>
+                            <div className="health-food-summary-detail">
+                              <span>Protein</span>
+                              <span>{FormatNumber(item.protein || 0)} g</span>
+                            </div>
+                            <div className="health-food-summary-detail">
+                              <span>Carbs</span>
+                              <span>{FormatNumber(item.carbs || 0)} g</span>
+                            </div>
+                            <div className="health-food-summary-detail">
+                              <span>Fat</span>
+                              <span>{FormatNumber(item.fat || 0)} g</span>
+                            </div>
+                            <div className="health-food-summary-detail">
+                              <span>Fibre</span>
+                              <span>{FormatNumber(item.fibre || 0)} g</span>
+                            </div>
+                            <div className="health-food-summary-detail">
+                              <span>Source</span>
+                              <span>{item.source}</span>
+                            </div>
+                            <div className="health-food-summary-actions">
+                              <button
+                                type="button"
+                                className="button-secondary"
+                                onClick={() => {
+                                  handleTabChange("meals");
+                                  selectTemplate(item.template);
+                                }}
+                              >
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                className="button-secondary button-danger"
+                                onClick={() => removeTemplate(item.id)}
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    ) : null}
+                  </li>
+                );
+              })}
+            </ul>
+          ) : null}
+        </section>
+      ) : null}
 
       {showFoodsList ? (
         <section className="module-panel">
@@ -1179,66 +1766,95 @@ const Foods = () => {
             <p className="health-empty">No foods yet.</p>
           ) : null}
           {sortedFoods.length ? (
-            <ul className="health-food-list">
-              {sortedFoods.map((food) => (
-                <li key={food.FoodId}>
-                  <SwipeableEntryRow
-                    onEdit={() => selectFood(food)}
-                    onDelete={() => deleteFood(food.FoodId)}
-                  >
+            <ul className="health-food-summary-list">
+              {sortedFoods.map((food) => {
+                const servingLabel =
+                  food.ServingDescription || `${food.ServingQuantity} ${food.ServingUnit}`;
+                const isExpanded = expandedItemKey === `food:${food.FoodId}`;
+                return (
+                  <li key={food.FoodId}>
                     <div
-                      className={`health-food-item${
-                        food.FoodId === selectedFoodId ? " is-active" : ""
-                      }`}
+                      className="health-food-summary-row"
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => toggleItemDetails("food", food.FoodId)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          toggleItemDetails("food", food.FoodId);
+                        }
+                      }}
                     >
-                      <div>
+                      <span className="health-food-summary-icon is-food" aria-hidden="true">
+                        <Icon name="food" className="icon" />
+                      </span>
+                      <div className="health-food-summary-main">
                         <p>{food.FoodName}</p>
-                        <div className="health-entry-meta">
-                          <span className="health-detail">
-                            {food.ServingDescription || `${food.ServingQuantity} ${food.ServingUnit}`}
-                          </span>
-                          <span className="health-detail">
-                            {food.ProteinPerServing} g protein
-                          </span>
-                          <span className="health-entry-calories">
-                            {food.CaloriesPerServing} kcal
+                      </div>
+                      <div className="health-food-summary-meta">
+                        <span className="health-food-summary-calories">
+                          {FormatNumber(food.CaloriesPerServing || 0)} kcal
+                        </span>
+                        <span className="health-food-summary-serving">{servingLabel}</span>
+                      </div>
+                      <button
+                        type="button"
+                        className="health-food-summary-toggle"
+                        aria-label={isExpanded ? "Hide details" : "Show details"}
+                        aria-expanded={isExpanded}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          toggleItemDetails("food", food.FoodId);
+                        }}
+                      >
+                        <Icon name={isExpanded ? "chevronUp" : "chevronDown"} className="icon" />
+                      </button>
+                    </div>
+                    {isExpanded ? (
+                      <div className="health-food-summary-details">
+                        <div className="health-food-summary-detail">
+                          <span>Protein</span>
+                          <span>{FormatNumber(food.ProteinPerServing || 0)} g</span>
+                        </div>
+                        <div className="health-food-summary-detail">
+                          <span>Carbs</span>
+                          <span>{FormatNumber(food.CarbsPerServing || 0)} g</span>
+                        </div>
+                        <div className="health-food-summary-detail">
+                          <span>Fat</span>
+                          <span>{FormatNumber(food.FatPerServing || 0)} g</span>
+                        </div>
+                        <div className="health-food-summary-detail">
+                          <span>Fibre</span>
+                          <span>{FormatNumber(food.FibrePerServing || 0)} g</span>
+                        </div>
+                        <div className="health-food-summary-detail">
+                          <span>Source</span>
+                          <span>{food.DataSource || "manual"}</span>
+                        </div>
+                        <div className="health-food-summary-detail">
+                          <span>Added by</span>
+                          <span>
+                            {food.CreatedByName ||
+                              (food.OwnerUserId ? `User ${food.OwnerUserId}` : "Unknown")}
                           </span>
                         </div>
-                        <span className="health-detail">Source: {food.DataSource || "manual"}</span>
-                        <span className="health-detail">
-                          Added by{" "}
-                          {food.CreatedByName ||
-                            (food.OwnerUserId ? `User ${food.OwnerUserId}` : "Unknown")}
-                        </span>
+                        <div className="health-food-summary-actions">
+                          <button type="button" className="button-secondary" onClick={() => selectFood(food)}>
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            className="button-secondary button-danger"
+                            onClick={() => deleteFood(food.FoodId)}
+                          >
+                            Delete
+                          </button>
+                        </div>
                       </div>
-                      <div className="health-entry-actions-inline">
-                        <button
-                          type="button"
-                          className="icon-button is-secondary"
-                          aria-label="Edit food"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            selectFood(food);
-                          }}
-                        >
-                          <Icon name="edit" className="icon" />
-                        </button>
-                        <button
-                          type="button"
-                          className="icon-button is-danger"
-                          aria-label="Delete food"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            deleteFood(food.FoodId);
-                          }}
-                        >
-                          <Icon name="trash" className="icon" />
-                        </button>
-                      </div>
-                    </div>
-                  </SwipeableEntryRow>
-                </li>
-              ))}
+                    ) : null}
+                  </li>
+                );
+              })}
             </ul>
           ) : null}
         </section>
@@ -1407,13 +2023,8 @@ const Foods = () => {
       ) : null}
 
       {lookupModalOpen ? (
-        <div
-          className="modal-backdrop"
-          role="dialog"
-          aria-modal="true"
-          onClick={() => setLookupModalOpen(false)}
-        >
-          <div className="modal modal--health" onClick={(event) => event.stopPropagation()}>
+        <div className="modal-backdrop" role="dialog" aria-modal="true">
+          <div className="modal health-edit-modal" onClick={(event) => event.stopPropagation()}>
             <div className="modal-header">
               <div>
                 <h3>Lookup results</h3>
@@ -1476,66 +2087,113 @@ const Foods = () => {
               <p>{filteredTemplates.length} meals</p>
             </div>
           </header>
-          <div className="health-template-list">
-            {filteredTemplates.length === 0 ? <p className="health-empty">No meals yet.</p> : null}
+          {filteredTemplates.length === 0 ? <p className="health-empty">No meals yet.</p> : null}
+          <ul className="health-food-summary-list health-template-summary-list">
             {filteredTemplates.map((template) => {
               const totals = getMealTotals(template);
+              const servings = resolveTemplateServings(template);
               const sourceFood =
                 template.Items.length === 1 ? foodsById[template.Items[0].FoodId] : null;
               const sourceLabel =
-                sourceFood && (sourceFood.DataSource || "manual") === "ai" ? "ai" : null;
+                sourceFood && (sourceFood.DataSource || "manual") === "ai" ? "ai" : "manual";
+              const isExpanded =
+                expandedItemKey === `meal:${template.Template.MealTemplateId}`;
               return (
-                <div key={template.Template.MealTemplateId}>
-                  <SwipeableEntryRow
-                    onEdit={() => selectTemplate(template)}
-                    onDelete={() => removeTemplate(template.Template.MealTemplateId)}
+                <li key={template.Template.MealTemplateId}>
+                  <div
+                    className="health-food-summary-row"
+                    role="button"
+                    tabIndex={0}
+                    onClick={() =>
+                      toggleItemDetails("meal", template.Template.MealTemplateId)
+                    }
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        toggleItemDetails("meal", template.Template.MealTemplateId);
+                      }
+                    }}
                   >
-                    <div className="health-template-card">
-                      <div>
-                        <h4>{template.Template.TemplateName}</h4>
-                        <div className="health-entry-meta">
-                          <span className="health-detail">{template.Items.length} items</span>
-                          <span className="health-detail">
-                            {FormatNumber(totals.protein)} g protein
-                          </span>
-                          <span className="health-entry-calories">
-                            {FormatNumber(totals.calories)} kcal
-                          </span>
-                        </div>
-                        {sourceLabel ? (
-                          <span className="health-detail">Source: {sourceLabel}</span>
-                        ) : null}
+                    <span className="health-food-summary-icon is-meal" aria-hidden="true">
+                      <Icon name="meal" className="icon" />
+                    </span>
+                    <div className="health-food-summary-main">
+                      <p>{template.Template.TemplateName}</p>
+                    </div>
+                    <div className="health-food-summary-meta">
+                      <span className="health-food-summary-calories">
+                        {FormatNumber(totals.calories || 0)} kcal
+                      </span>
+                      <span className="health-food-summary-serving">
+                        {servings > 1
+                          ? `1 of ${FormatNumber(servings)} servings`
+                          : "1 serving"}
+                      </span>
+                    </div>
+                      <button
+                        type="button"
+                        className="health-food-summary-toggle"
+                      aria-label={isExpanded ? "Hide details" : "Show details"}
+                      aria-expanded={isExpanded}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        toggleItemDetails("meal", template.Template.MealTemplateId);
+                      }}
+                    >
+                      <Icon name={isExpanded ? "chevronUp" : "chevronDown"} className="icon" />
+                    </button>
+                  </div>
+                  {isExpanded ? (
+                    <div className="health-food-summary-details">
+                      <div className="health-food-summary-detail">
+                        <span>Items</span>
+                        <span>{template.Items.length}</span>
                       </div>
-                      <div className="health-entry-actions-inline">
+                      <div className="health-food-summary-detail">
+                        <span>Servings</span>
+                        <span>{FormatNumber(servings)}</span>
+                      </div>
+                      <div className="health-food-summary-detail">
+                        <span>Protein</span>
+                        <span>{FormatNumber(totals.protein || 0)} g</span>
+                      </div>
+                      <div className="health-food-summary-detail">
+                        <span>Carbs</span>
+                        <span>{FormatNumber(totals.carbs || 0)} g</span>
+                      </div>
+                      <div className="health-food-summary-detail">
+                        <span>Fat</span>
+                        <span>{FormatNumber(totals.fat || 0)} g</span>
+                      </div>
+                      <div className="health-food-summary-detail">
+                        <span>Fibre</span>
+                        <span>{FormatNumber(totals.fibre || 0)} g</span>
+                      </div>
+                      <div className="health-food-summary-detail">
+                        <span>Source</span>
+                        <span>{sourceLabel}</span>
+                      </div>
+                      <div className="health-food-summary-actions">
                         <button
                           type="button"
-                          className="icon-button is-secondary"
-                          aria-label="Edit meal"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            selectTemplate(template);
-                          }}
+                          className="button-secondary"
+                          onClick={() => selectTemplate(template)}
                         >
-                          <Icon name="edit" className="icon" />
+                          Edit
                         </button>
                         <button
                           type="button"
-                          className="icon-button is-danger"
-                          aria-label="Delete meal"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            removeTemplate(template.Template.MealTemplateId);
-                          }}
+                          className="button-secondary button-danger"
+                          onClick={() => removeTemplate(template.Template.MealTemplateId)}
                         >
-                          <Icon name="trash" className="icon" />
+                          Delete
                         </button>
                       </div>
                     </div>
-                  </SwipeableEntryRow>
-                </div>
+                  ) : null}
+                </li>
               );
             })}
-          </div>
+          </ul>
         </section>
       ) : null}
 
@@ -1577,15 +2235,49 @@ const Foods = () => {
 
           {isMealManualMode ? (
             <div className="health-template-editor">
-              <label>
-                Meal name
-                <input
-                  value={templateForm.TemplateName}
-                  onChange={(event) =>
-                    setTemplateForm((prev) => ({ ...prev, TemplateName: event.target.value }))
-                  }
-                />
-              </label>
+              <div className="health-form-row health-form-row--compact">
+                <label className="health-form-inline">
+                  <span>Meal name</span>
+                  <input
+                    value={templateForm.TemplateName}
+                    onChange={(event) =>
+                      setTemplateForm((prev) => ({ ...prev, TemplateName: event.target.value }))
+                    }
+                  />
+                </label>
+                <label className="health-form-inline health-form-inline--compact">
+                  <span>Servings</span>
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={templateForm.Servings}
+                    onChange={(event) =>
+                      setTemplateForm((prev) => ({
+                        ...prev,
+                        Servings: event.target.value
+                      }))
+                    }
+                  />
+                </label>
+              </div>
+              <div className="form-actions">
+                <button type="button" onClick={saveTemplate}>
+                  {editingTemplateId ? "Update" : "Save"} meal
+                </button>
+                <button type="button" className="text-button" onClick={closeMealForm}>
+                  Cancel
+                </button>
+                {editingTemplateId ? (
+                  <button
+                    type="button"
+                    className="text-button"
+                    onClick={() => removeTemplate(editingTemplateId)}
+                  >
+                    Delete
+                  </button>
+                ) : null}
+              </div>
               {isEditingAiMeal && aiMealNutrition ? (
                 <div className="health-ai-meal-edit">
                   <h4>Meal nutrition</h4>
@@ -1728,28 +2420,47 @@ const Foods = () => {
                 </div>
               ) : (
                 <div className="health-template-added">
-                  <h4>Added foods</h4>
+                  <h4 className="health-template-added-header">
+                    Added foods
+                    {templateForm.Items.length ? (
+                      <span className="health-template-added-kcal">
+                        {FormatNumber(addedMealCalories)} kcal
+                      </span>
+                    ) : null}
+                  </h4>
                   {templateForm.Items.length ? (
-                    <ul className="health-template-items">
+                    <ul className="health-manual-select-list health-manual-select-list--added">
                       {templateForm.Items.map((item, index) => {
                         const food = foodsById[item.FoodId];
+                        const servingLabel =
+                          food?.ServingDescription ||
+                          (food ? `${food.ServingQuantity} ${food.ServingUnit}` : "");
                         return (
-                          <li key={`${item.FoodId}-${index}`} className="health-template-item-row">
-                            <div className="health-template-item-info">
-                              <p>{food?.FoodName || "Food"}</p>
-                              <span className="health-detail">
-                                {food?.ServingDescription ||
-                                  (food ? `${food.ServingQuantity} ${food.ServingUnit}` : "")}
+                          <li key={`${item.FoodId}-${index}`}>
+                            <div className="health-manual-select-row">
+                              <span className="health-food-summary-icon is-food" aria-hidden="true">
+                                <Icon name="food" className="icon" />
                               </span>
+                              <div className="health-manual-select-main">
+                                <p>{food?.FoodName || "Food"}</p>
+                                <div className="health-manual-select-meta">
+                                  <span>{FormatNumber(food?.CaloriesPerServing || 0)} kcal</span>
+                                  <span>{servingLabel}</span>
+                                </div>
+                              </div>
+                              <div className="health-manual-select-actions">
+                                <span className="health-manual-select-qty-label">
+                                  x{FormatNumber(item.Quantity || 1)}
+                                </span>
+                                <button
+                                  type="button"
+                                  className="button-secondary-pill health-manual-remove"
+                                  onClick={() => removeTemplateItem(index)}
+                                >
+                                  Remove
+                                </button>
+                              </div>
                             </div>
-                            <span className="health-template-quantity">x{item.Quantity}</span>
-                            <button
-                              type="button"
-                              className="text-button"
-                              onClick={() => removeTemplateItem(index)}
-                            >
-                              Remove
-                            </button>
                           </li>
                         );
                       })}
@@ -1762,51 +2473,55 @@ const Foods = () => {
               {!editingTemplateId ? (
                 <div className="health-template-library">
                   <label className="health-form-span">
-                    Search foods
                     <input
                       value={mealFoodSearch}
                       onChange={(event) => setMealFoodSearch(event.target.value)}
-                      placeholder="Search foods"
+                      placeholder="Search foods or meals"
                     />
                   </label>
-                  {filteredMealFoods.length ? (
-                    <ul className="health-food-list health-template-foods">
-                      {filteredMealFoods.map((food) => (
-                        <li key={food.FoodId}>
-                          <div className="health-food-item">
-                            <div>
-                              <p>{food.FoodName}</p>
-                              <div className="health-entry-meta">
-                                <span className="health-detail">
-                                  {food.ServingDescription || `${food.ServingQuantity} ${food.ServingUnit}`}
-                                </span>
-                                <span className="health-detail">
-                                  {food.ProteinPerServing} g protein
-                                </span>
-                                <span className="health-entry-calories">
-                                  {food.CaloriesPerServing} kcal
-                                </span>
+                  {manualSelectItems.length ? (
+                    <ul className="health-manual-select-list">
+                      {manualSelectItems.map((item) => (
+                        <li key={`${item.type}-${item.id}`}>
+                          <div className="health-manual-select-row">
+                            <span
+                              className={`health-food-summary-icon ${
+                                item.type === "meal" ? "is-meal" : "is-food"
+                              }`}
+                              aria-hidden="true"
+                            >
+                              <Icon name={item.type === "meal" ? "meal" : "food"} className="icon" />
+                            </span>
+                            <div className="health-manual-select-main">
+                              <p>{item.name}</p>
+                              <div className="health-manual-select-meta">
+                                <span>{FormatNumber(item.calories || 0)} kcal</span>
+                                <span>{item.servingLabel}</span>
                               </div>
                             </div>
-                            <div className="health-template-actions">
+                            <div className="health-manual-select-actions">
                               <input
                                 type="number"
                                 step="0.1"
                                 min="0"
-                                className="health-template-qty"
-                                value={mealFoodQuantities[food.FoodId] ?? "1"}
+                                className="health-manual-select-qty"
+                                value={getMealQuantity(item.type, item.id)}
                                 onChange={(event) =>
-                                  updateMealFoodQuantity(food.FoodId, event.target.value)
+                                  updateMealFoodQuantity(item.type, item.id, event.target.value)
                                 }
                                 onClick={(event) => event.stopPropagation()}
-                                aria-label={`${food.FoodName} quantity`}
+                                aria-label={`${item.name} quantity`}
                               />
                               <button
                                 type="button"
-                                className="button-secondary health-template-add"
-                                onClick={() =>
-                                  addTemplateItem(food, mealFoodQuantities[food.FoodId] ?? "1")
-                                }
+                                className="button-secondary health-manual-select-add"
+                                onClick={() => {
+                                  if (item.type === "meal") {
+                                    addMealTemplateItems(item.template, getMealQuantity(item.type, item.id));
+                                  } else {
+                                    addTemplateItem(item.food, getMealQuantity(item.type, item.id));
+                                  }
+                                }}
                               >
                                 Add
                               </button>
@@ -1816,27 +2531,10 @@ const Foods = () => {
                       ))}
                     </ul>
                   ) : (
-                    <p className="health-empty">No foods match your search.</p>
+                    <p className="health-empty">No foods or meals match your search.</p>
                   )}
                 </div>
               ) : null}
-              <div className="form-actions">
-                <button type="button" onClick={saveTemplate}>
-                  {editingTemplateId ? "Update" : "Save"} meal
-                </button>
-                <button type="button" className="text-button" onClick={closeMealForm}>
-                  Cancel
-                </button>
-                {editingTemplateId ? (
-                  <button
-                    type="button"
-                    className="text-button"
-                    onClick={() => removeTemplate(editingTemplateId)}
-                  >
-                    Delete
-                  </button>
-                ) : null}
-              </div>
             </div>
           ) : null}
 

@@ -8,7 +8,7 @@ const GetMobileTitle = (pathname) => {
   if (pathname === "/") return "Home";
   if (pathname.startsWith("/health/today")) return "Today";
   if (pathname.startsWith("/health/log")) return "Log";
-  if (pathname.startsWith("/health/history")) return "History";
+  if (pathname.startsWith("/health/history")) return "Log";
   if (pathname.startsWith("/health/insights")) return "Insights";
   if (pathname.startsWith("/health/foods")) return "Foods";
   if (pathname.startsWith("/health/settings")) return "Settings";

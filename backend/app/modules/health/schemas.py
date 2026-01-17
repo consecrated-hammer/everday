@@ -318,6 +318,21 @@ class CreateMealEntryInput(BaseModel):
     ScheduleSlotId: str | None = None
 
 
+class ShareMealEntryInput(BaseModel):
+    LogDate: str = Field(min_length=1)
+    TargetUserId: int = Field(gt=0)
+    MealType: MealType
+    FoodId: str | None = None
+    MealTemplateId: str | None = None
+    Quantity: float = Field(gt=0)
+    PortionOptionId: str | None = None
+    PortionLabel: str = Field(min_length=1)
+    PortionBaseUnit: str = Field(min_length=1)
+    PortionBaseAmount: float = Field(gt=0)
+    EntryNotes: str | None = None
+    ScheduleSlotId: str | None = None
+
+
 class UpdateMealEntryInput(BaseModel):
     MealType: MealTypeValue | None = None
     Quantity: float = Field(gt=0)
@@ -380,6 +395,7 @@ class ScheduleSlotsUpdateInput(BaseModel):
 class MealTemplate(BaseModel):
     MealTemplateId: str
     TemplateName: str
+    Servings: float
     CreatedAt: datetime
 
 
@@ -438,11 +454,13 @@ class MealTemplateItemInput(BaseModel):
 
 class CreateMealTemplateInput(BaseModel):
     TemplateName: str = Field(min_length=1)
+    Servings: float = Field(default=1.0, gt=0)
     Items: list[MealTemplateItemInput]
 
 
 class UpdateMealTemplateInput(BaseModel):
     TemplateName: str | None = Field(default=None, min_length=1)
+    Servings: float | None = Field(default=None, gt=0)
     Items: list[MealTemplateItemInput] | None = None
 
 

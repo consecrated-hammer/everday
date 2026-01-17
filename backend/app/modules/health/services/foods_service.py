@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.modules.auth.models import User
 from app.modules.health.models import Food as FoodModel
 from app.modules.health.models import MealEntry as MealEntryModel
+from app.modules.health.models import MealTemplate as MealTemplateModel
 from app.modules.health.models import MealTemplateItem as MealTemplateItemModel
 from app.modules.health.schemas import CreateFoodInput, Food, UpdateFoodInput
 from app.modules.health.utils.defaults import DefaultFoods
@@ -51,6 +52,24 @@ def _DisplayName(user: User) -> str:
     return name or user.Username
 
 
+def _NormalizeName(value: str) -> str:
+    return value.strip().lower()
+
+
+def _EnsureUniqueName(db: Session, name: str, FoodId: str | None = None) -> None:
+    normalized = _NormalizeName(name)
+    food_query = db.query(FoodModel).filter(func.lower(FoodModel.FoodName) == normalized)
+    if FoodId:
+        food_query = food_query.filter(FoodModel.FoodId != FoodId)
+    if food_query.first() is not None:
+        raise ValueError("Name already exists.")
+    template_query = db.query(MealTemplateModel).filter(
+        func.lower(MealTemplateModel.TemplateName) == normalized
+    )
+    if template_query.first() is not None:
+        raise ValueError("Name already exists.")
+
+
 def _BuildFood(row: FoodModel, created_by_name: str | None = None) -> Food:
     return Food(
         FoodId=row.FoodId,
@@ -82,10 +101,16 @@ def SeedFoodsForUser(db: Session, UserId: int) -> None:
     if seeded:
         return
 
-    existing_names = {row.FoodName for row in db.query(FoodModel.FoodName).all()}
+    existing_food_names = {
+        _NormalizeName(row.FoodName) for row in db.query(FoodModel.FoodName).all()
+    }
+    existing_template_names = {
+        _NormalizeName(row.TemplateName) for row in db.query(MealTemplateModel.TemplateName).all()
+    }
+    existing_names = existing_food_names.union(existing_template_names)
     inserted = False
     for FoodName, ServingDescription, CaloriesPerServing, ProteinPerServing in DefaultFoods:
-        if FoodName in existing_names:
+        if _NormalizeName(FoodName) in existing_names:
             continue
         quantity, unit = _ParseServingDescription(ServingDescription)
         record = FoodModel(
@@ -121,34 +146,7 @@ def UpsertFood(db: Session, UserId: int, Input: CreateFoodInput, IsAdmin: bool =
     food_name = Input.FoodName.strip()
     ServingDescription = f"{Input.ServingQuantity} {Input.ServingUnit}".strip()
 
-    existing = (
-        db.query(FoodModel)
-        .filter(func.lower(FoodModel.FoodName) == food_name.lower())
-        .first()
-    )
-
-    if existing:
-        if existing.OwnerUserId != UserId and not IsAdmin:
-            raise ValueError("Food already exists. Ask an admin to update it.")
-        existing.FoodName = food_name
-        existing.ServingDescription = ServingDescription
-        existing.ServingQuantity = Input.ServingQuantity
-        existing.ServingUnit = Input.ServingUnit
-        existing.CaloriesPerServing = Input.CaloriesPerServing
-        existing.ProteinPerServing = Input.ProteinPerServing
-        existing.FibrePerServing = Input.FibrePerServing
-        existing.CarbsPerServing = Input.CarbsPerServing
-        existing.FatPerServing = Input.FatPerServing
-        existing.SaturatedFatPerServing = Input.SaturatedFatPerServing
-        existing.SugarPerServing = Input.SugarPerServing
-        existing.SodiumPerServing = Input.SodiumPerServing
-        existing.DataSource = Input.DataSource
-        existing.CountryCode = Input.CountryCode
-        existing.IsFavourite = Input.IsFavourite
-        db.add(existing)
-        db.commit()
-        db.refresh(existing)
-        return _BuildFood(existing)
+    _EnsureUniqueName(db, food_name)
 
     record = FoodModel(
         FoodId=str(uuid.uuid4()),
@@ -186,18 +184,11 @@ def UpdateFood(db: Session, UserId: int, FoodId: str, Input: UpdateFoodInput, Is
     existing = db.query(FoodModel).filter(FoodModel.FoodId == FoodId).first()
     if existing is None:
         raise ValueError("Food not found")
-    if existing.OwnerUserId != UserId and not IsAdmin:
-        raise ValueError("Unauthorized")
 
     if Input.FoodName is not None:
         name = Input.FoodName.strip()
-        conflict = (
-            db.query(FoodModel)
-            .filter(func.lower(FoodModel.FoodName) == name.lower(), FoodModel.FoodId != FoodId)
-            .first()
-        )
-        if conflict:
-            raise ValueError("Food name already exists.")
+        if _NormalizeName(name) != _NormalizeName(existing.FoodName):
+            _EnsureUniqueName(db, name, FoodId=FoodId)
         existing.FoodName = name
 
     if Input.ServingQuantity is not None or Input.ServingUnit is not None:
@@ -236,8 +227,6 @@ def DeleteFood(db: Session, UserId: int, FoodId: str, IsAdmin: bool = False) -> 
     existing = db.query(FoodModel).filter(FoodModel.FoodId == FoodId).first()
     if existing is None:
         raise ValueError("Food not found")
-    if existing.OwnerUserId != UserId and not IsAdmin:
-        raise ValueError("Unauthorized")
 
     meal_entry_count = db.query(func.count(MealEntryModel.MealEntryId)).filter(
         MealEntryModel.FoodId == FoodId
