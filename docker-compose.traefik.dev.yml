@@ -17,6 +17,7 @@ services:
     env_file: .env.dev
     volumes:
       - ./backend/logs:/app/logs
+      - ./backend/uploads:/app/app/static/uploads
     networks:
       - traefik_proxy
     labels:

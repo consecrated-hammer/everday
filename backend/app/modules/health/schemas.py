@@ -18,6 +18,11 @@ class MealType(str, Enum):
 MealTypeValue = MealType
 
 
+class ImageScanMode(str, Enum):
+    Meal = "meal"
+    Label = "label"
+
+
 class Food(BaseModel):
     FoodId: str
     OwnerUserId: int | None = None
@@ -37,6 +42,7 @@ class Food(BaseModel):
     DataSource: str = "manual"
     CountryCode: str = "AU"
     IsFavourite: bool = False
+    ImageUrl: str | None = None
     CreatedAt: datetime | None = None
 
 
@@ -99,6 +105,7 @@ class MealEntryWithFood(BaseModel):
     SaturatedFatPerServing: float | None = None
     SugarPerServing: float | None = None
     SodiumPerServing: float | None = None
+    ImageUrl: str | None = None
     Quantity: float
     DisplayQuantity: float | None = None
     PortionOptionId: str | None = None
@@ -272,6 +279,7 @@ class CreateFoodInput(BaseModel):
     DataSource: str = Field(default="manual")
     CountryCode: str = Field(default="AU")
     IsFavourite: bool = False
+    ImageBase64: str | None = Field(default=None, min_length=1)
 
 
 class UpdateFoodInput(BaseModel):
@@ -287,6 +295,7 @@ class UpdateFoodInput(BaseModel):
     SugarPerServing: float | None = Field(default=None, ge=0)
     SodiumPerServing: float | None = Field(default=None, ge=0)
     IsFavourite: bool | None = None
+    ImageBase64: str | None = Field(default=None, min_length=1)
 
 
 class CreateDailyLogInput(BaseModel):
@@ -441,6 +450,28 @@ class MealTextParseResponse(BaseModel):
     SugarPerServing: float | None = None
     SodiumPerServing: float | None = None
     Summary: str
+
+
+class ImageScanInput(BaseModel):
+    ImageBase64: str = Field(min_length=1)
+    Mode: ImageScanMode = ImageScanMode.Meal
+
+
+class ImageScanResponse(BaseModel):
+    FoodName: str
+    ServingQuantity: float = 1.0
+    ServingUnit: str = "serving"
+    CaloriesPerServing: int
+    ProteinPerServing: float
+    FibrePerServing: float | None = None
+    CarbsPerServing: float | None = None
+    FatPerServing: float | None = None
+    SaturatedFatPerServing: float | None = None
+    SugarPerServing: float | None = None
+    SodiumPerServing: float | None = None
+    Summary: str
+    Confidence: str
+    Questions: list[str]
 
 
 class MealTemplateItemInput(BaseModel):

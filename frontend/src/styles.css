@@ -4731,7 +4731,7 @@ th {
   width: 100%;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 10px;
   padding: 0;
   border: none;
@@ -4739,6 +4739,39 @@ th {
   color: inherit;
   cursor: pointer;
   text-align: left;
+}
+
+.health-entry-main {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
+}
+
+.health-entry-title {
+  min-width: 0;
+}
+
+.health-entry-thumb {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  object-fit: cover;
+  flex-shrink: 0;
+  background: var(--surface-strong);
+}
+
+.health-entry-thumb.is-placeholder {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+}
+
+.health-entry-thumb.is-placeholder .icon {
+  font-size: 1rem;
 }
 
 .health-slot-summary-kcal {
@@ -4792,6 +4825,8 @@ th {
 
 .health-add-actions {
   display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
 }
 
 .health-action-tile {
@@ -4854,6 +4889,166 @@ th {
   margin: 0;
   font-size: 1rem;
   color: var(--text);
+}
+
+.health-scan-panel {
+  display: grid;
+  gap: 12px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  padding: 12px;
+  background: var(--surface);
+}
+
+.health-scan-header h4 {
+  margin: 0;
+  font-size: 1rem;
+  color: var(--text);
+}
+
+.health-scan-header p {
+  margin: 4px 0 0;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.health-scan-controls {
+  display: grid;
+  gap: 10px;
+}
+
+.health-scan-modes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.health-scan-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.health-scan-input {
+  display: none;
+}
+
+.health-scan-file,
+.health-scan-hint {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.health-scan-status {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--text-soft);
+}
+
+.health-scan-result {
+  display: grid;
+  gap: 12px;
+}
+
+.health-scan-meta {
+  display: grid;
+  gap: 4px;
+  font-size: 0.85rem;
+  color: var(--text-soft);
+}
+
+.health-scan-meta p {
+  margin: 0;
+}
+
+.health-scan-confidence {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.health-scan-questions {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.health-scan-advanced {
+  border-radius: 12px;
+  border: 1px dashed var(--border);
+  background: var(--surface-strong);
+  padding: 10px;
+}
+
+.health-scan-advanced summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+
+.health-scan-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+@media (max-width: 900px) {
+  .health-slot-label {
+    font-size: 1.05rem;
+  }
+
+  .health-slot-calories {
+    font-size: 0.85rem;
+  }
+
+  .health-entry-title {
+    font-size: 1rem;
+  }
+
+  .health-log-date-chip {
+    font-size: 1rem;
+    padding: 10px 14px;
+  }
+
+  .health-add-actions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .health-action-tile {
+    width: 100%;
+  }
+
+  .health-slot-summary-row,
+  .health-summary-row {
+    font-size: 0.98rem;
+  }
+
+  .health-date-picker {
+    width: min(360px, 96vw);
+    padding: 16px;
+  }
+
+  .health-date-picker-weekdays {
+    font-size: 0.8rem;
+  }
+
+  .health-date-picker-cell,
+  .health-date-picker-day {
+    width: 38px;
+    height: 38px;
+  }
+
+  .health-date-picker-day {
+    border-radius: 12px;
+    font-size: 0.95rem;
+  }
+
+  .module-shell--health button:not(.icon-button) {
+    font-size: 1rem;
+  }
 }
 
 .health-add-tabs {
@@ -5650,6 +5845,19 @@ th {
   align-items: center;
   justify-content: center;
   font-size: 0.9rem;
+}
+
+.health-food-summary-icon.has-image {
+  background: transparent;
+  padding: 0;
+}
+
+.health-food-summary-icon.has-image img {
+  width: 100%;
+  height: 100%;
+  border-radius: 8px;
+  object-fit: cover;
+  display: block;
 }
 
 .health-food-summary-icon.is-food {

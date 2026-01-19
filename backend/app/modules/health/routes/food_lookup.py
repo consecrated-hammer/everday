@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from app.modules.auth.deps import RequireModuleRole, UserContext
-from app.modules.health.schemas import FoodInfo
+from app.modules.health.schemas import FoodInfo, ImageScanInput, ImageScanResponse
 from app.modules.health.services.food_lookup_service import (
     GetFoodSuggestions,
     LookupFoodByBarcode,
@@ -10,6 +10,7 @@ from app.modules.health.services.food_lookup_service import (
     LookupFoodByText,
     LookupFoodByTextOptions,
 )
+from app.modules.health.services.image_scan_service import ParseImageScan
 from app.modules.health.services.multi_source_lookup_service import MultiSourceFoodLookupService
 from app.modules.health.services.rate_limiter import OpenFoodFactsRateLimiter
 
@@ -102,6 +103,20 @@ def LookupByImage(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=500, detail="Failed to analyze image.") from exc
+
+
+@router.post("/scan", response_model=ImageScanResponse)
+def ScanImage(
+    payload: ImageScanInput,
+    user: UserContext = Depends(RequireModuleRole("health", write=False)),
+) -> ImageScanResponse:
+    try:
+        result = ParseImageScan(payload.ImageBase64, payload.Mode.value)
+        return ImageScanResponse(**result)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail="Failed to scan image.") from exc
 
 
 @router.post("/barcode", response_model=BarcodeLookupResponse)

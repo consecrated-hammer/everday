@@ -22,3 +22,6 @@
 ### Example phrases
 - "Alexa, tell Everday add milk"
 - "Alexa, ask Everday what is on my list"
+
+## Health photos
+- Food scan photos are stored under `/uploads/health/foods/shared/` and served by the app for previews.

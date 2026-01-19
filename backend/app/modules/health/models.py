@@ -39,6 +39,7 @@ class Food(Base):
     DataSource = Column(String(40), nullable=False, default="manual")
     CountryCode = Column(String(8), nullable=False, default="AU")
     IsFavourite = Column(Boolean, nullable=False, default=False)
+    ImageUrl = Column(String(500))
     CreatedAt = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
 
 
