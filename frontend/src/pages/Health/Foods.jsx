@@ -598,6 +598,26 @@ const Foods = () => {
     );
   }, [templates, search]);
 
+  const favouriteFoods = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    let next = foods.filter((food) => food.IsFavourite);
+    if (!query) {
+      return next;
+    }
+    return next.filter((food) => food.FoodName.toLowerCase().includes(query));
+  }, [foods, search]);
+
+  const favouriteTemplates = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    let next = templates.filter((template) => template.Template.IsFavourite);
+    if (!query) {
+      return next;
+    }
+    return next.filter((template) =>
+      template.Template.TemplateName.toLowerCase().includes(query)
+    );
+  }, [templates, search]);
+
   const filteredMealFoods = useMemo(() => {
     const query = mealFoodSearch.trim().toLowerCase();
     if (!query) {
@@ -1180,6 +1200,24 @@ const Foods = () => {
     if (nextTab === "foods" || nextTab === "meals") {
       setMobileFilter(nextTab);
     }
+    if (nextTab === "favourites") {
+      setMobileFilter("favourites");
+      closeFoodForm();
+      if (!keepMealDraft) {
+        setShowMealForm(false);
+        clearAddModeParam();
+        setEditingTemplateId(null);
+        setTemplateForm({ ...EmptyTemplateForm });
+        setMealEntryMode("assistant");
+        setMealParseText("");
+        setMealParseResult(null);
+        setMealFoodSearch("");
+        setMealFoodQuantities({});
+        setAiMealNutrition(null);
+        setAiMealDescription("");
+      }
+      return;
+    }
     if (nextTab === "foods") {
       if (!keepMealDraft) {
         setShowMealForm(false);
@@ -1244,16 +1282,26 @@ const Foods = () => {
       : null;
   const isEditingAiMeal = Boolean(aiMealFood && (aiMealFood.DataSource || "manual") === "ai");
   const showMealsInline = mobileFilter === "all";
-  const showCombinedList = showMealsInline && !showMealForm && (!showFoodForm || selectedFoodId);
+  const showCombinedList =
+    activeTab === "all" && showMealsInline && !showMealForm && (!showFoodForm || selectedFoodId);
+  const showFavouritesList =
+    activeTab === "favourites" && !showMealForm && (!showFoodForm || selectedFoodId);
   const showFoodsList =
-    !showCombinedList && activeTab === "foods" && (!showFoodForm || selectedFoodId) && !showMealForm;
-  const showMealsList = !showCombinedList && activeTab === "meals" && !showMealForm && !showFoodForm;
+    !showCombinedList &&
+    !showFavouritesList &&
+    activeTab === "foods" &&
+    (!showFoodForm || selectedFoodId) &&
+    !showMealForm;
+  const showMealsList =
+    !showCombinedList && !showFavouritesList && activeTab === "meals" && !showMealForm && !showFoodForm;
 
   const applyMobileFilter = (value) => {
     if (value === "meals") {
       handleTabChange("meals");
     } else if (value === "all") {
       handleTabChange("all");
+    } else if (value === "favourites") {
+      handleTabChange("favourites");
     } else {
       handleTabChange("foods");
     }
@@ -1337,77 +1385,238 @@ const Foods = () => {
     return [...foodItems, ...mealItems];
   }, [filteredMealFoods, filteredMealTemplates, foodsById]);
 
-  const combinedItems = showMealsInline
-    ? (() => {
-        const items = [
-          ...filteredFoods.map((food) => ({
-            type: "food",
-            id: food.FoodId,
-            name: food.FoodName,
-            calories: Number(food.CaloriesPerServing || 0),
-            protein: Number(food.ProteinPerServing || 0),
-            carbs: Number(food.CarbsPerServing || 0),
-            fat: Number(food.FatPerServing || 0),
-            fibre: Number(food.FibrePerServing || 0),
-            servingLabel:
-              food.ServingDescription || `${food.ServingQuantity} ${food.ServingUnit}`,
-            createdAt: food.CreatedAt,
-            source: food.DataSource || "manual",
-            addedBy:
-              food.CreatedByName ||
-              (food.OwnerUserId ? `User ${food.OwnerUserId}` : "Unknown"),
-            food
-          })),
-          ...filteredTemplates.map((template) => {
-            const totals = getMealTotals(template);
-            const servings = resolveTemplateServings(template);
-            const sourceFood =
-              template.Items.length === 1 ? foodsById[template.Items[0].FoodId] : null;
-            const sourceLabel =
-              sourceFood && (sourceFood.DataSource || "manual") === "ai" ? "ai" : "manual";
-            return {
-              type: "meal",
-              id: template.Template.MealTemplateId,
-              name: template.Template.TemplateName,
-              calories: Number(totals.calories || 0),
-              protein: Number(totals.protein || 0),
-              carbs: Number(totals.carbs || 0),
-              fat: Number(totals.fat || 0),
-              fibre: Number(totals.fibre || 0),
-              servingLabel: servings > 1 ? `1 of ${FormatNumber(servings)} servings` : "1 serving",
-              createdAt: template.Template.CreatedAt,
-              source: sourceLabel,
-              itemsCount: template.Items.length,
-              template
-            };
-          })
-        ];
-        const direction = sortDirection === "asc" ? 1 : -1;
-        items.sort((a, b) => {
-          if (sortBy === "name") {
-            return direction * a.name.localeCompare(b.name);
-          }
-          if (sortBy === "calories") {
-            return direction * (a.calories - b.calories);
-          }
-          if (sortBy === "protein") {
-            return direction * ((a.protein || 0) - (b.protein || 0));
-          }
-          if (sortBy === "date") {
-            const left = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-            const right = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-            return direction * (left - right);
-          }
-          return 0;
-        });
-        return items;
-      })()
-    : [];
+  const buildCombinedItems = (foodList, templateList) => {
+    const items = [
+      ...foodList.map((food) => ({
+        type: "food",
+        id: food.FoodId,
+        name: food.FoodName,
+        calories: Number(food.CaloriesPerServing || 0),
+        protein: Number(food.ProteinPerServing || 0),
+        carbs: Number(food.CarbsPerServing || 0),
+        fat: Number(food.FatPerServing || 0),
+        fibre: Number(food.FibrePerServing || 0),
+        servingLabel: food.ServingDescription || `${food.ServingQuantity} ${food.ServingUnit}`,
+        createdAt: food.CreatedAt,
+        source: food.DataSource || "manual",
+        addedBy:
+          food.CreatedByName || (food.OwnerUserId ? `User ${food.OwnerUserId}` : "Unknown"),
+        food
+      })),
+      ...templateList.map((template) => {
+        const totals = getMealTotals(template);
+        const servings = resolveTemplateServings(template);
+        const sourceFood =
+          template.Items.length === 1 ? foodsById[template.Items[0].FoodId] : null;
+        const sourceLabel =
+          sourceFood && (sourceFood.DataSource || "manual") === "ai" ? "ai" : "manual";
+        return {
+          type: "meal",
+          id: template.Template.MealTemplateId,
+          name: template.Template.TemplateName,
+          calories: Number(totals.calories || 0),
+          protein: Number(totals.protein || 0),
+          carbs: Number(totals.carbs || 0),
+          fat: Number(totals.fat || 0),
+          fibre: Number(totals.fibre || 0),
+          servingLabel: servings > 1 ? `1 of ${FormatNumber(servings)} servings` : "1 serving",
+          createdAt: template.Template.CreatedAt,
+          source: sourceLabel,
+          itemsCount: template.Items.length,
+          template
+        };
+      })
+    ];
+    const direction = sortDirection === "asc" ? 1 : -1;
+    items.sort((a, b) => {
+      if (sortBy === "name") {
+        return direction * a.name.localeCompare(b.name);
+      }
+      if (sortBy === "calories") {
+        return direction * (a.calories - b.calories);
+      }
+      if (sortBy === "protein") {
+        return direction * ((a.protein || 0) - (b.protein || 0));
+      }
+      if (sortBy === "date") {
+        const left = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const right = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return direction * (left - right);
+      }
+      return 0;
+    });
+    return items;
+  };
+
+  const combinedItems = showMealsInline ? buildCombinedItems(filteredFoods, filteredTemplates) : [];
+  const favouriteItems = buildCombinedItems(favouriteFoods, favouriteTemplates);
 
   const toggleItemDetails = (type, id) => {
     const key = `${type}:${id}`;
     setExpandedItemKey((prev) => (prev === key ? null : key));
   };
+
+  const renderSummaryList = (items) => (
+    <ul className="health-food-summary-list">
+      {items.map((item) => {
+        const isFood = item.type === "food";
+        const isExpanded = expandedItemKey === `${isFood ? "food" : "meal"}:${item.id}`;
+        const toggleDetails = () => toggleItemDetails(isFood ? "food" : "meal", item.id);
+        const servings = isFood ? 1 : resolveTemplateServings(item.template);
+        return (
+          <li key={`${item.type}-${item.id}`}>
+            <div
+              className="health-food-summary-row"
+              role="button"
+              tabIndex={0}
+              onClick={toggleDetails}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  toggleDetails();
+                }
+              }}
+            >
+              <span
+                className={`health-food-summary-icon ${isFood ? "is-food" : "is-meal"}${
+                  isFood && item.food?.ImageUrl ? " has-image" : ""
+                }`}
+              >
+                {isFood && item.food?.ImageUrl ? (
+                  <img src={item.food.ImageUrl} alt={`${item.name} photo`} loading="lazy" />
+                ) : (
+                  <span aria-hidden="true">
+                    <Icon name={isFood ? "food" : "meal"} className="icon" />
+                  </span>
+                )}
+              </span>
+              <div className="health-food-summary-main">
+                <p>{item.name}</p>
+              </div>
+              <div className="health-food-summary-meta">
+                <span className="health-food-summary-calories">
+                  {FormatNumber(item.calories || 0)} kcal
+                </span>
+                <span className="health-food-summary-serving">{item.servingLabel}</span>
+              </div>
+              <button
+                type="button"
+                className="health-food-summary-toggle"
+                aria-label={isExpanded ? "Hide details" : "Show details"}
+                aria-expanded={isExpanded}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  toggleDetails();
+                }}
+              >
+                <Icon name={isExpanded ? "chevronUp" : "chevronDown"} className="icon" />
+              </button>
+            </div>
+            {isExpanded ? (
+              <div className="health-food-summary-details">
+                {isFood ? (
+                  <>
+                    <div className="health-food-summary-detail">
+                      <span>Protein</span>
+                      <span>{FormatNumber(item.protein || 0)} g</span>
+                    </div>
+                    <div className="health-food-summary-detail">
+                      <span>Carbs</span>
+                      <span>{FormatNumber(item.carbs || 0)} g</span>
+                    </div>
+                    <div className="health-food-summary-detail">
+                      <span>Fat</span>
+                      <span>{FormatNumber(item.fat || 0)} g</span>
+                    </div>
+                    <div className="health-food-summary-detail">
+                      <span>Fibre</span>
+                      <span>{FormatNumber(item.fibre || 0)} g</span>
+                    </div>
+                    <div className="health-food-summary-detail">
+                      <span>Source</span>
+                      <span>{item.source}</span>
+                    </div>
+                    <div className="health-food-summary-detail">
+                      <span>Added by</span>
+                      <span>{item.addedBy}</span>
+                    </div>
+                    <div className="health-food-summary-actions">
+                      <button
+                        type="button"
+                        className="button-secondary"
+                        onClick={() => {
+                          handleTabChange("foods");
+                          selectFood(item.food);
+                        }}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        className="button-secondary button-danger"
+                        onClick={() => deleteFood(item.id)}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="health-food-summary-detail">
+                      <span>Items</span>
+                      <span>{item.itemsCount}</span>
+                    </div>
+                    <div className="health-food-summary-detail">
+                      <span>Servings</span>
+                      <span>{FormatNumber(servings)}</span>
+                    </div>
+                    <div className="health-food-summary-detail">
+                      <span>Protein</span>
+                      <span>{FormatNumber(item.protein || 0)} g</span>
+                    </div>
+                    <div className="health-food-summary-detail">
+                      <span>Carbs</span>
+                      <span>{FormatNumber(item.carbs || 0)} g</span>
+                    </div>
+                    <div className="health-food-summary-detail">
+                      <span>Fat</span>
+                      <span>{FormatNumber(item.fat || 0)} g</span>
+                    </div>
+                    <div className="health-food-summary-detail">
+                      <span>Fibre</span>
+                      <span>{FormatNumber(item.fibre || 0)} g</span>
+                    </div>
+                    <div className="health-food-summary-detail">
+                      <span>Source</span>
+                      <span>{item.source}</span>
+                    </div>
+                    <div className="health-food-summary-actions">
+                      <button
+                        type="button"
+                        className="button-secondary"
+                        onClick={() => {
+                          handleTabChange("meals");
+                          selectTemplate(item.template);
+                        }}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        className="button-secondary button-danger"
+                        onClick={() => removeTemplate(item.id)}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            ) : null}
+          </li>
+        );
+      })}
+    </ul>
+  );
 
   return (
     <div className="health-foods">
@@ -1541,6 +1750,13 @@ const Foods = () => {
           >
             Meals
           </button>
+          <button
+            type="button"
+            className={`module-link${activeTab === "favourites" ? " is-active" : ""}`}
+            onClick={() => handleTabChange("favourites")}
+          >
+            Favourites
+          </button>
         </div>
       </div>
 
@@ -1590,172 +1806,48 @@ const Foods = () => {
           {status !== "loading" && combinedItems.length === 0 ? (
             <p className="health-empty">No foods or meals yet.</p>
           ) : null}
-          {combinedItems.length ? (
-            <ul className="health-food-summary-list">
-              {combinedItems.map((item) => {
-                const isFood = item.type === "food";
-                const isExpanded =
-                  expandedItemKey === `${isFood ? "food" : "meal"}:${item.id}`;
-                const toggleDetails = () => toggleItemDetails(isFood ? "food" : "meal", item.id);
-                const servings = isFood ? 1 : resolveTemplateServings(item.template);
-                return (
-                  <li key={`${item.type}-${item.id}`}>
-                    <div
-                      className="health-food-summary-row"
-                      role="button"
-                      tabIndex={0}
-                      onClick={toggleDetails}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter") {
-                          toggleDetails();
-                        }
-                      }}
-                    >
-                      <span
-                        className={`health-food-summary-icon ${isFood ? "is-food" : "is-meal"}${
-                          isFood && item.food?.ImageUrl ? " has-image" : ""
-                        }`}
-                      >
-                        {isFood && item.food?.ImageUrl ? (
-                          <img
-                            src={item.food.ImageUrl}
-                            alt={`${item.name} photo`}
-                            loading="lazy"
-                          />
-                        ) : (
-                          <span aria-hidden="true">
-                            <Icon name={isFood ? "food" : "meal"} className="icon" />
-                          </span>
-                        )}
-                      </span>
-                      <div className="health-food-summary-main">
-                        <p>{item.name}</p>
-                      </div>
-                      <div className="health-food-summary-meta">
-                        <span className="health-food-summary-calories">
-                          {FormatNumber(item.calories || 0)} kcal
-                        </span>
-                        <span className="health-food-summary-serving">{item.servingLabel}</span>
-                      </div>
-                      <button
-                        type="button"
-                        className="health-food-summary-toggle"
-                        aria-label={isExpanded ? "Hide details" : "Show details"}
-                        aria-expanded={isExpanded}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          toggleDetails();
-                        }}
-                      >
-                        <Icon name={isExpanded ? "chevronUp" : "chevronDown"} className="icon" />
-                      </button>
-                    </div>
-                    {isExpanded ? (
-                      <div className="health-food-summary-details">
-                        {isFood ? (
-                          <>
-                            <div className="health-food-summary-detail">
-                              <span>Protein</span>
-                              <span>{FormatNumber(item.protein || 0)} g</span>
-                            </div>
-                            <div className="health-food-summary-detail">
-                              <span>Carbs</span>
-                              <span>{FormatNumber(item.carbs || 0)} g</span>
-                            </div>
-                            <div className="health-food-summary-detail">
-                              <span>Fat</span>
-                              <span>{FormatNumber(item.fat || 0)} g</span>
-                            </div>
-                            <div className="health-food-summary-detail">
-                              <span>Fibre</span>
-                              <span>{FormatNumber(item.fibre || 0)} g</span>
-                            </div>
-                            <div className="health-food-summary-detail">
-                              <span>Source</span>
-                              <span>{item.source}</span>
-                            </div>
-                            <div className="health-food-summary-detail">
-                              <span>Added by</span>
-                              <span>{item.addedBy}</span>
-                            </div>
-                            <div className="health-food-summary-actions">
-                              <button
-                                type="button"
-                                className="button-secondary"
-                                onClick={() => {
-                                  handleTabChange("foods");
-                                  selectFood(item.food);
-                                }}
-                              >
-                                Edit
-                              </button>
-                              <button
-                                type="button"
-                                className="button-secondary button-danger"
-                                onClick={() => deleteFood(item.id)}
-                              >
-                                Delete
-                              </button>
-                            </div>
-                          </>
-                        ) : (
-                          <>
-                            <div className="health-food-summary-detail">
-                              <span>Items</span>
-                              <span>{item.itemsCount}</span>
-                            </div>
-                            <div className="health-food-summary-detail">
-                              <span>Servings</span>
-                              <span>{FormatNumber(servings)}</span>
-                            </div>
-                            <div className="health-food-summary-detail">
-                              <span>Protein</span>
-                              <span>{FormatNumber(item.protein || 0)} g</span>
-                            </div>
-                            <div className="health-food-summary-detail">
-                              <span>Carbs</span>
-                              <span>{FormatNumber(item.carbs || 0)} g</span>
-                            </div>
-                            <div className="health-food-summary-detail">
-                              <span>Fat</span>
-                              <span>{FormatNumber(item.fat || 0)} g</span>
-                            </div>
-                            <div className="health-food-summary-detail">
-                              <span>Fibre</span>
-                              <span>{FormatNumber(item.fibre || 0)} g</span>
-                            </div>
-                            <div className="health-food-summary-detail">
-                              <span>Source</span>
-                              <span>{item.source}</span>
-                            </div>
-                            <div className="health-food-summary-actions">
-                              <button
-                                type="button"
-                                className="button-secondary"
-                                onClick={() => {
-                                  handleTabChange("meals");
-                                  selectTemplate(item.template);
-                                }}
-                              >
-                                Edit
-                              </button>
-                              <button
-                                type="button"
-                                className="button-secondary button-danger"
-                                onClick={() => removeTemplate(item.id)}
-                              >
-                                Delete
-                              </button>
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    ) : null}
-                  </li>
-                );
-              })}
-            </ul>
+          {combinedItems.length ? renderSummaryList(combinedItems) : null}
+        </section>
+      ) : null}
+
+      {showFavouritesList ? (
+        <section className="module-panel">
+          <header className="module-panel-header food-library-header">
+            <div>
+              <h3>Favourites</h3>
+              <p>{favouriteItems.length} items</p>
+            </div>
+            <div className="module-panel-actions">
+              <input
+                className="health-search"
+                type="search"
+                placeholder="Search favourites"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+              />
+              <select value={sortBy} onChange={(event) => setSortBy(event.target.value)}>
+                <option value="name">Sort by name</option>
+                <option value="calories">Sort by calories</option>
+                <option value="protein">Sort by protein</option>
+                <option value="date">Sort by date</option>
+              </select>
+              <button
+                type="button"
+                className="icon-button is-secondary"
+                onClick={() =>
+                  setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"))
+                }
+                aria-label="Toggle sort direction"
+              >
+                <Icon name={sortDirection === "asc" ? "sortUp" : "sortDown"} className="icon" />
+              </button>
+            </div>
+          </header>
+          {status === "loading" ? <p className="health-empty">Loading favourites...</p> : null}
+          {status !== "loading" && favouriteItems.length === 0 ? (
+            <p className="health-empty">No favourites yet.</p>
           ) : null}
+          {favouriteItems.length ? renderSummaryList(favouriteItems) : null}
         </section>
       ) : null}
 

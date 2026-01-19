@@ -53,6 +53,7 @@ const Insights = () => {
     loadInsights();
   }, []);
 
+
   return (
     <div className="health-insights">
       <section className="module-panel">
@@ -103,7 +104,7 @@ const Insights = () => {
           </div>
           <button
             type="button"
-            className="button-secondary"
+            className="primary-button"
             onClick={loadSuggestions}
             disabled={suggestionsStatus === "loading"}
           >
@@ -124,16 +125,20 @@ const Insights = () => {
               Fetching suggestions...
             </div>
           ) : null}
-          {suggestions.length ? (
-            suggestions.map((suggestion, index) => (
-              <div key={`${suggestion.Title}-${index}`}>
-                <h4>{suggestion.Title}</h4>
-                <p>{suggestion.Detail}</p>
-              </div>
-            ))
-          ) : (
-            <p className="health-empty">No suggestions yet.</p>
-          )}
+          {suggestionsStatus !== "loading" && suggestions.length
+            ? suggestions.map((suggestion, index) => (
+                <div key={`${suggestion.Title}-${index}`}>
+                  <h4>{suggestion.Title}</h4>
+                  <p>{suggestion.Detail}</p>
+                </div>
+              ))
+            : null}
+          {suggestionsStatus === "error" ? (
+            <p className="health-empty">Unable to load suggestions.</p>
+          ) : null}
+          {suggestionsStatus === "ready" && suggestions.length === 0 ? (
+            <p className="health-empty">No suggestions yet. Log more meals or steps to get AI guidance.</p>
+          ) : null}
         </div>
       </section>
     </div>
