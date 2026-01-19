@@ -137,6 +137,11 @@ export const LookupFoodImage = (payload) =>
     method: "POST",
     body: JSON.stringify(payload)
   });
+export const ScanFoodImage = (payload) =>
+  RequestJson(`${Health}/food-lookup/scan`, {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
 export const LookupFoodBarcode = (payload) =>
   RequestJson(`${Health}/food-lookup/barcode`, {
     method: "POST",

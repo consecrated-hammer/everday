@@ -15,7 +15,9 @@ import {
   FetchMealTemplates,
   FetchPortionOptions,
   ParseMealTemplateText,
+  ScanFoodImage,
   ShareMealEntry,
+  UpdateFood,
   UpdateMealEntry
 } from "../../lib/healthApi.js";
 import { FetchUsers } from "../../lib/settingsApi.js";
@@ -312,6 +314,65 @@ const BuildEasyLabel = (option) => {
   return `1 ${label}`;
 };
 
+const BuildRecentDates = (value, days = 14) => {
+  const base = ParseIsoDate(value);
+  if (!Number.isFinite(base.getTime())) {
+    return [];
+  }
+  return Array.from({ length: days }, (_, index) => {
+    const next = new Date(base);
+    next.setDate(base.getDate() - index);
+    return FormatDate(next);
+  });
+};
+
+const ReadFileAsBase64 = (file) =>
+  new Promise((resolve, reject) => {
+    if (!file) {
+      reject(new Error("File is required."));
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result || "";
+      const base64 = String(result).split(",").pop() || "";
+      resolve(base64);
+    };
+    reader.onerror = () => reject(new Error("Failed to read image."));
+    reader.readAsDataURL(file);
+  });
+
+const FormatOptionalAmount = (value) =>
+  value === null || value === undefined ? "" : FormatAmount(value);
+
+const BuildScanForm = (result) => ({
+  FoodName: result?.FoodName || "",
+  ServingQuantity: FormatOptionalAmount(result?.ServingQuantity ?? 1),
+  ServingUnit: result?.ServingUnit || "serving",
+  CaloriesPerServing: FormatOptionalAmount(result?.CaloriesPerServing),
+  ProteinPerServing: FormatOptionalAmount(result?.ProteinPerServing),
+  FibrePerServing: FormatOptionalAmount(result?.FibrePerServing),
+  CarbsPerServing: FormatOptionalAmount(result?.CarbsPerServing),
+  FatPerServing: FormatOptionalAmount(result?.FatPerServing),
+  SaturatedFatPerServing: FormatOptionalAmount(result?.SaturatedFatPerServing),
+  SugarPerServing: FormatOptionalAmount(result?.SugarPerServing),
+  SodiumPerServing: FormatOptionalAmount(result?.SodiumPerServing),
+  Summary: result?.Summary || "",
+  Confidence: result?.Confidence || ""
+});
+
+const ParseOptionalNumber = (value) => {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  const text = String(value).trim();
+  if (!text) {
+    return null;
+  }
+  const numeric = Number(text);
+  return Number.isFinite(numeric) ? numeric : null;
+};
+
 const Log = ({ InitialDate, InitialAddMode }) => {
   const [searchParams] = useSearchParams();
   const fallbackDate = searchParams.get("date") || FormatDate(new Date());
@@ -333,14 +394,30 @@ const Log = ({ InitialDate, InitialAddMode }) => {
   const [returnView, setReturnView] = useState("slots");
   const [activeMealType, setActiveMealType] = useState(defaultMealType);
 
-  const [searchTab, setSearchTab] = useState("search");
+  const [searchTab, setSearchTab] = useState("recent");
   const [searchQuery, setSearchQuery] = useState("");
   const searchInputRef = useRef(null);
+  const scanInputRef = useRef(null);
+  const scanLibraryInputRef = useRef(null);
 
   const [describeOpen, setDescribeOpen] = useState(false);
   const [describeText, setDescribeText] = useState("");
   const [describeResult, setDescribeResult] = useState(null);
   const [describeStatus, setDescribeStatus] = useState("idle");
+
+  const [scanOpen, setScanOpen] = useState(false);
+  const [scanMode, setScanMode] = useState("meal");
+  const [scanStatus, setScanStatus] = useState("idle");
+  const [scanError, setScanError] = useState("");
+  const [scanResult, setScanResult] = useState(null);
+  const [scanForm, setScanForm] = useState(null);
+  const [scanQuestions, setScanQuestions] = useState([]);
+  const [scanImageName, setScanImageName] = useState("");
+  const [scanImageBase64, setScanImageBase64] = useState("");
+  const [scanQuantity, setScanQuantity] = useState("1");
+
+  const [recentStatus, setRecentStatus] = useState("idle");
+  const [recentStats, setRecentStats] = useState({});
 
   const [form, setForm] = useState({
     MealType: defaultMealType,
@@ -408,6 +485,63 @@ const Log = ({ InitialDate, InitialAddMode }) => {
 
   useEffect(() => {
     loadData(logDate);
+  }, [logDate]);
+
+  useEffect(() => {
+    let isActive = true;
+    const loadRecent = async () => {
+      setRecentStatus("loading");
+      const dates = BuildRecentDates(logDate, 14);
+      try {
+        const logs = await Promise.all(
+          dates.map(async (date) => {
+            try {
+              return await FetchDailyLog(date);
+            } catch {
+              return null;
+            }
+          })
+        );
+        if (!isActive) {
+          return;
+        }
+        const nextStats = {};
+        logs.filter(Boolean).forEach((log) => {
+          const logDateValue = log?.DailyLog?.LogDate || log?.Summary?.LogDate;
+          const timestamp = logDateValue ? ParseIsoDate(logDateValue).getTime() : 0;
+          (log?.Entries || []).forEach((entry) => {
+            const type = entry.MealTemplateId ? "template" : entry.FoodId ? "food" : null;
+            const id = entry.MealTemplateId || entry.FoodId || null;
+            if (!type || !id) {
+              return;
+            }
+            const mealType = entry.MealType;
+            if (!nextStats[mealType]) {
+              nextStats[mealType] = {};
+            }
+            const key = `${type}:${id}`;
+            const existing = nextStats[mealType][key] || { type, id, count: 0, lastUsed: 0 };
+            existing.count += 1;
+            if (timestamp && timestamp > existing.lastUsed) {
+              existing.lastUsed = timestamp;
+            }
+            nextStats[mealType][key] = existing;
+          });
+        });
+        setRecentStats(nextStats);
+        setRecentStatus("ready");
+      } catch (err) {
+        if (!isActive) {
+          return;
+        }
+        setRecentStatus("error");
+        setRecentStats({});
+      }
+    };
+    loadRecent();
+    return () => {
+      isActive = false;
+    };
   }, [logDate]);
 
   useEffect(() => {
@@ -813,12 +947,12 @@ const Log = ({ InitialDate, InitialAddMode }) => {
   }, [dayTotals, targets]);
 
   const filteredFoods = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
+    const query = searchTab === "search" ? searchQuery.trim().toLowerCase() : "";
     if (!query) {
       return foods;
     }
     return foods.filter((food) => food.FoodName.toLowerCase().includes(query));
-  }, [foods, searchQuery]);
+  }, [foods, searchQuery, searchTab]);
 
   const foodsById = useMemo(
     () =>
@@ -827,6 +961,15 @@ const Log = ({ InitialDate, InitialAddMode }) => {
         return map;
       }, {}),
     [foods]
+  );
+
+  const templatesById = useMemo(
+    () =>
+      templates.reduce((map, template) => {
+        map[template.Template.MealTemplateId] = template;
+        return map;
+      }, {}),
+    [templates]
   );
 
   const getTemplateServingLabel = (template) => {
@@ -853,26 +996,73 @@ const Log = ({ InitialDate, InitialAddMode }) => {
   }, [templates, foodsById]);
 
   const filteredTemplates = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
+    const query = searchTab === "search" ? searchQuery.trim().toLowerCase() : "";
     if (!query) {
       return templates;
     }
     return templates.filter((template) =>
       template.Template.TemplateName.toLowerCase().includes(query)
     );
-  }, [templates, searchQuery]);
+  }, [templates, searchQuery, searchTab]);
+
+  const recentItemsByMeal = useMemo(() => {
+    const result = {};
+    Object.entries(recentStats || {}).forEach(([mealType, items]) => {
+      const list = Object.values(items)
+        .map((item) => {
+          if (item.type === "food") {
+            const food = foodsById[item.id];
+            if (!food) {
+              return null;
+            }
+            return {
+              type: "food",
+              id: item.id,
+              name: food.FoodName,
+              hint: food.ServingDescription
+                ? `${food.ServingDescription} · ${food.CaloriesPerServing || 0} kcal`
+                : food.CaloriesPerServing
+                  ? `${food.CaloriesPerServing} kcal`
+                  : "",
+              food,
+              score: item.count,
+              lastUsed: item.lastUsed
+            };
+          }
+          if (item.type === "template") {
+            const template = templatesById[item.id];
+            if (!template) {
+              return null;
+            }
+            return {
+              type: "template",
+              id: item.id,
+              name: template.Template.TemplateName,
+              hint: templateCalories[template.Template.MealTemplateId]
+                ? `${templateCalories[template.Template.MealTemplateId]} kcal`
+                : "",
+              template,
+              score: item.count,
+              lastUsed: item.lastUsed
+            };
+          }
+          return null;
+        })
+        .filter(Boolean)
+        .sort((a, b) => {
+          if (b.score !== a.score) {
+            return b.score - a.score;
+          }
+          return b.lastUsed - a.lastUsed;
+        });
+      result[mealType] = list;
+    });
+    return result;
+  }, [foodsById, recentStats, templateCalories, templatesById]);
 
   const searchItems = useMemo(() => {
-    if (searchTab === "meals") {
-      return filteredTemplates.map((template) => ({
-        type: "template",
-        id: template.Template.MealTemplateId,
-        name: template.Template.TemplateName,
-        hint: templateCalories[template.Template.MealTemplateId]
-          ? `${templateCalories[template.Template.MealTemplateId]} kcal`
-          : "",
-        template
-      }));
+    if (searchTab === "recent") {
+      return (recentItemsByMeal[activeMealType] || []).slice(0, 10);
     }
     if (searchTab === "favourites") {
       return [
@@ -924,7 +1114,14 @@ const Log = ({ InitialDate, InitialAddMode }) => {
         template
       }))
     ];
-  }, [filteredFoods, filteredTemplates, searchTab, templateCalories]);
+  }, [
+    activeMealType,
+    filteredFoods,
+    filteredTemplates,
+    recentItemsByMeal,
+    searchTab,
+    templateCalories
+  ]);
 
   const selectedFood = isFoodSelected
     ? foods.find((item) => item.FoodId === selectedValue)
@@ -982,10 +1179,12 @@ const Log = ({ InitialDate, InitialAddMode }) => {
     setReturnView(backTarget);
     setView("add");
     setSearchQuery("");
-    setSearchTab("search");
+    setSearchTab("recent");
     setDescribeOpen(false);
     setDescribeText("");
     setDescribeResult(null);
+    setScanOpen(false);
+    resetScanState();
     setForm((prev) => ({
       ...prev,
       MealType: mealType,
@@ -1278,6 +1477,156 @@ const Log = ({ InitialDate, InitialAddMode }) => {
     }
   };
 
+  const resetScanState = () => {
+    setScanStatus("idle");
+    setScanError("");
+    setScanResult(null);
+    setScanForm(null);
+    setScanQuestions([]);
+    setScanImageName("");
+    setScanImageBase64("");
+    setScanQuantity("1");
+    if (scanInputRef.current) {
+      scanInputRef.current.value = "";
+    }
+    if (scanLibraryInputRef.current) {
+      scanLibraryInputRef.current.value = "";
+    }
+  };
+
+  const handleScanFile = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+    event.target.value = "";
+    setScanStatus("loading");
+    setScanError("");
+    setScanResult(null);
+    setScanForm(null);
+    setScanQuestions([]);
+    setScanImageName(file.name || "photo");
+    try {
+      const base64 = await ReadFileAsBase64(file);
+      setScanImageBase64(base64);
+      const result = await ScanFoodImage({ ImageBase64: base64, Mode: scanMode });
+      setScanResult(result);
+      setScanForm(BuildScanForm(result));
+      setScanQuestions(result.Questions || []);
+      setScanStatus("ready");
+    } catch (err) {
+      setScanStatus("error");
+      setScanError(err?.message || "Failed to scan photo");
+    }
+  };
+
+  const validateScanForm = () => {
+    if (!scanForm) {
+      setScanError("Scan a photo first.");
+      return false;
+    }
+    if (!scanForm.FoodName.trim()) {
+      setScanError("Food name is required.");
+      return false;
+    }
+    const servingQty = Number(scanForm.ServingQuantity);
+    if (!Number.isFinite(servingQty) || servingQty <= 0) {
+      setScanError("Serving quantity is required.");
+      return false;
+    }
+    if (!scanForm.ServingUnit.trim()) {
+      setScanError("Serving unit is required.");
+      return false;
+    }
+    const caloriesText = String(scanForm.CaloriesPerServing ?? "").trim();
+    const proteinText = String(scanForm.ProteinPerServing ?? "").trim();
+    const caloriesValue = Number(caloriesText);
+    const proteinValue = Number(proteinText);
+    if (!caloriesText || !Number.isFinite(caloriesValue) || caloriesValue < 0) {
+      setScanError("Calories are required.");
+      return false;
+    }
+    if (!proteinText || !Number.isFinite(proteinValue) || proteinValue < 0) {
+      setScanError("Protein is required.");
+      return false;
+    }
+    return true;
+  };
+
+  const saveScanResult = async (shouldLog) => {
+    if (!validateScanForm()) {
+      return;
+    }
+    const name = scanForm.FoodName.trim();
+    const servingQty = Number(scanForm.ServingQuantity);
+    const servingUnit = NormalizeUnit(scanForm.ServingUnit.trim());
+    const caloriesValue = Math.round(Number(scanForm.CaloriesPerServing));
+    const proteinValue = Number(scanForm.ProteinPerServing);
+    const quantityValue = Number(scanQuantity || 1);
+    if (shouldLog && (!Number.isFinite(quantityValue) || quantityValue <= 0)) {
+      setScanError("Servings to log must be greater than zero.");
+      return;
+    }
+
+    const payload = {
+      FoodName: name,
+      ServingQuantity: servingQty,
+      ServingUnit: servingUnit || "serving",
+      CaloriesPerServing: Number.isFinite(caloriesValue) ? caloriesValue : 0,
+      ProteinPerServing: Number.isFinite(proteinValue) ? proteinValue : 0,
+      FibrePerServing: ParseOptionalNumber(scanForm.FibrePerServing),
+      CarbsPerServing: ParseOptionalNumber(scanForm.CarbsPerServing),
+      FatPerServing: ParseOptionalNumber(scanForm.FatPerServing),
+      SaturatedFatPerServing: ParseOptionalNumber(scanForm.SaturatedFatPerServing),
+      SugarPerServing: ParseOptionalNumber(scanForm.SugarPerServing),
+      SodiumPerServing: ParseOptionalNumber(scanForm.SodiumPerServing),
+      DataSource: "ai",
+      CountryCode: "AU",
+      IsFavourite: false,
+      ImageBase64: scanImageBase64 || null
+    };
+
+    const existing = foods.find(
+      (food) => food.FoodName?.trim().toLowerCase() === name.toLowerCase()
+    );
+
+    try {
+      setStatus("saving");
+      setScanError("");
+      let food = existing || null;
+      if (food) {
+        if (!food.ImageUrl && scanImageBase64) {
+          food = await UpdateFood(food.FoodId, { ImageBase64: scanImageBase64 });
+        }
+      } else {
+        food = await CreateFood(payload);
+      }
+      if (shouldLog) {
+        const log = await ensureDailyLog();
+        const base = ResolveServingBase(food);
+        await CreateMealEntry({
+          DailyLogId: log.DailyLogId,
+          MealType: activeMealType,
+          FoodId: food.FoodId,
+          MealTemplateId: null,
+          Quantity: quantityValue || 1,
+          PortionOptionId: null,
+          PortionLabel: "serving",
+          PortionBaseUnit: base.unit,
+          PortionBaseAmount: base.amount,
+          EntryNotes: scanForm.Summary || null,
+          SortOrder: entries.length
+        });
+        openSummary(activeMealType);
+      }
+      await loadData(logDate);
+      resetScanState();
+    } catch (err) {
+      setStatus("error");
+      setScanError(err?.message || "Failed to save scan");
+    }
+  };
+
   const slotEntries = groupedEntries[activeMealType] || [];
   const slotCalories = Math.round(slotTotals[activeMealType] || 0);
   const slotProtein = useMemo(() => {
@@ -1454,13 +1803,21 @@ const Log = ({ InitialDate, InitialAddMode }) => {
 
   const showPortionSheet = sheetOpen && form.SelectedId;
   const portionModalLabel = editingEntryId ? "Edit entry" : "Portion picker";
-  const showSearchList = searchTab !== "search" || searchQuery.trim();
+  const isFocusedMode = describeOpen || scanOpen;
+  const showSearchList =
+    !isFocusedMode && (searchTab !== "search" || searchQuery.trim());
   const emptyListLabel =
-    searchTab === "meals"
-      ? "No meals yet."
-      : searchTab === "favourites"
-        ? "No favourites yet."
-        : "No foods or meals yet.";
+    searchTab === "recent"
+      ? recentStatus === "loading"
+        ? "Loading recent items..."
+        : recentStatus === "error"
+          ? "Unable to load recent items."
+          : "No recent items yet."
+      : searchTab === "search"
+        ? "No matches yet."
+        : searchTab === "favourites"
+          ? "No favourites yet."
+          : "No foods or meals yet.";
   const handleSheetKeyDown = (event) => {
     if (event.key !== "Enter") {
       return;
@@ -1661,7 +2018,7 @@ const Log = ({ InitialDate, InitialAddMode }) => {
             </button>
             <h2>{FormatMealTypeLabel(activeMealType)}</h2>
           </header>
-          {slotEntries.length ? (
+          {!isFocusedMode && slotEntries.length ? (
             <div className="health-slot-summary">
               <div className="health-slot-summary-header">
                 <span>Already logged</span>
@@ -1670,24 +2027,42 @@ const Log = ({ InitialDate, InitialAddMode }) => {
                 </span>
               </div>
               <ul className="health-slot-summary-list">
-                {slotEntries.map((entry) => (
-                  <li key={entry.MealEntryId}>
-                    <button
-                      type="button"
-                      className="health-slot-summary-row"
-                      onClick={() => onEditEntry(entry)}
-                    >
-                      <span>{entry.TemplateName || entry.FoodName || "Item"}</span>
-                      <span className="health-slot-summary-kcal">
-                        {FormatNumber(
-                          Math.round((entry.CaloriesPerServing || 0) * (entry.Quantity || 1))
-                        )}{" "}
-                        kcal
-                      </span>
-                      <Icon name="chevronRight" className="icon" />
-                    </button>
-                  </li>
-                ))}
+                {slotEntries.map((entry) => {
+                  const entryLabel = entry.TemplateName || entry.FoodName || "Item";
+                  const entryIcon = entry.MealTemplateId ? "meal" : "food";
+                  return (
+                    <li key={entry.MealEntryId}>
+                      <button
+                        type="button"
+                        className="health-slot-summary-row"
+                        onClick={() => onEditEntry(entry)}
+                      >
+                        <span className="health-entry-main">
+                          {entry.ImageUrl ? (
+                            <img
+                              className="health-entry-thumb"
+                              src={entry.ImageUrl}
+                              alt={`${entryLabel} photo`}
+                              loading="lazy"
+                            />
+                          ) : (
+                            <span className="health-entry-thumb is-placeholder" aria-hidden="true">
+                              <Icon name={entryIcon} className="icon" />
+                            </span>
+                          )}
+                          <span className="health-entry-title">{entryLabel}</span>
+                        </span>
+                        <span className="health-slot-summary-kcal">
+                          {FormatNumber(
+                            Math.round((entry.CaloriesPerServing || 0) * (entry.Quantity || 1))
+                          )}{" "}
+                          kcal
+                        </span>
+                        <Icon name="chevronRight" className="icon" />
+                      </button>
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           ) : null}
@@ -1695,23 +2070,41 @@ const Log = ({ InitialDate, InitialAddMode }) => {
             <button
               type="button"
               className="health-action-tile"
-              onClick={() => setDescribeOpen((prev) => !prev)}
+              onClick={() =>
+                setDescribeOpen((prev) => {
+                  const next = !prev;
+                  if (next) {
+                    setScanOpen(false);
+                  }
+                  return next;
+                })
+              }
             >
               <span className="health-action-icon" aria-hidden="true">
                 <Icon name="edit" className="icon" />
               </span>
-              <span>Describe meal</span>
+              <span>Describe meal (AI)</span>
             </button>
-          </div>
-          <div className="health-add-search">
-            <Icon name="search" className="icon" />
-            <input
-              ref={searchInputRef}
-              type="search"
-              placeholder="Search for your food"
-              value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
-            />
+            <button
+              type="button"
+              className="health-action-tile"
+              onClick={() =>
+                setScanOpen((prev) => {
+                  const next = !prev;
+                  if (next) {
+                    setDescribeOpen(false);
+                  } else {
+                    resetScanState();
+                  }
+                  return next;
+                })
+              }
+            >
+              <span className="health-action-icon" aria-hidden="true">
+                <Icon name="camera" className="icon" />
+              </span>
+              <span>Scan photo (AI)</span>
+            </button>
           </div>
           {describeOpen ? (
             <div className="health-describe-panel">
@@ -1746,61 +2139,351 @@ const Log = ({ InitialDate, InitialAddMode }) => {
               ) : null}
             </div>
           ) : null}
-          <div className="health-add-tabs" role="tablist" aria-label="Log tabs">
-            {[
-              { key: "search", label: "Search" },
-              { key: "meals", label: "My meals" },
-              { key: "favourites", label: "Favourites" },
-              { key: "foods", label: "Foods" }
-            ].map((tab) => (
-              <button
-                key={tab.key}
-                type="button"
-                role="tab"
-                aria-selected={searchTab === tab.key}
-                className={`health-add-tab${searchTab === tab.key ? " is-active" : ""}`}
-                onClick={() => setSearchTab(tab.key)}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-          {searchTab === "search" ? (
-            <div className="health-add-cta-group">
-              <Link
-                className="health-add-cta"
-                to={`/health/foods?add=food&return=log&meal=${encodeURIComponent(activeMealType)}`}
-              >
-                <Icon name="plus" className="icon" />
-                <span>Can't find it? Let's add it!</span>
-              </Link>
+          {scanOpen ? (
+            <div className="health-scan-panel">
+              <div className="health-scan-header">
+                <div>
+                  <h4>Scan a meal or label</h4>
+                  <p>Use the camera for a meal photo or a nutrition label.</p>
+                </div>
+              </div>
+              <div className="health-scan-controls">
+                <div className="health-scan-modes">
+                  <button
+                    type="button"
+                    className={`health-mode-button${scanMode === "meal" ? " is-active" : ""}`}
+                    onClick={() => {
+                      if (scanMode !== "meal") {
+                        setScanMode("meal");
+                        resetScanState();
+                      }
+                    }}
+                  >
+                    Meal photo
+                  </button>
+                  <button
+                    type="button"
+                    className={`health-mode-button${scanMode === "label" ? " is-active" : ""}`}
+                    onClick={() => {
+                      if (scanMode !== "label") {
+                        setScanMode("label");
+                        resetScanState();
+                      }
+                    }}
+                  >
+                    Nutrition label
+                  </button>
+                </div>
+                <div className="health-scan-actions">
+                  <input
+                    ref={scanInputRef}
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    className="health-scan-input"
+                    onChange={handleScanFile}
+                  />
+                  <input
+                    ref={scanLibraryInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="health-scan-input"
+                    onChange={handleScanFile}
+                  />
+                  <button
+                    type="button"
+                    className="button-secondary"
+                    onClick={() => scanInputRef.current?.click()}
+                    disabled={scanStatus === "loading"}
+                  >
+                    Take photo
+                  </button>
+                  <button
+                    type="button"
+                    className="button-secondary"
+                    onClick={() => scanLibraryInputRef.current?.click()}
+                    disabled={scanStatus === "loading"}
+                  >
+                    Choose from library
+                  </button>
+                  {scanImageName ? (
+                    <span className="health-scan-file">{scanImageName}</span>
+                  ) : (
+                    <span className="health-scan-hint">No photo selected.</span>
+                  )}
+                  {scanResult || scanError ? (
+                    <button type="button" className="button-secondary" onClick={resetScanState}>
+                      Clear
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+              {scanStatus === "loading" ? (
+                <p className="health-scan-status">Scanning photo...</p>
+              ) : null}
+              {scanError ? <p className="form-error">{scanError}</p> : null}
+              {scanResult && scanForm ? (
+                <div className="health-scan-result">
+                  <div className="health-scan-meta">
+                    <span className="health-scan-confidence">
+                      Confidence: {scanForm.Confidence || scanResult.Confidence}
+                    </span>
+                    {scanForm.Summary ? <p>{scanForm.Summary}</p> : null}
+                  </div>
+                  {scanQuestions.length ? (
+                    <ul className="health-scan-questions">
+                      {scanQuestions.map((question, index) => (
+                        <li key={`${index}-${question}`}>{question}</li>
+                      ))}
+                    </ul>
+                  ) : null}
+                  <div className="health-log-form health-scan-form">
+                    <label className="health-form-span">
+                      <span>Food name</span>
+                      <input
+                        type="text"
+                        value={scanForm.FoodName}
+                        onChange={(event) =>
+                          setScanForm((prev) => ({ ...prev, FoodName: event.target.value }))
+                        }
+                      />
+                    </label>
+                    <div className="health-form-row health-form-row--compact">
+                      <label>
+                        <span>Serving quantity</span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={scanForm.ServingQuantity}
+                          onChange={(event) =>
+                            setScanForm((prev) => ({ ...prev, ServingQuantity: event.target.value }))
+                          }
+                        />
+                      </label>
+                      <label>
+                        <span>Serving unit</span>
+                        <input
+                          type="text"
+                          value={scanForm.ServingUnit}
+                          onChange={(event) =>
+                            setScanForm((prev) => ({ ...prev, ServingUnit: event.target.value }))
+                          }
+                        />
+                      </label>
+                    </div>
+                    <div className="health-form-row health-form-row--compact">
+                      <label>
+                        <span>Calories per serving</span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="1"
+                          value={scanForm.CaloriesPerServing}
+                          onChange={(event) =>
+                            setScanForm((prev) => ({
+                              ...prev,
+                              CaloriesPerServing: event.target.value
+                            }))
+                          }
+                        />
+                      </label>
+                      <label>
+                        <span>Protein per serving</span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.1"
+                          value={scanForm.ProteinPerServing}
+                          onChange={(event) =>
+                            setScanForm((prev) => ({
+                              ...prev,
+                              ProteinPerServing: event.target.value
+                            }))
+                          }
+                        />
+                      </label>
+                    </div>
+                    <div className="health-form-row health-form-row--compact">
+                      <label>
+                        <span>Servings to log</span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.1"
+                          value={scanQuantity}
+                          onChange={(event) => setScanQuantity(event.target.value)}
+                        />
+                      </label>
+                    </div>
+                  </div>
+                  <details className="health-scan-advanced">
+                    <summary>More nutrition</summary>
+                    <div className="health-form-row health-form-row--compact">
+                      <label>
+                        <span>Carbs per serving</span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.1"
+                          value={scanForm.CarbsPerServing}
+                          onChange={(event) =>
+                            setScanForm((prev) => ({ ...prev, CarbsPerServing: event.target.value }))
+                          }
+                        />
+                      </label>
+                      <label>
+                        <span>Fat per serving</span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.1"
+                          value={scanForm.FatPerServing}
+                          onChange={(event) =>
+                            setScanForm((prev) => ({ ...prev, FatPerServing: event.target.value }))
+                          }
+                        />
+                      </label>
+                    </div>
+                    <div className="health-form-row health-form-row--compact">
+                      <label>
+                        <span>Fibre per serving</span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.1"
+                          value={scanForm.FibrePerServing}
+                          onChange={(event) =>
+                            setScanForm((prev) => ({ ...prev, FibrePerServing: event.target.value }))
+                          }
+                        />
+                      </label>
+                      <label>
+                        <span>Saturated fat per serving</span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.1"
+                          value={scanForm.SaturatedFatPerServing}
+                          onChange={(event) =>
+                            setScanForm((prev) => ({
+                              ...prev,
+                              SaturatedFatPerServing: event.target.value
+                            }))
+                          }
+                        />
+                      </label>
+                    </div>
+                    <div className="health-form-row health-form-row--compact">
+                      <label>
+                        <span>Sugar per serving</span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.1"
+                          value={scanForm.SugarPerServing}
+                          onChange={(event) =>
+                            setScanForm((prev) => ({ ...prev, SugarPerServing: event.target.value }))
+                          }
+                        />
+                      </label>
+                      <label>
+                        <span>Sodium per serving</span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="1"
+                          value={scanForm.SodiumPerServing}
+                          onChange={(event) =>
+                            setScanForm((prev) => ({ ...prev, SodiumPerServing: event.target.value }))
+                          }
+                        />
+                      </label>
+                    </div>
+                  </details>
+                  <div className="health-scan-footer">
+                    <button type="button" className="button-secondary" onClick={() => saveScanResult(false)}>
+                      Save food
+                    </button>
+                    <button type="button" className="primary-button" onClick={() => saveScanResult(true)}>
+                      Save and log
+                    </button>
+                  </div>
+                </div>
+              ) : null}
             </div>
           ) : null}
-          {showSearchList ? (
-            <ul className="health-result-list">
-              {searchItems.length ? (
-                searchItems.map((item) => (
-                  <li key={`${item.type}-${item.id}`}>
-                    <button
-                      type="button"
-                      className="health-result-row"
-                      onClick={() => handleSelectItem(item)}
-                    >
-                      <span className="health-result-icon" aria-hidden="true">
-                        <Icon name={item.type === "template" ? "meal" : "food"} className="icon" />
-                      </span>
-                      <span className="health-result-name">{item.name}</span>
-                      {item.hint ? <span className="health-result-hint">{item.hint}</span> : null}
-                    </button>
-                  </li>
-                ))
+          {!isFocusedMode ? (
+            <>
+              <div className="health-add-tabs" role="tablist" aria-label="Log tabs">
+                {[
+                  { key: "recent", label: "Recent" },
+                  { key: "favourites", label: "Favourites" },
+                  { key: "search", label: "Search" },
+                  { key: "library", label: "Foods" }
+                ].map((tab) => (
+                  <button
+                    key={tab.key}
+                    type="button"
+                    role="tab"
+                    aria-selected={searchTab === tab.key}
+                    className={`health-add-tab${searchTab === tab.key ? " is-active" : ""}`}
+                    onClick={() => setSearchTab(tab.key)}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+              {searchTab === "search" ? (
+                <div className="health-add-search">
+                  <Icon name="search" className="icon" />
+                  <input
+                    ref={searchInputRef}
+                    type="search"
+                    placeholder="Search foods and meals"
+                    value={searchQuery}
+                    onChange={(event) => setSearchQuery(event.target.value)}
+                  />
+                </div>
+              ) : null}
+              {showSearchList ? (
+                <ul className="health-result-list">
+                  {searchItems.length ? (
+                    searchItems.map((item) => (
+                      <li key={`${item.type}-${item.id}`}>
+                        <button
+                          type="button"
+                          className="health-result-row"
+                          onClick={() => handleSelectItem(item)}
+                        >
+                          <span className="health-result-icon" aria-hidden="true">
+                            <Icon name={item.type === "template" ? "meal" : "food"} className="icon" />
+                          </span>
+                          <span className="health-result-name">{item.name}</span>
+                          {item.hint ? <span className="health-result-hint">{item.hint}</span> : null}
+                        </button>
+                      </li>
+                    ))
+                  ) : (
+                    <li className="health-empty">{emptyListLabel}</li>
+                  )}
+                </ul>
               ) : (
-                <li className="health-empty">{emptyListLabel}</li>
+                <p className="health-empty">Start typing to see results.</p>
               )}
-            </ul>
-          ) : (
-            <p className="health-empty">Start typing to see results.</p>
-          )}
+              {searchTab === "search" && searchQuery.trim() ? (
+                <div className="health-add-cta-group">
+                  <Link
+                    className="health-add-cta"
+                    to={`/health/foods?add=food&return=log&meal=${encodeURIComponent(activeMealType)}`}
+                  >
+                    <Icon name="plus" className="icon" />
+                    <span>Can't find it? Let's add it!</span>
+                  </Link>
+                </div>
+              ) : null}
+            </>
+          ) : null}
         </section>
       ) : null}
 
@@ -1825,20 +2508,38 @@ const Log = ({ InitialDate, InitialAddMode }) => {
           </header>
           <ul className="health-summary-list">
             {slotEntries.length ? (
-              slotEntries.map((entry) => (
-                <li key={entry.MealEntryId}>
-                  <button
-                    type="button"
-                    className="health-summary-row"
-                    onClick={() => onEditEntry(entry)}
-                  >
-                    <span>{entry.TemplateName || entry.FoodName || "Item"}</span>
-                    <span>
-                      {Math.round((entry.CaloriesPerServing || 0) * (entry.Quantity || 1))} kcal
-                    </span>
-                  </button>
-                </li>
-              ))
+              slotEntries.map((entry) => {
+                const entryLabel = entry.TemplateName || entry.FoodName || "Item";
+                const entryIcon = entry.MealTemplateId ? "meal" : "food";
+                return (
+                  <li key={entry.MealEntryId}>
+                    <button
+                      type="button"
+                      className="health-summary-row"
+                      onClick={() => onEditEntry(entry)}
+                    >
+                      <span className="health-entry-main">
+                        {entry.ImageUrl ? (
+                          <img
+                            className="health-entry-thumb"
+                            src={entry.ImageUrl}
+                            alt={`${entryLabel} photo`}
+                            loading="lazy"
+                          />
+                        ) : (
+                          <span className="health-entry-thumb is-placeholder" aria-hidden="true">
+                            <Icon name={entryIcon} className="icon" />
+                          </span>
+                        )}
+                        <span className="health-entry-title">{entryLabel}</span>
+                      </span>
+                      <span>
+                        {Math.round((entry.CaloriesPerServing || 0) * (entry.Quantity || 1))} kcal
+                      </span>
+                    </button>
+                  </li>
+                );
+              })
             ) : (
               <li className="health-empty">No items yet.</li>
             )}

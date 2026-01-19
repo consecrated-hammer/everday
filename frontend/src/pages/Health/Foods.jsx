@@ -1509,8 +1509,11 @@ const Foods = () => {
                     </button>
                   ))}
                 </div>
-              ) : null}
+                ) : null}
             </div>
+            <button type="button" className="primary-button" onClick={startAddFood}>
+              Add food
+            </button>
           </div>
         </div>
       ) : null}
@@ -1609,10 +1612,21 @@ const Foods = () => {
                       }}
                     >
                       <span
-                        className={`health-food-summary-icon ${isFood ? "is-food" : "is-meal"}`}
-                        aria-hidden="true"
+                        className={`health-food-summary-icon ${isFood ? "is-food" : "is-meal"}${
+                          isFood && item.food?.ImageUrl ? " has-image" : ""
+                        }`}
                       >
-                        <Icon name={isFood ? "food" : "meal"} className="icon" />
+                        {isFood && item.food?.ImageUrl ? (
+                          <img
+                            src={item.food.ImageUrl}
+                            alt={`${item.name} photo`}
+                            loading="lazy"
+                          />
+                        ) : (
+                          <span aria-hidden="true">
+                            <Icon name={isFood ? "food" : "meal"} className="icon" />
+                          </span>
+                        )}
                       </span>
                       <div className="health-food-summary-main">
                         <p>{item.name}</p>
@@ -1807,8 +1821,16 @@ const Foods = () => {
                         }
                       }}
                     >
-                      <span className="health-food-summary-icon is-food" aria-hidden="true">
-                        <Icon name="food" className="icon" />
+                      <span
+                        className={`health-food-summary-icon is-food${food.ImageUrl ? " has-image" : ""}`}
+                      >
+                        {food.ImageUrl ? (
+                          <img src={food.ImageUrl} alt={`${food.FoodName} photo`} loading="lazy" />
+                        ) : (
+                          <span aria-hidden="true">
+                            <Icon name="food" className="icon" />
+                          </span>
+                        )}
                       </span>
                       <div className="health-food-summary-main">
                         <p>{food.FoodName}</p>

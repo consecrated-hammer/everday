@@ -10,6 +10,7 @@ from app.modules.health.models import MealEntry as MealEntryModel
 from app.modules.health.models import MealTemplate as MealTemplateModel
 from app.modules.health.models import MealTemplateItem as MealTemplateItemModel
 from app.modules.health.schemas import CreateFoodInput, Food, UpdateFoodInput
+from app.modules.health.services.food_image_service import SaveFoodImage, TryRemoveFoodImage
 from app.modules.health.utils.defaults import DefaultFoods
 
 
@@ -92,6 +93,7 @@ def _BuildFood(row: FoodModel, created_by_name: str | None = None) -> Food:
         DataSource=row.DataSource or "manual",
         CountryCode=row.CountryCode or "AU",
         IsFavourite=bool(row.IsFavourite),
+        ImageUrl=row.ImageUrl,
         CreatedAt=row.CreatedAt,
     )
 
@@ -148,6 +150,10 @@ def UpsertFood(db: Session, UserId: int, Input: CreateFoodInput, IsAdmin: bool =
 
     _EnsureUniqueName(db, food_name)
 
+    image_url = None
+    if Input.ImageBase64:
+        image_url = SaveFoodImage(Input.ImageBase64)
+
     record = FoodModel(
         FoodId=str(uuid.uuid4()),
         OwnerUserId=UserId,
@@ -166,6 +172,7 @@ def UpsertFood(db: Session, UserId: int, Input: CreateFoodInput, IsAdmin: bool =
         DataSource=Input.DataSource,
         CountryCode=Input.CountryCode,
         IsFavourite=Input.IsFavourite,
+        ImageUrl=image_url,
     )
     db.add(record)
     db.commit()
@@ -216,6 +223,10 @@ def UpdateFood(db: Session, UserId: int, FoodId: str, Input: UpdateFoodInput, Is
         existing.SodiumPerServing = Input.SodiumPerServing
     if Input.IsFavourite is not None:
         existing.IsFavourite = Input.IsFavourite
+    if Input.ImageBase64 is not None:
+        previous_image = existing.ImageUrl
+        existing.ImageUrl = SaveFoodImage(Input.ImageBase64)
+        TryRemoveFoodImage(previous_image)
 
     db.add(existing)
     db.commit()
@@ -228,6 +239,7 @@ def DeleteFood(db: Session, UserId: int, FoodId: str, IsAdmin: bool = False) -> 
     if existing is None:
         raise ValueError("Food not found")
 
+    image_url = existing.ImageUrl
     meal_entry_count = db.query(func.count(MealEntryModel.MealEntryId)).filter(
         MealEntryModel.FoodId == FoodId
     ).scalar() or 0
@@ -248,3 +260,4 @@ def DeleteFood(db: Session, UserId: int, FoodId: str, IsAdmin: bool = False) -> 
 
     db.delete(existing)
     db.commit()
+    TryRemoveFoodImage(image_url)

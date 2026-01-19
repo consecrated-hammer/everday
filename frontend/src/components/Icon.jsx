@@ -213,6 +213,11 @@ const IconMap = {
     material: "material-symbols:info",
     lucide: "lucide:info"
   },
+  camera: {
+    phosphor: "ph:camera",
+    material: "material-symbols:photo-camera",
+    lucide: "lucide:camera"
+  },
   food: {
     phosphor: "ph:apple-logo",
     material: "material-symbols:nutrition",

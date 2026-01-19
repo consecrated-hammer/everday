@@ -213,6 +213,7 @@ def GetEntriesForLog(db: Session, UserId: int, DailyLogId: str) -> list[MealEntr
                 else None,
                 SugarPerServing=float(food.SugarPerServing) if food.SugarPerServing is not None else None,
                 SodiumPerServing=float(food.SodiumPerServing) if food.SodiumPerServing is not None else None,
+                ImageUrl=food.ImageUrl,
                 Quantity=float(entry.Quantity),
                 DisplayQuantity=float(entry.DisplayQuantity) if entry.DisplayQuantity is not None else None,
                 PortionOptionId=entry.PortionOptionId,
