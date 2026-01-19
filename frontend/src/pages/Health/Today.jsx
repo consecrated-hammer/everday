@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   Bar,
   CartesianGrid,
@@ -147,6 +147,7 @@ const BuildWeeklySeries = (startDate, summary, target) => {
 
 const Today = () => {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const today = useMemo(() => FormatDate(new Date()), []);
   const todayLabel = useMemo(() => {
     const parsed = ParseLocalDate(today);
@@ -344,6 +345,13 @@ const Today = () => {
     () => BuildWeeklySeries(startDate, weeklySummary, targets?.DailyCalorieTarget ?? 0),
     [startDate, weeklySummary, targets]
   );
+  const handleBarClick = (data) => {
+    const dateValue = data?.payload?.Date;
+    if (!dateValue) {
+      return;
+    }
+    navigate(`/health/log?date=${encodeURIComponent(dateValue)}`);
+  };
 
   return (
     <div className="health-grid">
@@ -351,17 +359,17 @@ const Today = () => {
         <header className="module-panel-header">
           <div className="health-today-header">
             <h2>{todayLabel}</h2>
-            <Link className="button-pill" to="/health/log">
-              Log a meal
-            </Link>
-          </div>
-          <div className="health-actions">
-            <button type="button" className="module-link" onClick={openStepsModal}>
-              Log steps
-            </button>
-            <button type="button" className="module-link" onClick={openWeightModal}>
-              Log weight
-            </button>
+            <div className="health-actions">
+              <Link className="button-pill" to="/health/log">
+                Log a meal
+              </Link>
+              <button type="button" className="module-link" onClick={openStepsModal}>
+                Log steps
+              </button>
+              <button type="button" className="module-link" onClick={openWeightModal}>
+                Log weight
+              </button>
+            </div>
           </div>
         </header>
         {status === "error" ? <p className="form-error">{error}</p> : null}
@@ -443,6 +451,7 @@ const Today = () => {
                   name="Calories"
                   fill="var(--chart-primary)"
                   radius={[10, 10, 0, 0]}
+                  onClick={handleBarClick}
                 />
                 <Line
                   type="monotone"

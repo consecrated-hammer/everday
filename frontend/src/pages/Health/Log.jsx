@@ -2446,6 +2446,17 @@ const Log = ({ InitialDate, InitialAddMode }) => {
                   />
                 </div>
               ) : null}
+              {searchTab === "search" && searchQuery.trim() ? (
+                <div className="health-add-cta-group">
+                  <Link
+                    className="health-add-cta"
+                    to={`/health/foods?add=food&return=log&meal=${encodeURIComponent(activeMealType)}`}
+                  >
+                    <Icon name="plus" className="icon" />
+                    <span>Can't find it? Let's add it!</span>
+                  </Link>
+                </div>
+              ) : null}
               {showSearchList ? (
                 <ul className="health-result-list">
                   {searchItems.length ? (
@@ -2471,17 +2482,6 @@ const Log = ({ InitialDate, InitialAddMode }) => {
               ) : (
                 <p className="health-empty">Start typing to see results.</p>
               )}
-              {searchTab === "search" && searchQuery.trim() ? (
-                <div className="health-add-cta-group">
-                  <Link
-                    className="health-add-cta"
-                    to={`/health/foods?add=food&return=log&meal=${encodeURIComponent(activeMealType)}`}
-                  >
-                    <Icon name="plus" className="icon" />
-                    <span>Can't find it? Let's add it!</span>
-                  </Link>
-                </div>
-              ) : null}
             </>
           ) : null}
         </section>
@@ -2585,7 +2585,7 @@ const Log = ({ InitialDate, InitialAddMode }) => {
                 className="button-secondary health-summary-button"
                 onClick={() => setSaveMealOpen(true)}
               >
-                Save this meal
+                Save as meal
               </button>
             ) : null}
             {shareUsers.length ? (

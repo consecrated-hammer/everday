@@ -3473,6 +3473,10 @@ th {
   height: 260px;
 }
 
+.health-chart .recharts-bar-rectangle {
+  cursor: pointer;
+}
+
 .health-trends-toggle {
   border: 1px solid var(--border);
   background: transparent;

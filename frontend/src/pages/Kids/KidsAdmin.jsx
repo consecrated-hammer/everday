@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 
 import {
   ApproveKidsChoreEntry,
@@ -134,6 +134,7 @@ const BuildKidName = (kid) => kid.FirstName || kid.Username || `Kid ${kid.KidUse
 
 const KidsAdmin = () => {
   const location = useLocation();
+  const navigate = useNavigate();
 
   const [kids, setKids] = useState([]);
   const [activeKidId, setActiveKidId] = useState(null);
@@ -301,6 +302,24 @@ const KidsAdmin = () => {
 
   const refreshDayAndMonth = async (dateValue) => {
     await Promise.all([loadMonthData(), loadDayDetail(dateValue)]);
+  };
+
+  const updateKidSelection = (kidId) => {
+    if (!kidId) {
+      return;
+    }
+    setActiveKidId(kidId);
+    const params = new URLSearchParams(location.search);
+    params.set("kid", String(kidId));
+    const search = params.toString();
+    navigate(
+      {
+        pathname: location.pathname,
+        search: search ? `?${search}` : "",
+        hash: location.hash
+      },
+      { replace: true }
+    );
   };
 
   useEffect(() => {
@@ -1321,7 +1340,7 @@ const KidsAdmin = () => {
                       key={kid.KidUserId}
                       type="button"
                       className={`kids-admin-tab${activeKidId === kid.KidUserId ? " is-active" : ""}`}
-                      onClick={() => setActiveKidId(kid.KidUserId)}
+                      onClick={() => updateKidSelection(kid.KidUserId)}
                     >
                       {kid.FirstName || kid.Username}
                     </button>
@@ -1330,7 +1349,7 @@ const KidsAdmin = () => {
                   <select
                     aria-label="Select kid"
                     value={activeKidId || ""}
-                    onChange={(event) => setActiveKidId(Number(event.target.value))}
+                    onChange={(event) => updateKidSelection(Number(event.target.value))}
                   >
                     <option value="" disabled>
                       Select kid
