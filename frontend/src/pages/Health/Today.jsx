@@ -174,8 +174,10 @@ const Today = () => {
   const [weightLog, setWeightLog] = useState(null);
   const [stepsModalOpen, setStepsModalOpen] = useState(false);
   const [weightModalOpen, setWeightModalOpen] = useState(false);
+  const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
   const stepsBackdropDown = useRef(false);
   const weightBackdropDown = useRef(false);
+  const actionsMenuRef = useRef(null);
   const [trendsOpen, setTrendsOpen] = useState(() => {
     const stored = localStorage.getItem("health.trendsOpen");
     if (stored === "true") return true;
@@ -242,6 +244,28 @@ const Today = () => {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [stepsModalOpen, weightModalOpen]);
 
+  useEffect(() => {
+    if (!actionsMenuOpen) {
+      return undefined;
+    }
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        setActionsMenuOpen(false);
+      }
+    };
+    const handleClick = (event) => {
+      if (actionsMenuRef.current && !actionsMenuRef.current.contains(event.target)) {
+        setActionsMenuOpen(false);
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    document.addEventListener("mousedown", handleClick);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      document.removeEventListener("mousedown", handleClick);
+    };
+  }, [actionsMenuOpen]);
+
   const loadStepsLog = async (dateValue) => {
     try {
       const data = await FetchDailyLog(dateValue);
@@ -298,6 +322,11 @@ const Today = () => {
     setWeightDate(today);
     setWeightModalOpen(true);
     loadWeightLog(today);
+  };
+
+  const handleOverflowAction = (action) => {
+    setActionsMenuOpen(false);
+    action();
   };
 
   const submitSteps = async (event) => {
@@ -363,6 +392,38 @@ const Today = () => {
               <Link className="button-pill" to="/health/log">
                 Log a meal
               </Link>
+              <div className="health-overflow health-actions-overflow" ref={actionsMenuRef}>
+                <button
+                  type="button"
+                  className="icon-button is-secondary"
+                  aria-label="More actions"
+                  aria-expanded={actionsMenuOpen}
+                  aria-haspopup="menu"
+                  onClick={() => setActionsMenuOpen((prev) => !prev)}
+                >
+                  <Icon name="more" className="icon" />
+                </button>
+                {actionsMenuOpen ? (
+                  <div className="health-overflow-menu" role="menu">
+                    <button
+                      type="button"
+                      className="health-overflow-item"
+                      role="menuitem"
+                      onClick={() => handleOverflowAction(openStepsModal)}
+                    >
+                      Log steps
+                    </button>
+                    <button
+                      type="button"
+                      className="health-overflow-item"
+                      role="menuitem"
+                      onClick={() => handleOverflowAction(openWeightModal)}
+                    >
+                      Log weight
+                    </button>
+                  </div>
+                ) : null}
+              </div>
               <button type="button" className="module-link" onClick={openStepsModal}>
                 Log steps
               </button>

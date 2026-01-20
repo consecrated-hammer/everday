@@ -3390,6 +3390,10 @@ th {
   flex-wrap: wrap;
 }
 
+.health-actions-overflow {
+  display: none;
+}
+
 .health-today-header {
   display: flex;
   align-items: center;
@@ -7087,6 +7091,15 @@ th {
     display: flex;
     gap: 8px;
     flex-wrap: wrap;
+  }
+
+  .health-actions-overflow {
+    display: inline-flex;
+  }
+
+  .health-actions-overflow .health-overflow-menu {
+    top: calc(100% + 8px);
+    bottom: auto;
   }
 
   .health-actions .module-link {
