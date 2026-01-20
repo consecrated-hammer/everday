@@ -92,6 +92,7 @@ If tests are slow, prioritise Tier 1 during implementation, then Tier 2 at the e
 - Add types/schemas at boundaries (API, persistence, UI forms).
 - Centralise constants and configuration.
 - Avoid duplication when it is clearly recurring, but do not over-abstract early.
+- SQL Server boolean comparisons should use `== True/False` instead of `.is_(True/False)` to avoid `IS 0` syntax errors.
 
 ## Error Handling
 - Fail fast with clear messages.

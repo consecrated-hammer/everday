@@ -14,6 +14,7 @@ import Login from "./pages/Login/Login.jsx";
 import ResetPassword from "./pages/Login/ResetPassword.jsx";
 import Shopping from "./pages/Shopping/Shopping.jsx";
 import Settings from "./pages/Settings/Settings.jsx";
+import Notifications from "./pages/Notifications/Notifications.jsx";
 import HealthLayout from "./pages/Health/HealthLayout.jsx";
 import HealthToday from "./pages/Health/Today.jsx";
 import HealthLog from "./pages/Health/Log.jsx";
@@ -65,6 +66,7 @@ const App = () => (
           <Route path="insights" element={<HealthInsights />} />
         </Route>
         <Route path="/shopping" element={<Shopping />} />
+        <Route path="/notifications" element={<Notifications />} />
         <Route path="/life-admin" element={<LifeAdminLayout />}>
           <Route index element={<Navigate to="/life-admin/records" replace />} />
           <Route path="records" element={<LifeAdminRecords />} />
