@@ -458,6 +458,7 @@ class MealTextParseResponse(BaseModel):
 class ImageScanInput(BaseModel):
     ImageBase64: str = Field(min_length=1)
     Mode: ImageScanMode = ImageScanMode.Meal
+    Note: str | None = Field(default=None, max_length=500)
 
 
 class ImageScanResponse(BaseModel):

@@ -4948,6 +4948,24 @@ th {
   color: var(--text-muted);
 }
 
+.health-scan-note {
+  margin-top: 12px;
+}
+
+.health-scan-note textarea {
+  width: 100%;
+  min-height: 90px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  padding: 10px 12px;
+  font: inherit;
+  background: var(--surface-strong);
+}
+
+.health-scan-note .form-actions {
+  margin-top: 8px;
+}
+
 .health-scan-status {
   margin: 0;
   font-size: 0.85rem;
@@ -6263,6 +6281,30 @@ th {
 .health-food-section {
   display: grid;
   gap: 12px;
+}
+
+.health-food-image-preview,
+.health-food-detail-image {
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: var(--surface-muted);
+}
+
+.health-food-image-preview {
+  margin-top: 8px;
+}
+
+.health-food-detail-image {
+  margin-bottom: 12px;
+}
+
+.health-food-image-preview img,
+.health-food-detail-image img {
+  width: 100%;
+  height: 220px;
+  object-fit: cover;
+  display: block;
 }
 
 .health-section-header {

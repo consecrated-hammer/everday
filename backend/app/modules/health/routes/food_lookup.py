@@ -111,7 +111,7 @@ def ScanImage(
     user: UserContext = Depends(RequireModuleRole("health", write=False)),
 ) -> ImageScanResponse:
     try:
-        result = ParseImageScan(payload.ImageBase64, payload.Mode.value)
+        result = ParseImageScan(payload.ImageBase64, payload.Mode.value, payload.Note)
         return ImageScanResponse(**result)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
