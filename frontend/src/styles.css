@@ -3627,6 +3627,23 @@ th {
   border: 1px solid var(--border);
 }
 
+.health-progress--action {
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.health-progress--action:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 24px rgba(43, 110, 246, 0.12);
+}
+
+.health-progress--action:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 .health-progress-header {
   display: flex;
   align-items: center;
