@@ -259,66 +259,7 @@ const FoodEditAdvancedAccordion = ({ open, onToggle, foodForm, onFoodChange }) =
   </div>
 );
 
-const OverflowMenu = ({ open, onToggle, items }) => {
-  const menuRef = useRef(null);
-
-  useEffect(() => {
-    if (!open) {
-      return undefined;
-    }
-    const handler = (event) => {
-      if (menuRef.current && !menuRef.current.contains(event.target)) {
-        onToggle(false);
-      }
-    };
-    const onKeyDown = (event) => {
-      if (event.key === "Escape") {
-        onToggle(false);
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("mousedown", handler);
-      document.removeEventListener("keydown", onKeyDown);
-    };
-  }, [open, onToggle]);
-
-  return (
-    <div className="health-overflow" ref={menuRef}>
-      <button
-        type="button"
-        className="icon-button is-secondary"
-        aria-label="More actions"
-        aria-expanded={open}
-        onClick={() => onToggle(!open)}
-      >
-        <Icon name="more" className="icon" />
-      </button>
-      {open ? (
-        <div className="health-overflow-menu" role="menu">
-          {items.map((item) => (
-            <button
-              key={item.label}
-              type="button"
-              className={`health-overflow-item${item.danger ? " is-danger" : ""}`}
-              role="menuitem"
-              onClick={() => {
-                onToggle(false);
-                item.onClick();
-              }}
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
-      ) : null}
-    </div>
-  );
-};
-
 const StickyActionBar = ({ formId, onCancel, onDelete, showDelete, isSaving }) => {
-  const [open, setOpen] = useState(false);
   return (
     <div className="health-sticky-actions">
       <div className="health-sticky-actions-inner">
@@ -329,17 +270,13 @@ const StickyActionBar = ({ formId, onCancel, onDelete, showDelete, isSaving }) =
           Cancel
         </button>
         {showDelete ? (
-          <OverflowMenu
-            open={open}
-            onToggle={setOpen}
-            items={[
-              {
-                label: "Delete food",
-                danger: true,
-                onClick: onDelete
-              }
-            ]}
-          />
+          <button
+            type="button"
+            className="primary-button button-danger health-sticky-delete"
+            onClick={onDelete}
+          >
+            Delete
+          </button>
         ) : null}
       </div>
     </div>

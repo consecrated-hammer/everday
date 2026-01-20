@@ -1131,6 +1131,12 @@ iconify-icon {
   padding: 6px 8px;
 }
 
+.health-summary-link {
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+}
+
 .widget-body .health-summary-grid {
   gap: 4px;
 }
@@ -2595,6 +2601,19 @@ iconify-icon {
   white-space: nowrap;
 }
 
+.primary-button.button-danger {
+  background: rgba(178, 59, 46, 0.12);
+  color: #b23b2e;
+  border: 1px solid rgba(178, 59, 46, 0.45);
+  box-shadow: none;
+}
+
+.primary-button.button-danger:hover {
+  background: rgba(208, 76, 63, 0.18);
+  color: #d04c3f;
+  border-color: rgba(208, 76, 63, 0.6);
+}
+
 .table-shell {
   background: var(--surface-strong);
   border-radius: 16px;
@@ -3800,7 +3819,7 @@ th {
   right: 16px;
   top: 16px;
   z-index: 40;
-  display: grid;
+  display: none;
   gap: 8px;
   justify-items: end;
 }
@@ -6592,6 +6611,10 @@ th {
 .health-sticky-actions .text-button,
 .health-sticky-actions .icon-button {
   min-height: 44px;
+}
+
+.health-sticky-delete {
+  margin-left: auto;
 }
 
 .health-overflow {
