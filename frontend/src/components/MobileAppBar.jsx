@@ -3,6 +3,7 @@ import { useLocation } from "react-router-dom";
 
 import Icon from "./Icon.jsx";
 import NavFlyout from "./NavFlyout.jsx";
+import NotificationsMenu from "./NotificationsMenu.jsx";
 
 const GetMobileTitle = (pathname) => {
   if (pathname === "/") return "Home";
@@ -75,7 +76,9 @@ const MobileAppBar = () => {
         <Icon name="dashboard" className="icon" />
       </button>
       <div className="mobile-app-bar-title">{title}</div>
-      <div className="mobile-app-bar-actions" />
+      <div className="mobile-app-bar-actions">
+        <NotificationsMenu />
+      </div>
       <NavFlyout
         open={open}
         pathname={location.pathname}

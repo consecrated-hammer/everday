@@ -237,6 +237,11 @@ const IconMap = {
     phosphor: "ph:list-bullets",
     material: "material-symbols:lists",
     lucide: "lucide:list"
+  },
+  bell: {
+    phosphor: "ph:bell",
+    material: "material-symbols:notifications",
+    lucide: "lucide:bell"
   }
 };
 

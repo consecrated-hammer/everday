@@ -1,3 +1,5 @@
+import logging
+from datetime import datetime
 import uuid
 from datetime import date
 
@@ -23,6 +25,25 @@ from app.modules.health.schemas import (
 )
 from app.modules.health.services.portion_entry_service import BuildPortionValues
 from app.modules.health.utils.dates import ParseIsoDate
+from app.modules.notifications.services import CreateNotification
+
+logger = logging.getLogger("health.daily_logs")
+
+
+def _DisplayName(user: User) -> str:
+    if user.FirstName:
+        return user.FirstName.strip()
+    if user.LastName:
+        return user.LastName.strip()
+    return user.Username
+
+
+def _FormatShortDate(value: str) -> str:
+    try:
+        parsed = datetime.strptime(value, "%Y-%m-%d").date()
+        return parsed.strftime("%a %d %b")
+    except ValueError:
+        return value
 
 
 def _BuildDailyLog(log: DailyLogModel) -> DailyLog:
@@ -468,7 +489,32 @@ def ShareMealEntry(db: Session, UserId: int, Input: ShareMealEntryInput, IsAdmin
         SortOrder=next_sort,
         ScheduleSlotId=Input.ScheduleSlotId,
     )
-    return CreateMealEntry(db, Input.TargetUserId, payload)
+    meal_entry = CreateMealEntry(db, Input.TargetUserId, payload)
+    try:
+        actor = db.query(User).filter(User.Id == UserId).first()
+        actor_name = _DisplayName(actor) if actor else "Someone"
+        title = "Meal shared with you"
+        meal_type = Input.MealType.value if hasattr(Input.MealType, "value") else str(Input.MealType)
+        friendly_date = _FormatShortDate(Input.LogDate)
+        body = f"{actor_name} shared {meal_type} for {friendly_date}."
+        link_url = f"/health/log?date={Input.LogDate}"
+        CreateNotification(
+            db,
+            user_id=Input.TargetUserId,
+            created_by_user_id=UserId,
+            title=title,
+            body=body,
+            notification_type="MealShare",
+            link_url=link_url,
+            action_label="Open log",
+            action_type="link",
+            source_module="health",
+            source_id=meal_entry.MealEntryId,
+            meta={"LogDate": Input.LogDate, "MealType": meal_type},
+        )
+    except Exception:  # noqa: BLE001
+        logger.exception("Failed to create share meal notification")
+    return meal_entry
 
 
 def DeleteMealEntry(db: Session, UserId: int, MealEntryId: str, IsAdmin: bool = False) -> None:

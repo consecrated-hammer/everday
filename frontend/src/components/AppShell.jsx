@@ -6,6 +6,7 @@ import MobileAppBar from "./MobileAppBar.jsx";
 import PasswordChangePrompt from "./PasswordChangePrompt.jsx";
 import HealthProfilePrompt from "./HealthProfilePrompt.jsx";
 import Icon from "./Icon.jsx";
+import NotificationsMenu from "./NotificationsMenu.jsx";
 const navSections = [
   {
     label: "Modules",
@@ -111,6 +112,9 @@ const AppShell = () => {
         <MobileAppBar />
         <div className="app-topbar">
           <div />
+          <div className="app-topbar-actions">
+            <NotificationsMenu />
+          </div>
         </div>
         <Outlet />
       </main>

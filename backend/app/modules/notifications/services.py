@@ -1,0 +1,275 @@
+import json
+
+from sqlalchemy import func
+from sqlalchemy.orm import Session
+
+from app.modules.auth.deps import NowUtc, UserContext
+from app.modules.auth.models import User
+from app.modules.notifications.models import Notification
+from app.modules.notifications.schemas import NotificationTargetScope
+from app.modules.notifications.utils.rbac import IsAdmin
+
+
+def _SerializeJson(value: dict | None) -> str | None:
+    if value is None:
+        return None
+    return json.dumps(value, separators=(",", ":"))
+
+
+def _ParseJson(value: str | None) -> dict | None:
+    if not value:
+        return None
+    try:
+        return json.loads(value)
+    except json.JSONDecodeError:
+        return None
+
+
+def ResolveTargetUserIds(
+    db: Session,
+    user: UserContext,
+    target_scope: NotificationTargetScope | None,
+    target_user_ids: list[int] | None,
+) -> list[int]:
+    if target_scope == NotificationTargetScope.AllUsers:
+        if not IsAdmin(user):
+            raise ValueError("Unauthorized")
+        users = db.query(User.Id).all()
+        return [row.Id for row in users]
+    if target_scope == NotificationTargetScope.Self:
+        return [user.Id]
+
+    resolved_ids = {int(value) for value in (target_user_ids or []) if value}
+    if not resolved_ids:
+        return [user.Id]
+
+    if resolved_ids != {user.Id} and not IsAdmin(user):
+        raise ValueError("Unauthorized")
+
+    rows = db.query(User.Id).filter(User.Id.in_(resolved_ids)).all()
+    found_ids = {row.Id for row in rows}
+    if found_ids != resolved_ids:
+        raise ValueError("User not found")
+
+    return sorted(found_ids)
+
+
+def CreateNotification(
+    db: Session,
+    *,
+    user_id: int,
+    created_by_user_id: int,
+    title: str,
+    body: str | None = None,
+    notification_type: str = "General",
+    link_url: str | None = None,
+    action_label: str | None = None,
+    action_type: str | None = None,
+    action_payload: dict | None = None,
+    source_module: str | None = None,
+    source_id: str | None = None,
+    meta: dict | None = None,
+) -> Notification:
+    now = NowUtc()
+    record = Notification(
+        UserId=user_id,
+        CreatedByUserId=created_by_user_id,
+        Type=notification_type or "General",
+        Title=title,
+        Body=body,
+        LinkUrl=link_url,
+        ActionLabel=action_label,
+        ActionType=action_type,
+        ActionPayloadJson=_SerializeJson(action_payload),
+        SourceModule=source_module,
+        SourceId=source_id,
+        MetaJson=_SerializeJson(meta),
+        IsRead=False,
+        IsDismissed=False,
+        CreatedAt=now,
+        UpdatedAt=now,
+    )
+    db.add(record)
+    db.commit()
+    db.refresh(record)
+    return record
+
+
+def CreateNotificationsForUsers(
+    db: Session,
+    *,
+    user_ids: list[int],
+    created_by_user_id: int,
+    title: str,
+    body: str | None = None,
+    notification_type: str = "General",
+    link_url: str | None = None,
+    action_label: str | None = None,
+    action_type: str | None = None,
+    action_payload: dict | None = None,
+    source_module: str | None = None,
+    source_id: str | None = None,
+    meta: dict | None = None,
+) -> list[Notification]:
+    now = NowUtc()
+    payload_json = _SerializeJson(action_payload)
+    meta_json = _SerializeJson(meta)
+    records = []
+    for user_id in user_ids:
+        records.append(
+            Notification(
+                UserId=user_id,
+                CreatedByUserId=created_by_user_id,
+                Type=notification_type or "General",
+                Title=title,
+                Body=body,
+                LinkUrl=link_url,
+                ActionLabel=action_label,
+                ActionType=action_type,
+                ActionPayloadJson=payload_json,
+                SourceModule=source_module,
+                SourceId=source_id,
+                MetaJson=meta_json,
+                IsRead=False,
+                IsDismissed=False,
+                CreatedAt=now,
+                UpdatedAt=now,
+            )
+        )
+    if not records:
+        return []
+    db.add_all(records)
+    db.commit()
+    for record in records:
+        db.refresh(record)
+    return records
+
+
+def ListNotifications(
+    db: Session,
+    *,
+    user_id: int,
+    include_read: bool,
+    include_dismissed: bool,
+    limit: int,
+    offset: int = 0,
+) -> list[Notification]:
+    query = db.query(Notification).filter(Notification.UserId == user_id)
+    if not include_read:
+        query = query.filter(Notification.IsRead == False)  # noqa: E712
+    if not include_dismissed:
+        query = query.filter(Notification.IsDismissed == False)  # noqa: E712
+    return (
+        query.order_by(Notification.CreatedAt.desc())
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+
+
+def CountUnread(db: Session, *, user_id: int) -> int:
+    value = (
+        db.query(func.count(Notification.Id))
+        .filter(
+            Notification.UserId == user_id,
+            Notification.IsRead == False,  # noqa: E712
+            Notification.IsDismissed == False,  # noqa: E712
+        )
+        .scalar()
+    )
+    return int(value or 0)
+
+
+def MarkNotificationRead(
+    db: Session,
+    *,
+    user_id: int,
+    notification_id: int,
+) -> Notification | None:
+    record = (
+        db.query(Notification)
+        .filter(Notification.Id == notification_id, Notification.UserId == user_id)
+        .first()
+    )
+    if record is None:
+        return None
+    if record.IsRead:
+        return record
+    now = NowUtc()
+    record.IsRead = True
+    record.ReadAt = now
+    record.UpdatedAt = now
+    db.commit()
+    db.refresh(record)
+    return record
+
+
+def DismissNotification(
+    db: Session,
+    *,
+    user_id: int,
+    notification_id: int,
+) -> Notification | None:
+    record = (
+        db.query(Notification)
+        .filter(Notification.Id == notification_id, Notification.UserId == user_id)
+        .first()
+    )
+    if record is None:
+        return None
+    now = NowUtc()
+    record.IsDismissed = True
+    record.DismissedAt = now
+    if not record.IsRead:
+        record.IsRead = True
+        record.ReadAt = now
+    record.UpdatedAt = now
+    db.commit()
+    db.refresh(record)
+    return record
+
+
+def MarkAllRead(db: Session, *, user_id: int) -> int:
+    now = NowUtc()
+    updated = (
+        db.query(Notification)
+        .filter(
+            Notification.UserId == user_id,
+            Notification.IsRead == False,  # noqa: E712
+            Notification.IsDismissed == False,  # noqa: E712
+        )
+        .update(
+            {
+                Notification.IsRead: True,
+                Notification.ReadAt: now,
+                Notification.UpdatedAt: now,
+            },
+            synchronize_session=False,
+        )
+    )
+    db.commit()
+    return int(updated or 0)
+
+
+def BuildNotificationPayload(record: Notification) -> dict:
+    return {
+        "Id": record.Id,
+        "UserId": record.UserId,
+        "CreatedByUserId": record.CreatedByUserId,
+        "Type": record.Type,
+        "Title": record.Title,
+        "Body": record.Body,
+        "LinkUrl": record.LinkUrl,
+        "ActionLabel": record.ActionLabel,
+        "ActionType": record.ActionType,
+        "ActionPayload": _ParseJson(record.ActionPayloadJson),
+        "SourceModule": record.SourceModule,
+        "SourceId": record.SourceId,
+        "Meta": _ParseJson(record.MetaJson),
+        "IsRead": record.IsRead,
+        "ReadAt": record.ReadAt,
+        "IsDismissed": record.IsDismissed,
+        "DismissedAt": record.DismissedAt,
+        "CreatedAt": record.CreatedAt,
+        "UpdatedAt": record.UpdatedAt,
+    }
