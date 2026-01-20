@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   CartesianGrid,
   Line,
@@ -194,13 +195,17 @@ const HealthWidget = ({ IsExpanded }) => {
 
           <div className="health-summary-grid">
             {summaryItems.map((item) => (
-              <div key={item.Key} className="health-summary-item dashboard-panel">
+              <Link
+                key={item.Key}
+                className="health-summary-item dashboard-panel health-summary-link"
+                to="/health/today"
+              >
                 <span className="metric-label">{item.Label}</span>
                 <span className="health-summary-value">
                   {FormatNumber(item.Value)}
                   {item.Target ? ` / ${FormatNumber(item.Target)}` : ""}
                 </span>
-              </div>
+              </Link>
             ))}
           </div>
         </>
