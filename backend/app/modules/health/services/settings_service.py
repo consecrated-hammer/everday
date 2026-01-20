@@ -1,13 +1,23 @@
 import json
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
+import logging
 
 from sqlalchemy.orm import Session
 
 from app.modules.auth.models import User
 from app.modules.health.models import Settings as SettingsModel
 from app.modules.health.schemas import Targets, UpdateProfileInput, UpdateSettingsInput, UserProfile, UserSettings
+from app.modules.health.services.nutrition_recommendations_service import (
+    CalculateAge,
+    GetAiNutritionRecommendations,
+)
+from app.modules.health.services.recommendation_logs_service import SaveRecommendationLog
 from app.modules.health.utils.defaults import DefaultTargets, DefaultTodayLayout
+
+Logger = logging.getLogger(__name__)
+
+AutoTuneInterval = timedelta(days=7)
 
 
 def _ParseLayout(value: str | None) -> list[str]:
@@ -31,6 +41,66 @@ def _ParseBarOrder(value: str | None) -> list[str]:
 
 def _SerializeBarOrder(value: list[str]) -> str:
     return ",".join(value)
+
+
+def _ShouldAutoTuneTargets(record: SettingsModel) -> bool:
+    if not record.AutoTuneTargetsWeekly:
+        return False
+    if record.LastAutoTuneAt is None:
+        return True
+    return datetime.utcnow() - record.LastAutoTuneAt >= AutoTuneInterval
+
+
+def _ProfileReady(profile: UserProfile) -> bool:
+    return bool(
+        profile.BirthDate and profile.HeightCm and profile.WeightKg and profile.ActivityLevel
+    )
+
+
+def _TryAutoTuneTargets(db: Session, UserId: int, record: SettingsModel) -> SettingsModel:
+    if not _ShouldAutoTuneTargets(record):
+        return record
+    try:
+        profile = GetUserProfile(db, UserId, IsAdmin=False)
+    except ValueError:
+        return record
+
+    if not _ProfileReady(profile):
+        return record
+
+    try:
+        age = CalculateAge(profile.BirthDate.strftime("%Y-%m-%d"))
+        recommendation, _model_used = GetAiNutritionRecommendations(
+            Age=age,
+            HeightCm=profile.HeightCm,
+            WeightKg=profile.WeightKg,
+            ActivityLevel=profile.ActivityLevel,
+        )
+        SaveRecommendationLog(
+            db,
+            UserId=UserId,
+            Age=age,
+            HeightCm=profile.HeightCm,
+            WeightKg=profile.WeightKg,
+            ActivityLevel=profile.ActivityLevel,
+            Recommendation=recommendation,
+        )
+        record.DailyCalorieTarget = recommendation.DailyCalorieTarget
+        record.ProteinTargetMin = recommendation.ProteinTargetMin
+        record.ProteinTargetMax = recommendation.ProteinTargetMax
+        record.FibreTarget = recommendation.FibreTarget
+        record.CarbsTarget = recommendation.CarbsTarget
+        record.FatTarget = recommendation.FatTarget
+        record.SaturatedFatTarget = recommendation.SaturatedFatTarget
+        record.SugarTarget = recommendation.SugarTarget
+        record.SodiumTarget = recommendation.SodiumTarget
+        record.LastAutoTuneAt = datetime.utcnow()
+        db.add(record)
+        db.commit()
+        db.refresh(record)
+    except ValueError as exc:
+        Logger.warning("Auto-tune targets failed for user %s: %s", UserId, exc)
+    return record
 
 
 def EnsureSettingsForUser(db: Session, UserId: int) -> SettingsModel:
@@ -62,6 +132,8 @@ def EnsureSettingsForUser(db: Session, UserId: int) -> SettingsModel:
         ShowSodiumOnToday=DefaultTargets.ShowSodiumOnToday,
         TodayLayout=json.dumps(DefaultTodayLayout),
         BarOrder=_SerializeBarOrder(DefaultTargets.BarOrder),
+        AutoTuneTargetsWeekly=False,
+        LastAutoTuneAt=None,
     )
     db.add(record)
     db.commit()
@@ -99,8 +171,14 @@ def GetSettings(db: Session, UserId: int) -> Targets:
 
 def GetUserSettings(db: Session, UserId: int) -> UserSettings:
     record = EnsureSettingsForUser(db, UserId)
+    record = _TryAutoTuneTargets(db, UserId, record)
     targets = GetSettings(db, UserId)
-    return UserSettings(Targets=targets, TodayLayout=_ParseLayout(record.TodayLayout))
+    return UserSettings(
+        Targets=targets,
+        TodayLayout=_ParseLayout(record.TodayLayout),
+        AutoTuneTargetsWeekly=bool(record.AutoTuneTargetsWeekly),
+        LastAutoTuneAt=record.LastAutoTuneAt,
+    )
 
 
 def UpdateSettings(db: Session, UserId: int, Input: UpdateSettingsInput) -> UserSettings:
