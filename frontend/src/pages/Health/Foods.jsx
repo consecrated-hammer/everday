@@ -94,7 +94,8 @@ const ParseServingDescription = (value) => {
 
 const FoodEditEssentialsSection = ({
   foodForm,
-  onFoodChange
+  onFoodChange,
+  imageUrl
 }) => (
   <div className="health-food-section">
     <div className="health-section-header">
@@ -113,6 +114,11 @@ const FoodEditEssentialsSection = ({
         <label htmlFor="food-favourite">Favourite</label>
       </div>
     </div>
+    {imageUrl ? (
+      <div className="health-food-image-preview">
+        <img src={imageUrl} alt={`${foodForm.FoodName || "Food"} photo`} loading="lazy" />
+      </div>
+    ) : null}
     <div className="health-form-row">
       <label className="health-form-span">
         Food name
@@ -361,6 +367,7 @@ const Foods = () => {
   const filterMenuRef = useRef(null);
 
   const [foodForm, setFoodForm] = useState(EmptyFoodForm);
+  const [foodImageUrl, setFoodImageUrl] = useState("");
   const [selectedFoodId, setSelectedFoodId] = useState(null);
   const [showFoodForm, setShowFoodForm] = useState(false);
 
@@ -666,6 +673,7 @@ const Foods = () => {
 
   const selectFood = (food) => {
     setSelectedFoodId(food.FoodId);
+    setFoodImageUrl(food.ImageUrl || "");
     setFoodForm({
       FoodName: food.FoodName,
       ServingQuantity: String(food.ServingQuantity || 1),
@@ -692,6 +700,7 @@ const Foods = () => {
   const resetFoodForm = () => {
     setSelectedFoodId(null);
     setFoodForm(EmptyFoodForm);
+    setFoodImageUrl("");
     setLookupQuery("");
     setFoodEntryMode("lookup");
     setSearchResults({ openfoodfacts: [], ai: [], aiFallbackAvailable: false });
@@ -801,6 +810,7 @@ const Foods = () => {
       CountryCode: "AU",
       IsFavourite: false
     });
+    setFoodImageUrl("");
     setSelectedFoodId(null);
     setDataSourceUsed(source);
     setFoodEntryMode("manual");
@@ -1515,6 +1525,15 @@ const Foods = () => {
               <div className="health-food-summary-details">
                 {isFood ? (
                   <>
+                    {item.food?.ImageUrl ? (
+                      <div className="health-food-detail-image">
+                        <img
+                          src={item.food.ImageUrl}
+                          alt={`${item.name} photo`}
+                          loading="lazy"
+                        />
+                      </div>
+                    ) : null}
                     <div className="health-food-summary-detail">
                       <span>Protein</span>
                       <span>{FormatNumber(item.protein || 0)} g</span>
@@ -2147,7 +2166,11 @@ const Foods = () => {
                   className="health-food-form health-food-form--sticky"
                   onSubmit={saveFood}
                 >
-                  <FoodEditEssentialsSection foodForm={foodForm} onFoodChange={onFoodChange} />
+                  <FoodEditEssentialsSection
+                    foodForm={foodForm}
+                    onFoodChange={onFoodChange}
+                    imageUrl={foodImageUrl}
+                  />
                   <FoodEditAdvancedAccordion
                     open={showAdvanced}
                     onToggle={() => setShowAdvanced((prev) => !prev)}

@@ -415,6 +415,7 @@ const Log = ({ InitialDate, InitialAddMode }) => {
   const [scanImageName, setScanImageName] = useState("");
   const [scanImageBase64, setScanImageBase64] = useState("");
   const [scanQuantity, setScanQuantity] = useState("1");
+  const [scanNote, setScanNote] = useState("");
 
   const [recentStatus, setRecentStatus] = useState("idle");
   const [recentStats, setRecentStats] = useState({});
@@ -1486,6 +1487,7 @@ const Log = ({ InitialDate, InitialAddMode }) => {
     setScanImageName("");
     setScanImageBase64("");
     setScanQuantity("1");
+    setScanNote("");
     if (scanInputRef.current) {
       scanInputRef.current.value = "";
     }
@@ -1509,7 +1511,27 @@ const Log = ({ InitialDate, InitialAddMode }) => {
     try {
       const base64 = await ReadFileAsBase64(file);
       setScanImageBase64(base64);
-      const result = await ScanFoodImage({ ImageBase64: base64, Mode: scanMode });
+      setScanStatus("idle");
+    } catch (err) {
+      setScanStatus("error");
+      setScanError(err?.message || "Failed to scan photo");
+    }
+  };
+
+  const runScanAnalysis = async () => {
+    if (!scanImageBase64) {
+      setScanError("Choose a photo first.");
+      return;
+    }
+    try {
+      setScanStatus("loading");
+      setScanError("");
+      const noteValue = scanNote.trim();
+      const payload = { ImageBase64: scanImageBase64, Mode: scanMode };
+      if (noteValue) {
+        payload.Note = noteValue;
+      }
+      const result = await ScanFoodImage(payload);
       setScanResult(result);
       setScanForm(BuildScanForm(result));
       setScanQuestions(result.Questions || []);
@@ -2218,6 +2240,27 @@ const Log = ({ InitialDate, InitialAddMode }) => {
                   ) : null}
                 </div>
               </div>
+              <div className="health-scan-note">
+                <label>
+                  Context note (optional)
+                  <textarea
+                    value={scanNote}
+                    onChange={(event) => setScanNote(event.target.value)}
+                    placeholder="e.g. Homemade chicken salad, medium bowl."
+                    rows={3}
+                  />
+                </label>
+                <div className="form-actions">
+                  <button
+                    type="button"
+                    className="primary-button"
+                    onClick={runScanAnalysis}
+                    disabled={scanStatus === "loading" || !scanImageBase64}
+                  >
+                    {scanStatus === "loading" ? "Analyzing..." : "Analyze photo"}
+                  </button>
+                </div>
+              </div>
               {scanStatus === "loading" ? (
                 <p className="health-scan-status">Scanning photo...</p>
               ) : null}
@@ -2317,7 +2360,7 @@ const Log = ({ InitialDate, InitialAddMode }) => {
                       </label>
                     </div>
                   </div>
-                  <details className="health-scan-advanced">
+                  <details className="health-scan-advanced health-log-form">
                     <summary>More nutrition</summary>
                     <div className="health-form-row health-form-row--compact">
                       <label>

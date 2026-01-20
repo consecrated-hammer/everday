@@ -132,6 +132,21 @@ def _BuildLabelPrompt() -> str:
     )
 
 
+def _AppendContextNote(Prompt: str, Note: str | None) -> str:
+    if not Note:
+        return Prompt
+    Cleaned = str(Note).strip()
+    if not Cleaned:
+        return Prompt
+    if len(Cleaned) > 500:
+        Cleaned = Cleaned[:500].rstrip()
+    return (
+        f"{Prompt}\n\nAdditional context from the user:\n"
+        f"{Cleaned}\n"
+        "Use this only if it helps interpret the photo."
+    )
+
+
 def _RequestVisionContent(Prompt: str, ImageBase64: str) -> str:
     if not Settings.OpenAiApiKey:
         raise ValueError("OpenAI API key not configured.")
@@ -235,12 +250,13 @@ def _NormalizeScanResult(Data: dict) -> dict[str, Any]:
     }
 
 
-def ParseImageScan(ImageBase64: str, Mode: str) -> dict[str, Any]:
+def ParseImageScan(ImageBase64: str, Mode: str, Note: str | None = None) -> dict[str, Any]:
     if Mode not in ("meal", "label"):
         raise ValueError("Mode must be meal or label.")
 
     CleanBase64 = _StripBase64Prefix(ImageBase64)
     Prompt = _BuildMealPrompt() if Mode == "meal" else _BuildLabelPrompt()
+    Prompt = _AppendContextNote(Prompt, Note)
     Content = _RequestVisionContent(Prompt, CleanBase64)
     Parsed = ParseLookupJson(Content)
     if not isinstance(Parsed, dict):
