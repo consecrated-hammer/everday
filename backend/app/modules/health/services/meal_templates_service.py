@@ -22,7 +22,7 @@ from app.modules.health.schemas import (
 )
 from app.modules.health.services.daily_logs_service import CreateMealEntry, EnsureDailyLogForDate
 from app.modules.health.services.portion_entry_service import BuildServePortion, ResolvePortionBase
-from app.modules.health.services.serving_conversion_service import ConvertEntryToServings
+from app.modules.health.services.serving_conversion_service import TryConvertEntryToServings
 
 
 def _ResolveTemplateItemAmount(
@@ -38,14 +38,21 @@ def _ResolveTemplateItemAmount(
     if EntryUnit == "serving":
         return EntryQuantity, EntryQuantity, EntryUnit
 
-    Quantity, _Detail, NormalizedUnit = ConvertEntryToServings(
+    Attempt = TryConvertEntryToServings(
         FoodRow.FoodName,
         float(FoodRow.ServingQuantity) if FoodRow.ServingQuantity else 1.0,
         FoodRow.ServingUnit or "serving",
         EntryQuantity,
         EntryUnit,
     )
-    return Quantity, EntryQuantity, NormalizedUnit
+    if Attempt is not None:
+        Quantity, _Detail, NormalizedUnit = Attempt
+        return Quantity, EntryQuantity, NormalizedUnit
+
+    fallback_quantity = float(Item.Quantity)
+    if fallback_quantity <= 0:
+        raise ValueError("Quantity must be greater than zero.")
+    return fallback_quantity, fallback_quantity, "serving"
 
 
 def _BuildMealTemplateItem(item: MealTemplateItemModel, food: FoodModel) -> MealTemplateItem:

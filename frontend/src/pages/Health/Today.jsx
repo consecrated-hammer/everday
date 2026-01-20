@@ -382,6 +382,14 @@ const Today = () => {
     navigate(`/health/log?date=${encodeURIComponent(dateValue)}`);
   };
 
+  const handleProgressAction = (key) => {
+    if (key === "Steps") {
+      openStepsModal();
+      return;
+    }
+    navigate("/health/log");
+  };
+
   return (
     <div className="health-grid">
       <section className="module-panel">
@@ -449,7 +457,12 @@ const Today = () => {
               target > 0 ? deltaLabel : ""
             ].filter(Boolean);
             return (
-              <div key={key} className="health-progress">
+              <button
+                key={key}
+                type="button"
+                className="health-progress health-progress--action"
+                onClick={() => handleProgressAction(key)}
+              >
                 <div className="health-progress-header">
                   <div>
                     <p className="health-progress-label">{NutrientLabels[key]}</p>
@@ -468,7 +481,7 @@ const Today = () => {
                 <div className="health-progress-bar">
                   <div className="health-progress-fill" style={{ width: `${percent}%` }} />
                 </div>
-              </div>
+              </button>
             );
           })}
         </div>
