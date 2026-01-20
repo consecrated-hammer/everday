@@ -4,33 +4,84 @@ import { FetchAiSuggestions, FetchWeeklySummary } from "../../lib/healthApi.js";
 
 const FormatDate = (value) => value.toISOString().slice(0, 10);
 
-const GetMonday = () => {
-  const today = new Date();
-  const day = today.getDay();
-  const diff = day === 0 ? -6 : 1 - day;
-  const monday = new Date(today);
-  monday.setDate(today.getDate() + diff);
-  return monday;
+const GetRollingStart = () => {
+  const date = new Date();
+  date.setDate(date.getDate() - 6);
+  return date;
 };
+
+const FormatAverage = (total, decimals = 0) => {
+  const value = Number(total) || 0;
+  const factor = 10 ** decimals;
+  return Math.round((value / 7) * factor) / factor;
+};
+
+const SuggestionsCacheMs = 60 * 60 * 1000;
+
+const BuildSuggestionsCacheKey = (logDate) => `health.aiSuggestions.${logDate}`;
+
+const LoadSuggestionsCache = (logDate) => {
+  const raw = localStorage.getItem(BuildSuggestionsCacheKey(logDate));
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || !Array.isArray(parsed.Suggestions) || !parsed.Timestamp) {
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+};
+
+const SaveSuggestionsCache = (logDate, payload) => {
+  localStorage.setItem(BuildSuggestionsCacheKey(logDate), JSON.stringify(payload));
+};
+
+const FormatSuggestedTime = (value) =>
+  value.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 
 const Insights = () => {
   const [summary, setSummary] = useState(null);
   const [suggestions, setSuggestions] = useState([]);
   const [status, setStatus] = useState("idle");
   const [suggestionsStatus, setSuggestionsStatus] = useState("idle");
+  const [lastSuggestedAt, setLastSuggestedAt] = useState(null);
   const [error, setError] = useState("");
 
-  const weekStart = useMemo(() => FormatDate(GetMonday()), []);
+  const weekStart = useMemo(() => FormatDate(GetRollingStart()), []);
   const today = useMemo(() => FormatDate(new Date()), []);
 
-  const loadSuggestions = async () => {
+  const loadSuggestions = async ({ force = false } = {}) => {
+    const cached = LoadSuggestionsCache(today);
+    if (cached?.Timestamp) {
+      setLastSuggestedAt(new Date(cached.Timestamp));
+    }
+    if (cached && !force) {
+      const ageMs = Date.now() - cached.Timestamp;
+      if (ageMs < SuggestionsCacheMs) {
+        setSuggestions(cached.Suggestions || []);
+        setSuggestionsStatus("ready");
+        return;
+      }
+    }
+
     try {
       setSuggestionsStatus("loading");
       const ai = await FetchAiSuggestions(today);
-      setSuggestions(ai.Suggestions || []);
+      const nextSuggestions = ai.Suggestions || [];
+      setSuggestions(nextSuggestions);
+      const now = Date.now();
+      setLastSuggestedAt(new Date(now));
+      SaveSuggestionsCache(today, {
+        Timestamp: now,
+        Suggestions: nextSuggestions
+      });
       setSuggestionsStatus("ready");
     } catch {
-      setSuggestions([]);
+      if (!cached) {
+        setSuggestions([]);
+      }
       setSuggestionsStatus("error");
     }
   };
@@ -60,35 +111,23 @@ const Insights = () => {
         <header className="module-panel-header">
           <div>
             <h2>Weekly snapshot</h2>
-            <p>Monday to Sunday totals.</p>
+            <p>7 day averages based on the last week.</p>
           </div>
         </header>
         {error ? <p className="form-error">{error}</p> : null}
         {summary ? (
           <div className="health-summary-grid">
             <div>
-              <p>Total calories</p>
-              <h3>{summary.Totals.TotalCalories}</h3>
-            </div>
-            <div>
-              <p>Total protein</p>
-              <h3>{summary.Totals.TotalProtein}</h3>
-            </div>
-            <div>
-              <p>Total steps</p>
-              <h3>{summary.Totals.TotalSteps}</h3>
-            </div>
-            <div>
               <p>Average calories</p>
-              <h3>{summary.Averages.AverageCalories}</h3>
+              <h3>{FormatAverage(summary.Totals.TotalCalories)}</h3>
             </div>
             <div>
               <p>Average protein</p>
-              <h3>{summary.Averages.AverageProtein}</h3>
+              <h3>{FormatAverage(summary.Totals.TotalProtein, 1)}</h3>
             </div>
             <div>
               <p>Average steps</p>
-              <h3>{summary.Averages.AverageSteps}</h3>
+              <h3>{FormatAverage(summary.Totals.TotalSteps)}</h3>
             </div>
           </div>
         ) : (
@@ -101,11 +140,16 @@ const Insights = () => {
           <div>
             <h3>AI suggestions</h3>
             <p>Guidance tuned to today's log.</p>
+            {lastSuggestedAt ? (
+              <p className="health-detail">Last suggested at {FormatSuggestedTime(lastSuggestedAt)}.</p>
+            ) : (
+              <p className="health-detail">Not suggested yet.</p>
+            )}
           </div>
           <button
             type="button"
             className="primary-button"
-            onClick={loadSuggestions}
+            onClick={() => loadSuggestions({ force: true })}
             disabled={suggestionsStatus === "loading"}
           >
             {suggestionsStatus === "loading" ? (

@@ -73,6 +73,8 @@ class Settings(Base):
     ShowSodiumOnToday = Column(Boolean, nullable=False, default=False)
     TodayLayout = Column(Text, nullable=False)
     BarOrder = Column(Text, nullable=False)
+    AutoTuneTargetsWeekly = Column(Boolean, nullable=False, default=False)
+    LastAutoTuneAt = Column(DateTime(timezone=True))
     CreatedAt = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
 
 

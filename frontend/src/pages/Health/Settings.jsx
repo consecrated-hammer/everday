@@ -49,6 +49,17 @@ const ActivityOptions = [
   { value: "extra_active", label: "Extra active" }
 ];
 
+const BuildTargetsState = (settingsTargets) => ({
+  ...EmptyTargets,
+  ...settingsTargets,
+  FibreTarget: settingsTargets.FibreTarget ?? "",
+  CarbsTarget: settingsTargets.CarbsTarget ?? "",
+  FatTarget: settingsTargets.FatTarget ?? "",
+  SaturatedFatTarget: settingsTargets.SaturatedFatTarget ?? "",
+  SugarTarget: settingsTargets.SugarTarget ?? "",
+  SodiumTarget: settingsTargets.SodiumTarget ?? ""
+});
+
 const Settings = () => {
   const [profile, setProfile] = useState(EmptyProfile);
   const [targets, setTargets] = useState(EmptyTargets);
@@ -56,6 +67,8 @@ const Settings = () => {
   const [error, setError] = useState("");
   const [recommendation, setRecommendation] = useState(null);
   const [recommendationHistory, setRecommendationHistory] = useState([]);
+  const [autoTuneWeekly, setAutoTuneWeekly] = useState(false);
+  const [autoTuneLastRunAt, setAutoTuneLastRunAt] = useState(null);
 
   const loadData = async () => {
     try {
@@ -66,16 +79,7 @@ const Settings = () => {
         FetchHealthProfile(),
         FetchRecommendationHistory()
       ]);
-      setTargets({
-        ...EmptyTargets,
-        ...settings.Targets,
-        FibreTarget: settings.Targets.FibreTarget ?? "",
-        CarbsTarget: settings.Targets.CarbsTarget ?? "",
-        FatTarget: settings.Targets.FatTarget ?? "",
-        SaturatedFatTarget: settings.Targets.SaturatedFatTarget ?? "",
-        SugarTarget: settings.Targets.SugarTarget ?? "",
-        SodiumTarget: settings.Targets.SodiumTarget ?? ""
-      });
+      setTargets(BuildTargetsState(settings.Targets));
       setProfile({
         ...EmptyProfile,
         FirstName: profileData.FirstName || "",
@@ -87,6 +91,8 @@ const Settings = () => {
         ActivityLevel: profileData.ActivityLevel || ""
       });
       setRecommendationHistory(history.Logs || []);
+      setAutoTuneWeekly(Boolean(settings.AutoTuneTargetsWeekly));
+      setAutoTuneLastRunAt(settings.LastAutoTuneAt ? new Date(settings.LastAutoTuneAt) : null);
       setStatus("ready");
     } catch (err) {
       setStatus("error");
@@ -175,6 +181,29 @@ const Settings = () => {
     } catch (err) {
       setStatus("error");
       setError(err?.message || "Failed to fetch recommendations");
+    }
+  };
+
+  const updateAutoTune = async (event) => {
+    const nextValue = event.target.checked;
+    const previousValue = autoTuneWeekly;
+    setAutoTuneWeekly(nextValue);
+    try {
+      setStatus("saving");
+      setError("");
+      const updated = await UpdateHealthSettings({
+        AutoTuneTargetsWeekly: nextValue
+      });
+      setTargets(BuildTargetsState(updated.Targets));
+      setAutoTuneWeekly(Boolean(updated.AutoTuneTargetsWeekly));
+      setAutoTuneLastRunAt(
+        updated.LastAutoTuneAt ? new Date(updated.LastAutoTuneAt) : null
+      );
+      setStatus("ready");
+    } catch (err) {
+      setAutoTuneWeekly(previousValue);
+      setStatus("error");
+      setError(err?.message || "Failed to update auto-tune settings");
     }
   };
 
@@ -441,10 +470,29 @@ const Settings = () => {
             <h3>AI recommendations</h3>
             <p>Generate targets based on your profile.</p>
           </div>
-          <button type="button" onClick={runRecommendation}>
-            Get recommendations
+          <button
+            type="button"
+            className="primary-button"
+            onClick={runRecommendation}
+            disabled={status === "loading"}
+          >
+            {recommendation ? "Refresh recommendations" : "Get recommendations"}
           </button>
         </header>
+        <div className="form-switch-row">
+          <span className="form-switch-label">Auto-tune targets weekly</span>
+          <input type="checkbox" checked={autoTuneWeekly} onChange={updateAutoTune} />
+        </div>
+        <p className="health-detail">
+          Auto-tune runs once a week when you open the app.
+        </p>
+        {autoTuneLastRunAt ? (
+          <p className="health-detail">
+            Last auto-tune: {autoTuneLastRunAt.toLocaleString()}
+          </p>
+        ) : (
+          <p className="health-detail">No auto-tune run yet.</p>
+        )}
         {recommendation ? (
           <div className="health-ai-result">
             <h4>Suggested targets</h4>

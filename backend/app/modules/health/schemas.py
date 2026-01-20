@@ -157,6 +157,8 @@ class Targets(BaseModel):
 class UserSettings(BaseModel):
     Targets: Targets
     TodayLayout: list[str]
+    AutoTuneTargetsWeekly: bool = False
+    LastAutoTuneAt: datetime | None = None
 
 
 class UpdateSettingsInput(BaseModel):
@@ -181,6 +183,7 @@ class UpdateSettingsInput(BaseModel):
     ShowSodiumOnToday: bool | None = None
     TodayLayout: list[str] | None = None
     BarOrder: list[str] | None = None
+    AutoTuneTargetsWeekly: bool | None = None
 
 
 class DailyTotals(BaseModel):
