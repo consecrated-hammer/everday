@@ -11,7 +11,6 @@ const GetMobileTitle = (pathname) => {
   if (pathname.startsWith("/health/history")) return "Log";
   if (pathname.startsWith("/health/insights")) return "Insights";
   if (pathname.startsWith("/health/foods")) return "Foods";
-  if (pathname.startsWith("/health/settings")) return "Settings";
   if (pathname.startsWith("/budget/income")) return "Income";
   if (pathname.startsWith("/budget/expenses")) return "Expenses";
   if (pathname.startsWith("/budget/allocations")) return "Allocations";

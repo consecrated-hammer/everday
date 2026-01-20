@@ -19,7 +19,6 @@ import HealthToday from "./pages/Health/Today.jsx";
 import HealthLog from "./pages/Health/Log.jsx";
 import HealthFoods from "./pages/Health/Foods.jsx";
 import HealthInsights from "./pages/Health/Insights.jsx";
-import HealthSettings from "./pages/Health/Settings.jsx";
 import KidsLayout from "./pages/Kids/KidsLayout.jsx";
 import KidsHome from "./pages/Kids/KidsHome.jsx";
 import KidsHistory from "./pages/Kids/KidsHistory.jsx";
@@ -64,7 +63,6 @@ const App = () => (
           <Route path="history" element={<HealthHistoryRedirect />} />
           <Route path="history/:date" element={<HealthHistoryRedirect />} />
           <Route path="insights" element={<HealthInsights />} />
-          <Route path="settings" element={<HealthSettings />} />
         </Route>
         <Route path="/shopping" element={<Shopping />} />
         <Route path="/life-admin" element={<LifeAdminLayout />}>

@@ -31,9 +31,6 @@ const BuildHealthPageLabel = (path) => {
   if (path.startsWith("/health/history")) {
     return "Health History";
   }
-  if (path.startsWith("/health/settings")) {
-    return "Health Settings";
-  }
   return "Health";
 };
 

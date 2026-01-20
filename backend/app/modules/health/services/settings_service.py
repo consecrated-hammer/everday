@@ -1,6 +1,6 @@
 import json
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import logging
 
 from sqlalchemy.orm import Session
@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.modules.auth.models import User
 from app.modules.health.models import Settings as SettingsModel
 from app.modules.health.schemas import Targets, UpdateProfileInput, UpdateSettingsInput, UserProfile, UserSettings
+from app.modules.health.services.daily_logs_service import UpdateUserWeightFromLatestLog
 from app.modules.health.services.nutrition_recommendations_service import (
     CalculateAge,
     GetAiNutritionRecommendations,
@@ -48,7 +49,7 @@ def _ShouldAutoTuneTargets(record: SettingsModel) -> bool:
         return False
     if record.LastAutoTuneAt is None:
         return True
-    return datetime.utcnow() - record.LastAutoTuneAt >= AutoTuneInterval
+    return datetime.now(timezone.utc) - record.LastAutoTuneAt >= AutoTuneInterval
 
 
 def _ProfileReady(profile: UserProfile) -> bool:
@@ -94,7 +95,7 @@ def _TryAutoTuneTargets(db: Session, UserId: int, record: SettingsModel) -> Sett
         record.SaturatedFatTarget = recommendation.SaturatedFatTarget
         record.SugarTarget = recommendation.SugarTarget
         record.SodiumTarget = recommendation.SodiumTarget
-        record.LastAutoTuneAt = datetime.utcnow()
+        record.LastAutoTuneAt = datetime.now(timezone.utc)
         db.add(record)
         db.commit()
         db.refresh(record)
@@ -199,6 +200,7 @@ def UpdateSettings(db: Session, UserId: int, Input: UpdateSettingsInput) -> User
 
 
 def GetUserProfile(db: Session, UserId: int, IsAdmin: bool) -> UserProfile:
+    UpdateUserWeightFromLatestLog(db, UserId)
     user = db.query(User).filter(User.Id == UserId).first()
     if not user:
         raise ValueError("User not found")

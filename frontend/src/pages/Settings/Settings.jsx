@@ -10,6 +10,8 @@ import {
 import {
   FetchHealthProfile,
   FetchHealthSettings,
+  FetchRecommendationHistory,
+  GetAiRecommendations,
   UpdateHealthProfile,
   UpdateHealthSettings
 } from "../../lib/healthApi.js";
@@ -66,6 +68,17 @@ const EmptyHealthTargets = {
   ShowSodiumOnToday: false
 };
 
+const BuildHealthTargetsState = (targets) => ({
+  ...EmptyHealthTargets,
+  ...targets,
+  FibreTarget: targets.FibreTarget ?? "",
+  CarbsTarget: targets.CarbsTarget ?? "",
+  FatTarget: targets.FatTarget ?? "",
+  SaturatedFatTarget: targets.SaturatedFatTarget ?? "",
+  SugarTarget: targets.SugarTarget ?? "",
+  SodiumTarget: targets.SodiumTarget ?? ""
+});
+
 const Settings = () => {
   const [users, setUsers] = useState([]);
   const [status, setStatus] = useState("idle");
@@ -84,6 +97,11 @@ const Settings = () => {
   const [healthTargets, setHealthTargets] = useState(EmptyHealthTargets);
   const [healthStatus, setHealthStatus] = useState("idle");
   const [healthError, setHealthError] = useState("");
+  const [healthAiStatus, setHealthAiStatus] = useState("idle");
+  const [healthRecommendation, setHealthRecommendation] = useState(null);
+  const [healthRecommendationHistory, setHealthRecommendationHistory] = useState([]);
+  const [healthAutoTuneWeekly, setHealthAutoTuneWeekly] = useState(false);
+  const [healthAutoTuneLastRunAt, setHealthAutoTuneLastRunAt] = useState(null);
   const [uiSettings, setUiSettings] = useState(() => GetUiSettings());
   const [apiStatus, setApiStatus] = useState("checking");
   const [dbStatus, setDbStatus] = useState("checking");
@@ -225,20 +243,12 @@ const Settings = () => {
     try {
       setHealthStatus("loading");
       setHealthError("");
-      const [settings, profile] = await Promise.all([
+      const [settings, profile, history] = await Promise.all([
         FetchHealthSettings(),
-        FetchHealthProfile()
+        FetchHealthProfile(),
+        FetchRecommendationHistory()
       ]);
-      setHealthTargets({
-        ...EmptyHealthTargets,
-        ...settings.Targets,
-        FibreTarget: settings.Targets.FibreTarget ?? "",
-        CarbsTarget: settings.Targets.CarbsTarget ?? "",
-        FatTarget: settings.Targets.FatTarget ?? "",
-        SaturatedFatTarget: settings.Targets.SaturatedFatTarget ?? "",
-        SugarTarget: settings.Targets.SugarTarget ?? "",
-        SodiumTarget: settings.Targets.SodiumTarget ?? ""
-      });
+      setHealthTargets(BuildHealthTargetsState(settings.Targets));
       setHealthProfile({
         ...EmptyHealthProfile,
         FirstName: profile.FirstName || "",
@@ -249,6 +259,11 @@ const Settings = () => {
         WeightKg: profile.WeightKg || "",
         ActivityLevel: profile.ActivityLevel || ""
       });
+      setHealthAutoTuneWeekly(Boolean(settings.AutoTuneTargetsWeekly));
+      setHealthAutoTuneLastRunAt(
+        settings.LastAutoTuneAt ? new Date(settings.LastAutoTuneAt) : null
+      );
+      setHealthRecommendationHistory(history.Logs || []);
       setHealthStatus("ready");
     } catch (err) {
       setHealthStatus("error");
@@ -436,6 +451,58 @@ const Settings = () => {
     } catch (err) {
       setHealthStatus("error");
       setHealthError(err?.message || "Failed to update health targets");
+    }
+  };
+
+  const runHealthRecommendation = async () => {
+    try {
+      setHealthAiStatus("loading");
+      setHealthError("");
+      const result = await GetAiRecommendations();
+      setHealthRecommendation(result);
+      setHealthAiStatus("ready");
+    } catch (err) {
+      setHealthAiStatus("error");
+      setHealthError(err?.message || "Failed to fetch AI targets");
+    }
+  };
+
+  const applyHealthRecommendation = () => {
+    if (!healthRecommendation) return;
+    setHealthTargets((prev) => ({
+      ...prev,
+      DailyCalorieTarget: healthRecommendation.DailyCalorieTarget,
+      ProteinTargetMin: healthRecommendation.ProteinTargetMin,
+      ProteinTargetMax: healthRecommendation.ProteinTargetMax,
+      FibreTarget: healthRecommendation.FibreTarget || "",
+      CarbsTarget: healthRecommendation.CarbsTarget || "",
+      FatTarget: healthRecommendation.FatTarget || "",
+      SaturatedFatTarget: healthRecommendation.SaturatedFatTarget || "",
+      SugarTarget: healthRecommendation.SugarTarget || "",
+      SodiumTarget: healthRecommendation.SodiumTarget || ""
+    }));
+  };
+
+  const updateHealthAutoTune = async (event) => {
+    const nextValue = event.target.checked;
+    const previousValue = healthAutoTuneWeekly;
+    setHealthAutoTuneWeekly(nextValue);
+    try {
+      setHealthAiStatus("loading");
+      setHealthError("");
+      const updated = await UpdateHealthSettings({
+        AutoTuneTargetsWeekly: nextValue
+      });
+      setHealthTargets(BuildHealthTargetsState(updated.Targets));
+      setHealthAutoTuneWeekly(Boolean(updated.AutoTuneTargetsWeekly));
+      setHealthAutoTuneLastRunAt(
+        updated.LastAutoTuneAt ? new Date(updated.LastAutoTuneAt) : null
+      );
+      setHealthAiStatus("ready");
+    } catch (err) {
+      setHealthAutoTuneWeekly(previousValue);
+      setHealthAiStatus("error");
+      setHealthError(err?.message || "Failed to update auto-tune settings");
     }
   };
 
@@ -673,6 +740,61 @@ const Settings = () => {
                   </div>
                   <div className="settings-subsection">
                     <div className="settings-subsection-header">
+                      <h4>AI targets</h4>
+                      <p>Refresh AI suggestions and auto-tune weekly.</p>
+                    </div>
+                    <div className="form-actions">
+                      <button
+                        type="button"
+                        className="primary-button"
+                        onClick={runHealthRecommendation}
+                        disabled={healthAiStatus === "loading"}
+                      >
+                        {healthRecommendation ? "Refresh suggestions" : "Get suggestions"}
+                      </button>
+                    </div>
+                    <div className="form-switch-row">
+                      <span className="form-switch-label">Auto-tune targets weekly</span>
+                      <input
+                        type="checkbox"
+                        checked={healthAutoTuneWeekly}
+                        onChange={updateHealthAutoTune}
+                      />
+                    </div>
+                    <p className="health-detail">Auto-tune runs once a week when you open the app.</p>
+                    {healthAutoTuneLastRunAt ? (
+                      <p className="health-detail">
+                        Last auto-tune: {healthAutoTuneLastRunAt.toLocaleString()}
+                      </p>
+                    ) : (
+                      <p className="health-detail">No auto-tune run yet.</p>
+                    )}
+                    {healthRecommendation ? (
+                      <div className="health-ai-result">
+                        <h4>Suggested targets</h4>
+                        <p>{healthRecommendation.Explanation}</p>
+                        <div className="health-summary-grid">
+                          <div>
+                            <p>Calories</p>
+                            <h3>{healthRecommendation.DailyCalorieTarget}</h3>
+                          </div>
+                          <div>
+                            <p>Protein min</p>
+                            <h3>{healthRecommendation.ProteinTargetMin}</h3>
+                          </div>
+                          <div>
+                            <p>Protein max</p>
+                            <h3>{healthRecommendation.ProteinTargetMax}</h3>
+                          </div>
+                        </div>
+                        <button type="button" className="primary-button" onClick={applyHealthRecommendation}>
+                          Apply suggested targets
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+                  <div className="settings-subsection">
+                    <div className="settings-subsection-header">
                       <h4>Targets</h4>
                       <p>Set calorie, protein, and step goals for today.</p>
                     </div>
@@ -863,6 +985,31 @@ const Settings = () => {
                         </button>
                       </div>
                     </form>
+                  </div>
+                  <div className="settings-subsection">
+                    <div className="settings-subsection-header">
+                      <h4>Recommendation history</h4>
+                      <p>Previous AI calculations for reference.</p>
+                    </div>
+                    <div className="health-history-list">
+                      {healthRecommendationHistory.length ? (
+                        healthRecommendationHistory.map((log) => (
+                          <div key={log.RecommendationLogId} className="health-history-card">
+                            <div className="health-history-card-header">
+                              <span>
+                                {new Date(log.CreatedAt).toLocaleDateString()}
+                              </span>
+                              <span className="health-history-card-kcal">
+                                {log.DailyCalorieTarget} kcal
+                              </span>
+                            </div>
+                            <div className="health-history-card-subtitle">{log.Explanation}</div>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="health-history-card-empty">No recommendations yet.</p>
+                      )}
+                    </div>
                   </div>
                 </div>
               )}
