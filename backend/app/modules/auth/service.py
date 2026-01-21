@@ -56,3 +56,11 @@ def HashPasswordResetToken(token: str) -> str:
 
 def VerifyPasswordResetToken(token: str, token_hash: str) -> bool:
     return pwd_context.verify(token, token_hash)
+
+
+def HashApiKey(key: str) -> str:
+    return pwd_context.hash(key)
+
+
+def VerifyApiKey(key: str, key_hash: str) -> bool:
+    return pwd_context.verify(key, key_hash)

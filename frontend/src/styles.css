@@ -1586,6 +1586,15 @@ iconify-icon {
   color: var(--text);
 }
 
+.form-input {
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  padding: 10px 12px;
+  font: inherit;
+  background: var(--surface-strong);
+  color: var(--text);
+}
+
 .form-span {
   grid-column: 1 / -1;
 }
@@ -2512,6 +2521,49 @@ iconify-icon {
 
 .settings-subsection .form-grid {
   margin-top: 0;
+}
+
+.health-integrations {
+  display: grid;
+  gap: 12px;
+}
+
+.health-integrations-actions {
+  padding: 4px 0 8px;
+}
+
+.health-key-reveal {
+  display: grid;
+  gap: 8px;
+}
+
+.health-key-reveal label {
+  display: grid;
+  gap: 6px;
+  font-weight: 600;
+}
+
+.health-key-reveal input {
+  width: 100%;
+  max-width: 640px;
+}
+
+.health-key-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+.health-key-status {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+@media (max-width: 720px) {
+  .health-key-reveal input {
+    max-width: 100%;
+  }
 }
 
 .settings-list {

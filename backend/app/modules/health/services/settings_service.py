@@ -1,13 +1,16 @@
 import json
+import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
 import logging
 
 from sqlalchemy.orm import Session
 
+from app.modules.auth.service import HashApiKey, VerifyApiKey
 from app.modules.auth.models import User
 from app.modules.health.models import Settings as SettingsModel
 from app.modules.health.schemas import (
+    HaeApiKeyResponse,
     GoalRecommendationInput,
     GoalSummary,
     GoalType,
@@ -426,7 +429,41 @@ def GetUserSettings(db: Session, UserId: int) -> UserSettings:
         ShowWeightProjectionOnToday=bool(record.ShowWeightProjectionOnToday)
         if record.ShowWeightProjectionOnToday is not None
         else True,
+        HaeApiKeyConfigured=bool(record.HaeApiKeyHash),
+        HaeApiKeyLast4=record.HaeApiKeyLast4,
+        HaeApiKeyCreatedAt=record.HaeApiKeyCreatedAt,
     )
+
+
+def RotateHaeApiKey(db: Session, UserId: int) -> HaeApiKeyResponse:
+    record = EnsureSettingsForUser(db, UserId)
+    api_key = secrets.token_urlsafe(32)
+    record.HaeApiKeyHash = HashApiKey(api_key)
+    record.HaeApiKeyLast4 = api_key[-4:]
+    record.HaeApiKeyCreatedAt = datetime.now(timezone.utc)
+    db.add(record)
+    db.commit()
+    db.refresh(record)
+    return HaeApiKeyResponse(
+        ApiKey=api_key,
+        Last4=record.HaeApiKeyLast4,
+        CreatedAt=record.HaeApiKeyCreatedAt,
+    )
+
+
+def ResolveUserIdByHaeApiKey(db: Session, api_key: str) -> int | None:
+    if not api_key:
+        return None
+    last4 = api_key[-4:]
+    candidates = (
+        db.query(SettingsModel)
+        .filter(SettingsModel.HaeApiKeyLast4 == last4, SettingsModel.HaeApiKeyHash.isnot(None))
+        .all()
+    )
+    for record in candidates:
+        if record.HaeApiKeyHash and VerifyApiKey(api_key, record.HaeApiKeyHash):
+            return record.UserId
+    return None
 
 
 def UpdateSettings(db: Session, UserId: int, Input: UpdateSettingsInput) -> UserSettings:
