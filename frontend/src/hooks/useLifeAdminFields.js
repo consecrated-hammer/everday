@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { FetchLifeFields } from "../lib/lifeAdminApi.js";
 
@@ -7,7 +7,7 @@ export const useLifeAdminFields = (categoryId) => {
   const [status, setStatus] = useState("idle");
   const [error, setError] = useState("");
 
-  const loadFields = async () => {
+  const loadFields = useCallback(async () => {
     if (!categoryId) {
       setFields([]);
       return;
@@ -22,11 +22,11 @@ export const useLifeAdminFields = (categoryId) => {
       setStatus("error");
       setError(err?.message || "Failed to load fields");
     }
-  };
+  }, [categoryId]);
 
   useEffect(() => {
     loadFields();
-  }, [categoryId]);
+  }, [loadFields]);
 
   return { fields, status, error, reloadFields: loadFields };
 };

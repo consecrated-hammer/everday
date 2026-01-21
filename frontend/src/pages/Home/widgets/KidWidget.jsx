@@ -127,8 +127,6 @@ const NextPocketMoneyRun = (rule) => {
   return nextDate;
 };
 
-const BuildKidName = (kid) => kid.FirstName || kid.Username || `Kid ${kid.KidUserId}`;
-
 const KidWidget = ({ kid, IsExpanded }) => {
   const [ledger, setLedger] = useState(null);
   const [rule, setRule] = useState(null);

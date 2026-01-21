@@ -23,6 +23,12 @@ class ImageScanMode(str, Enum):
     Label = "label"
 
 
+class GoalType(str, Enum):
+    Lose = "lose"
+    Maintain = "maintain"
+    Gain = "gain"
+
+
 class Food(BaseModel):
     FoodId: str
     OwnerUserId: int | None = None
@@ -159,6 +165,9 @@ class UserSettings(BaseModel):
     TodayLayout: list[str]
     AutoTuneTargetsWeekly: bool = False
     LastAutoTuneAt: datetime | None = None
+    Goal: "GoalSummary | None" = None
+    ShowWeightChartOnToday: bool = True
+    ShowWeightProjectionOnToday: bool = True
 
 
 class UpdateSettingsInput(BaseModel):
@@ -184,6 +193,39 @@ class UpdateSettingsInput(BaseModel):
     TodayLayout: list[str] | None = None
     BarOrder: list[str] | None = None
     AutoTuneTargetsWeekly: bool | None = None
+    ShowWeightChartOnToday: bool | None = None
+    ShowWeightProjectionOnToday: bool | None = None
+
+
+class GoalSummary(BaseModel):
+    GoalType: GoalType
+    BmiMin: float
+    BmiMax: float
+    StartDate: date
+    EndDate: date
+    CurrentWeightKg: float
+    CurrentBmi: float
+    TargetWeightKg: float
+    TargetBmi: float
+    WeightDeltaKg: float
+    DurationDays: int
+    RemainingDays: int
+    DailyCalorieTarget: int
+    DailyCalorieDelta: float
+    Status: str
+    CompletedAt: datetime | None = None
+
+
+class GoalRecommendationInput(BaseModel):
+    GoalType: GoalType
+    BmiMin: float = Field(gt=0, le=60)
+    BmiMax: float = Field(gt=0, le=60)
+    StartDate: date | None = None
+    DurationMonths: int = Field(default=6, ge=1, le=36)
+    EndDateOverride: date | None = None
+    TargetWeightKgOverride: float | None = Field(default=None, gt=0)
+    DailyCalorieTargetOverride: int | None = Field(default=None, ge=0)
+    ApplyGoal: bool = False
 
 
 class DailyTotals(BaseModel):
@@ -220,6 +262,15 @@ class WeeklySummary(BaseModel):
     Days: list[DailySummary]
     Totals: dict
     Averages: dict
+
+
+class WeightHistoryEntry(BaseModel):
+    LogDate: date
+    WeightKg: float
+
+
+class WeightHistoryResponse(BaseModel):
+    Weights: list[WeightHistoryEntry]
 
 
 class UserProfile(BaseModel):
@@ -522,6 +573,7 @@ class NutritionRecommendationResponse(BaseModel):
     SodiumTarget: float | None = None
     Explanation: str
     ModelUsed: str | None = None
+    Goal: GoalSummary | None = None
 
 
 class RecommendationLog(BaseModel):

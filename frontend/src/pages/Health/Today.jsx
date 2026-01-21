@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   Bar,
@@ -6,6 +6,7 @@ import {
   ComposedChart,
   Legend,
   Line,
+  ReferenceDot,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -17,6 +18,7 @@ import {
   FetchDailyLog,
   FetchHealthSettings,
   FetchWeeklySummary,
+  FetchWeightHistory,
   UpdateDailySteps
 } from "../../lib/healthApi.js";
 
@@ -30,6 +32,18 @@ const FormatDate = (value) => {
 const ParseLocalDate = (value) => {
   const [year, month, day] = value.split("-").map((part) => Number(part));
   return new Date(year, month - 1, day);
+};
+
+const AddDays = (value, days) => {
+  const base = typeof value === "string" ? ParseLocalDate(value) : new Date(value);
+  base.setDate(base.getDate() + days);
+  return FormatDate(base);
+};
+
+const DayMs = 24 * 60 * 60 * 1000;
+const ToDayNumber = (value) => {
+  const [year, month, day] = value.split("-").map((part) => Number(part));
+  return Date.UTC(year, month - 1, day) / DayMs;
 };
 
 const ProgressClamp = (value, target) => {
@@ -145,6 +159,60 @@ const BuildWeeklySeries = (startDate, summary, target) => {
   return series;
 };
 
+const BuildTrendLine = (entries) => {
+  if (!entries || entries.length < 2) return null;
+  const points = entries.map((entry) => ({
+    x: ToDayNumber(entry.LogDate),
+    y: Number(entry.WeightKg)
+  }));
+  const count = points.length;
+  const meanX = points.reduce((sum, point) => sum + point.x, 0) / count;
+  const meanY = points.reduce((sum, point) => sum + point.y, 0) / count;
+  let numerator = 0;
+  let denominator = 0;
+  points.forEach((point) => {
+    const dx = point.x - meanX;
+    numerator += dx * (point.y - meanY);
+    denominator += dx * dx;
+  });
+  if (!denominator) return null;
+  const slope = numerator / denominator;
+  const intercept = meanY - slope * meanX;
+  return (dateValue) => intercept + slope * ToDayNumber(dateValue);
+};
+
+const BuildWeightDomain = (series) => {
+  if (!series || series.length === 0) return null;
+  let min = Number.POSITIVE_INFINITY;
+  let max = Number.NEGATIVE_INFINITY;
+  series.forEach((entry) => {
+    [entry.Weight, entry.Trend, entry.TargetPath].forEach((value) => {
+      if (value == null || Number.isNaN(value)) return;
+      min = Math.min(min, value);
+      max = Math.max(max, value);
+    });
+  });
+  if (!Number.isFinite(min) || !Number.isFinite(max)) return null;
+
+  const baseRange = Math.max(0, max - min);
+  const padding = Math.max(baseRange * 0.1, 2);
+  let lower = min - padding;
+  let upper = max + padding;
+  let paddedRange = upper - lower;
+  if (paddedRange < 10) {
+    const extra = (10 - paddedRange) / 2;
+    lower -= extra;
+    upper += extra;
+  }
+  const step = 1;
+  lower = Math.round(lower / step) * step;
+  upper = Math.round(upper / step) * step;
+  if (upper - lower < 10) {
+    upper = lower + 10;
+  }
+  return [lower, upper];
+};
+
 const Today = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -164,6 +232,15 @@ const Today = () => {
   const [log, setLog] = useState(null);
   const [totals, setTotals] = useState(null);
   const [weeklySummary, setWeeklySummary] = useState(null);
+  const [goal, setGoal] = useState(null);
+  const [showWeightChart, setShowWeightChart] = useState(true);
+  const [showWeightProjection, setShowWeightProjection] = useState(true);
+  const [weightRangeKey, setWeightRangeKey] = useState("30");
+  const [weightGoalEnabled, setWeightGoalEnabled] = useState(false);
+  const [weightGoalReady, setWeightGoalReady] = useState(false);
+  const [weightHistory, setWeightHistory] = useState([]);
+  const [weightHistoryStatus, setWeightHistoryStatus] = useState("idle");
+  const [weightHistoryError, setWeightHistoryError] = useState("");
   const [stepsForm, setStepsForm] = useState({
     Steps: ""
   });
@@ -185,7 +262,7 @@ const Today = () => {
     return true;
   });
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       setStatus("loading");
       setError("");
@@ -195,6 +272,9 @@ const Today = () => {
         FetchWeeklySummary(startDate)
       ]);
       setTargets(settings.Targets);
+      setGoal(settings.Goal || null);
+      setShowWeightChart(settings.ShowWeightChartOnToday !== false);
+      setShowWeightProjection(settings.ShowWeightProjectionOnToday !== false);
       setLog(dailyData.DailyLog);
       setTotals(dailyData.Totals || null);
       setWeeklySummary(weeklyData);
@@ -203,11 +283,26 @@ const Today = () => {
       setStatus("error");
       setError(err?.message || "Failed to load today");
     }
-  };
+  }, [startDate, today]);
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
+
+  useEffect(() => {
+    if (weightGoalReady) {
+      return;
+    }
+    const hasGoalEndDate = Boolean(goal?.EndDate && goal.EndDate >= today);
+    setWeightGoalEnabled(hasGoalEndDate);
+    setWeightGoalReady(true);
+  }, [goal, today, weightGoalReady]);
+
+  useEffect(() => {
+    if (!goal?.EndDate || goal.EndDate < today) {
+      setWeightGoalEnabled(false);
+    }
+  }, [goal, today]);
 
   useEffect(() => {
     const shouldOpenSteps = searchParams.get("steps") === "1";
@@ -265,6 +360,7 @@ const Today = () => {
       document.removeEventListener("mousedown", handleClick);
     };
   }, [actionsMenuOpen]);
+
 
   const loadStepsLog = async (dateValue) => {
     try {
@@ -374,6 +470,207 @@ const Today = () => {
     () => BuildWeeklySeries(startDate, weeklySummary, targets?.DailyCalorieTarget ?? 0),
     [startDate, weeklySummary, targets]
   );
+  const goalEndDate = goal?.EndDate && goal.EndDate >= today ? goal.EndDate : null;
+  const weightRangeOptions = [
+    { key: "7", label: "7d" },
+    { key: "30", label: "30d" },
+    { key: "90", label: "90d" },
+    { key: "all", label: "All" }
+  ];
+  const weightHistoryStartDate = useMemo(() => {
+    if (weightRangeKey === "all") {
+      return "1900-01-01";
+    }
+    const days = Number(weightRangeKey);
+    return AddDays(today, -(days - 1));
+  }, [today, weightRangeKey]);
+  const earliestWeightDate = useMemo(() => {
+    if (!weightHistory?.length) return null;
+    return weightHistory.reduce((earliest, entry) => {
+      if (!earliest || entry.LogDate < earliest) {
+        return entry.LogDate;
+      }
+      return earliest;
+    }, weightHistory[0]?.LogDate || null);
+  }, [weightHistory]);
+  const weightStartDate = useMemo(() => {
+    if (weightRangeKey !== "all") {
+      return weightHistoryStartDate;
+    }
+    if (earliestWeightDate) {
+      return earliestWeightDate;
+    }
+    return AddDays(today, -29);
+  }, [weightRangeKey, weightHistoryStartDate, earliestWeightDate, today]);
+  const next7EndDate = useMemo(() => AddDays(today, 7), [today]);
+  const next30EndDate = useMemo(() => AddDays(today, 30), [today]);
+  const weightProjectionState = useMemo(() => {
+    const history = [...(weightHistory || [])].sort((a, b) =>
+      a.LogDate > b.LogDate ? 1 : -1
+    );
+    const historyToDate = history.filter((entry) => entry.LogDate <= today);
+    const count = historyToDate.length;
+    if (count < 2) {
+      return {
+        history,
+        historyToDate,
+        count,
+        spanDays: 0,
+        trendMode: "none"
+      };
+    }
+    const first = historyToDate[0];
+    const last = historyToDate[historyToDate.length - 1];
+    const spanDays = Math.max(0, ToDayNumber(last.LogDate) - ToDayNumber(first.LogDate));
+    if (count >= 7 && spanDays >= 14) {
+      return {
+        history,
+        historyToDate,
+        count,
+        spanDays,
+        trendMode: "full"
+      };
+    }
+    if (count >= 4) {
+      return {
+        history,
+        historyToDate,
+        count,
+        spanDays,
+        trendMode: "full"
+      };
+    }
+    return {
+      history,
+      historyToDate,
+      count,
+      spanDays,
+      trendMode: "short"
+    };
+  }, [weightHistory, today]);
+  const showGoalTarget = Boolean(weightGoalEnabled && goalEndDate);
+  const weightEndDate = useMemo(() => {
+    if (showGoalTarget && goalEndDate) {
+      return AddDays(goalEndDate, 1);
+    }
+    if (weightProjectionState.count <= 2) {
+      return next7EndDate;
+    }
+    return next30EndDate;
+  }, [showGoalTarget, goalEndDate, next7EndDate, next30EndDate, weightProjectionState.count]);
+  const weightHistoryEndDate = weightEndDate < today ? weightEndDate : today;
+
+  const weightSeries = useMemo(() => {
+    if (!weightStartDate || !weightEndDate) return [];
+    const historyMap = new Map(
+      weightProjectionState.history.map((entry) => [entry.LogDate, entry.WeightKg])
+    );
+    const lastEntry = weightProjectionState.historyToDate.length
+      ? weightProjectionState.historyToDate[weightProjectionState.historyToDate.length - 1]
+      : null;
+    const lastWeightValue = lastEntry?.WeightKg ?? null;
+    const targetStartDate = lastEntry?.LogDate ?? null;
+    const trendLine =
+      showWeightProjection && weightProjectionState.trendMode !== "none"
+        ? BuildTrendLine(weightProjectionState.historyToDate)
+        : null;
+    const shortTrendEnd = AddDays(today, 7);
+    const trendEndLimit =
+      weightProjectionState.trendMode === "short" && shortTrendEnd < weightEndDate
+        ? shortTrendEnd
+        : weightEndDate;
+    const targetWeightValue = goal?.TargetWeightKg ?? null;
+    const targetEndDate = goalEndDate;
+    const lineStartDay = targetStartDate ? ToDayNumber(targetStartDate) : null;
+    const targetEndDay = targetEndDate ? ToDayNumber(targetEndDate) : null;
+    const targetSlope =
+      showWeightProjection &&
+      showGoalTarget &&
+      lastWeightValue !== null &&
+      targetWeightValue !== null &&
+      lineStartDay !== null &&
+      targetEndDay !== null &&
+      targetEndDay > lineStartDay
+        ? (targetWeightValue - lastWeightValue) / (targetEndDay - lineStartDay)
+        : null;
+
+    const start = ParseLocalDate(weightStartDate);
+    const end = ParseLocalDate(weightEndDate);
+    const series = [];
+    for (let day = new Date(start); day <= end; day.setDate(day.getDate() + 1)) {
+      const iso = FormatDate(day);
+      const entry = {
+        Date: iso,
+        Label: day.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+        Weight: historyMap.get(iso) ?? null
+      };
+      if (trendLine && iso >= today && iso <= trendEndLimit) {
+        entry.Trend = Number(trendLine(iso).toFixed(2));
+      }
+      if (targetSlope !== null && targetStartDate && iso >= targetStartDate) {
+        const dayNumber = ToDayNumber(iso);
+        if (!targetEndDate || dayNumber <= targetEndDay) {
+          entry.TargetPath = Number(
+            (lastWeightValue + targetSlope * (dayNumber - lineStartDay)).toFixed(2)
+          );
+        }
+      }
+      series.push(entry);
+    }
+    return series;
+  }, [
+    weightStartDate,
+    weightEndDate,
+    weightProjectionState,
+    showWeightProjection,
+    showGoalTarget,
+    goal,
+    goalEndDate,
+    today
+  ]);
+  const weightYAxisDomain = useMemo(() => BuildWeightDomain(weightSeries), [weightSeries]);
+  const showTrendLine = showWeightProjection && weightProjectionState.trendMode !== "none";
+  const trendLineDash =
+    weightProjectionState.trendMode === "short" ? "2 6" : "6 6";
+  const trendLineOpacity = weightProjectionState.trendMode === "short" ? 0.5 : 0.8;
+  const showTargetPath = Boolean(
+    showWeightProjection &&
+      showGoalTarget &&
+      goalEndDate &&
+      goal?.TargetWeightKg != null &&
+      weightProjectionState.historyToDate.length > 0
+  );
+  const targetDot = useMemo(() => {
+    if (!showTargetPath || !goalEndDate || goal?.TargetWeightKg == null) {
+      return null;
+    }
+    const label = ParseLocalDate(goalEndDate).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric"
+    });
+    return {
+      x: label,
+      y: Number(goal.TargetWeightKg)
+    };
+  }, [goal, goalEndDate, showTargetPath]);
+  useEffect(() => {
+    if (!showWeightChart || !weightHistoryStartDate || !weightHistoryEndDate) {
+      return;
+    }
+    const loadWeights = async () => {
+      try {
+        setWeightHistoryStatus("loading");
+        setWeightHistoryError("");
+        const data = await FetchWeightHistory(weightHistoryStartDate, weightHistoryEndDate);
+        setWeightHistory(data?.Weights || []);
+        setWeightHistoryStatus("ready");
+      } catch (err) {
+        setWeightHistoryStatus("error");
+        setWeightHistoryError(err?.message || "Failed to load weight history");
+      }
+    };
+    loadWeights();
+  }, [showWeightChart, weightHistoryStartDate, weightHistoryEndDate]);
   const handleBarClick = (data) => {
     const dateValue = data?.payload?.Date;
     if (!dateValue) {
@@ -527,6 +824,122 @@ const Today = () => {
           </div>
         ) : null}
       </section>
+
+      {showWeightChart ? (
+        <section className="module-panel">
+          <header className="module-panel-header">
+            <div>
+              <h3>Weight trend</h3>
+              <p>Logged weights with goal and trend projections.</p>
+            </div>
+          </header>
+          {weightHistoryError ? <p className="form-error">{weightHistoryError}</p> : null}
+          {weightHistoryStatus === "loading" ? (
+            <p>Loading weight history...</p>
+          ) : (
+            <div className="health-chart health-chart--weight">
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart data={weightSeries} margin={{ top: 10, right: 24, left: 8, bottom: 0 }}>
+                  <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" />
+                  <XAxis dataKey="Label" tick={{ fill: "var(--text-muted)", fontSize: 12 }} />
+                  <YAxis
+                    domain={weightYAxisDomain || undefined}
+                    tick={{ fill: "var(--text-muted)", fontSize: 12 }}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      background: "var(--surface-strong)",
+                      border: "1px solid var(--border)",
+                      borderRadius: "12px",
+                      boxShadow: "0 12px 24px rgba(20, 16, 12, 0.18)"
+                    }}
+                    labelStyle={{ color: "var(--text)" }}
+                  />
+                  <Legend />
+                  <Line
+                    type="monotone"
+                    dataKey="Weight"
+                    name="Weight"
+                    stroke="var(--health-weight)"
+                    strokeWidth={2}
+                    dot={{ r: 3 }}
+                    connectNulls
+                  />
+                  {showTrendLine ? (
+                    <Line
+                      type="monotone"
+                      dataKey="Trend"
+                      name="Trend"
+                      stroke="var(--health-trend)"
+                      strokeDasharray={trendLineDash}
+                      strokeOpacity={trendLineOpacity}
+                      dot={false}
+                    />
+                  ) : null}
+                  {showTargetPath ? (
+                    <Line
+                      type="monotone"
+                      dataKey="TargetPath"
+                      name="Target 🎯"
+                      stroke="var(--health-meal)"
+                      strokeDasharray="4 4"
+                      dot={false}
+                    />
+                  ) : null}
+                  {targetDot ? (
+                    <ReferenceDot
+                      x={targetDot.x}
+                      y={targetDot.y}
+                      r={6}
+                      fill="var(--health-meal)"
+                      stroke="var(--surface)"
+                      strokeWidth={2}
+                      isFront
+                      label={({ x, y }) => (
+                        <text
+                          x={x}
+                          y={y}
+                          dy={-12}
+                          textAnchor="middle"
+                          fontSize="14"
+                        >
+                          🎯
+                        </text>
+                      )}
+                    />
+                  ) : null}
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+          <div className="health-chart-footer">
+            <div className="health-chart-range">
+              <span className="health-chart-note">Range</span>
+              {weightRangeOptions.map((option) => (
+                <button
+                  key={option.key}
+                  type="button"
+                  className={`button-secondary-pill${weightRangeKey === option.key ? " is-active" : ""}`}
+                  onClick={() => setWeightRangeKey(option.key)}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              className={`health-goal-toggle${showGoalTarget ? " is-active" : ""}`}
+              onClick={() => setWeightGoalEnabled((prev) => !prev)}
+              aria-pressed={showGoalTarget}
+              aria-label="Toggle goal projection"
+              disabled={!goalEndDate}
+            >
+              Goal
+              <span className="health-goal-dot" aria-hidden="true" />
+            </button>
+          </div>
+        </section>
+      ) : null}
       {stepsModalOpen ? (
         <div
           className="modal-backdrop"

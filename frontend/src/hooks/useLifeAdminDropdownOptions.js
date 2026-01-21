@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { FetchLifeDropdownOptions } from "../lib/lifeAdminApi.js";
 
@@ -7,7 +7,7 @@ export const useLifeAdminDropdownOptions = (dropdownId) => {
   const [status, setStatus] = useState("idle");
   const [error, setError] = useState("");
 
-  const loadOptions = async () => {
+  const loadOptions = useCallback(async () => {
     if (!dropdownId) {
       setOptions([]);
       return;
@@ -22,11 +22,11 @@ export const useLifeAdminDropdownOptions = (dropdownId) => {
       setStatus("error");
       setError(err?.message || "Failed to load dropdown options");
     }
-  };
+  }, [dropdownId]);
 
   useEffect(() => {
     loadOptions();
-  }, [dropdownId]);
+  }, [loadOptions]);
 
   return { options, status, error, reloadOptions: loadOptions };
 };

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import Icon from "../../components/Icon.jsx";
@@ -73,7 +73,7 @@ const HistoryDay = () => {
   const [slotFilter, setSlotFilter] = useState("all");
   const pendingDeletesRef = useRef(new Map());
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     if (!date) {
       return;
     }
@@ -87,16 +87,17 @@ const HistoryDay = () => {
       setStatus("error");
       setError(err?.message || "Failed to load history day");
     }
-  };
+  }, [date]);
 
   useEffect(() => {
     loadData();
     setSlotFilter("all");
+    const pendingDeletes = pendingDeletesRef.current;
     return () => {
-      pendingDeletesRef.current.forEach((pending) => clearTimeout(pending.timeoutId));
-      pendingDeletesRef.current.clear();
+      pendingDeletes.forEach((pending) => clearTimeout(pending.timeoutId));
+      pendingDeletes.clear();
     };
-  }, [date]);
+  }, [date, loadData]);
 
   const scheduleDelete = (entry) => {
     const entryId = entry.MealEntryId;

@@ -73,6 +73,7 @@ const App = () => (
           <Route path="builder" element={<LifeAdminBuilder />} />
         </Route>
         <Route path="/settings" element={<Settings />} />
+        <Route path="/settings/:section" element={<Settings />} />
         <Route path="/kids-admin" element={<KidsAdmin />} />
       </Route>
       <Route

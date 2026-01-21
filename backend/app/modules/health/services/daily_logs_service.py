@@ -22,6 +22,7 @@ from app.modules.health.schemas import (
     MealEntryWithFood,
     ShareMealEntryInput,
     UpdateMealEntryInput,
+    WeightHistoryEntry,
 )
 from app.modules.health.services.portion_entry_service import BuildPortionValues
 from app.modules.health.utils.dates import ParseIsoDate
@@ -80,6 +81,34 @@ def GetDailyLogById(db: Session, UserId: int, DailyLogId: str) -> DailyLog | Non
     if not record:
         return None
     return _BuildDailyLog(record)
+
+
+def GetWeightHistory(
+    db: Session,
+    UserId: int,
+    StartDate: str,
+    EndDate: str,
+) -> list[WeightHistoryEntry]:
+    StartValue = ParseIsoDate(StartDate)
+    EndValue = ParseIsoDate(EndDate)
+    if EndValue < StartValue:
+        raise ValueError("End date must be on or after the start date.")
+    rows = (
+        db.query(DailyLogModel)
+        .filter(
+            DailyLogModel.UserId == UserId,
+            DailyLogModel.LogDate >= StartValue,
+            DailyLogModel.LogDate <= EndValue,
+            DailyLogModel.WeightKg.isnot(None),
+        )
+        .order_by(DailyLogModel.LogDate.asc())
+        .all()
+    )
+    return [
+        WeightHistoryEntry(LogDate=row.LogDate, WeightKg=float(row.WeightKg))
+        for row in rows
+        if row.WeightKg is not None
+    ]
 
 
 def _BuildMealEntrySchema(entry: MealEntryModel) -> MealEntry:

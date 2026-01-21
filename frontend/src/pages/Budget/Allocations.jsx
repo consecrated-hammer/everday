@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import DataTable from "../../components/DataTable.jsx";
 import Icon from "../../components/Icon.jsx";
@@ -170,13 +170,13 @@ const BudgetAllocations = () => {
   const allocationTableRef = useRef(null);
   const allocationResizeRef = useRef(null);
 
-  const loadAllocationAccounts = async () => {
+  const loadAllocationAccounts = useCallback(async () => {
     const data = await FetchAllocationAccounts();
     setAllocationAccounts(data);
     return data;
-  };
+  }, []);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       setStatus("loading");
       setError("");
@@ -192,11 +192,11 @@ const BudgetAllocations = () => {
       setStatus("error");
       setError(err?.message || "Failed to load allocation data");
     }
-  };
+  }, [loadAllocationAccounts]);
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
 
   useEffect(() => {
     setSplitTargets((prev) =>

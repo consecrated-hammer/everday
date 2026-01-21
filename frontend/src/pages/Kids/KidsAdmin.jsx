@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import {
@@ -55,12 +55,6 @@ const BuildMonthLabel = (dateValue) =>
 const BuildDayLabel = (dateValue) =>
   new Date(`${dateValue}T00:00:00`).toLocaleDateString("en-AU", {
     weekday: "short",
-    day: "numeric",
-    month: "short"
-  });
-
-const BuildShortDate = (dateValue) =>
-  new Date(`${dateValue}T00:00:00`).toLocaleDateString("en-AU", {
     day: "numeric",
     month: "short"
   });
@@ -194,7 +188,7 @@ const KidsAdmin = () => {
     monthCursor.getFullYear() === currentMonth.getFullYear() &&
     monthCursor.getMonth() === currentMonth.getMonth();
 
-  const loadBaseData = async () => {
+  const loadBaseData = useCallback(async () => {
     setStatus("loading");
     setError("");
     try {
@@ -209,9 +203,9 @@ const KidsAdmin = () => {
       setStatus("error");
       setError(err?.message || "Unable to load kids admin data.");
     }
-  };
+  }, []);
 
-  const loadMonthData = async () => {
+  const loadMonthData = useCallback(async () => {
     if (!activeKidId) {
       return;
     }
@@ -229,9 +223,9 @@ const KidsAdmin = () => {
       setStatus("error");
       setError(err?.message || "Unable to load month data.");
     }
-  };
+  }, [activeKidId, monthParam]);
 
-  const loadApprovals = async () => {
+  const loadApprovals = useCallback(async () => {
     if (!activeKidId) {
       setPendingApprovals([]);
       setApprovalsLoaded(false);
@@ -253,9 +247,9 @@ const KidsAdmin = () => {
     } finally {
       setApprovalsLoaded(true);
     }
-  };
+  }, [activeKidId]);
 
-  const loadHistory = async () => {
+  const loadHistory = useCallback(async () => {
     if (!activeKidId) {
       return;
     }
@@ -269,9 +263,9 @@ const KidsAdmin = () => {
       setStatus("error");
       setError(err?.message || "Unable to load history.");
     }
-  };
+  }, [activeKidId]);
 
-  const loadLedger = async () => {
+  const loadLedger = useCallback(async () => {
     if (!activeKidId) {
       return;
     }
@@ -283,9 +277,9 @@ const KidsAdmin = () => {
       setLedgerEntries([]);
       setLedgerBalance(null);
     }
-  };
+  }, [activeKidId]);
 
-  const loadDayDetail = async (dateValue) => {
+  const loadDayDetail = useCallback(async (dateValue) => {
     if (!activeKidId || !dateValue) {
       return;
     }
@@ -298,7 +292,7 @@ const KidsAdmin = () => {
       setDayStatus("error");
       setError(err?.message || "Unable to load day detail.");
     }
-  };
+  }, [activeKidId]);
 
   const refreshDayAndMonth = async (dateValue) => {
     await Promise.all([loadMonthData(), loadDayDetail(dateValue)]);
@@ -324,7 +318,7 @@ const KidsAdmin = () => {
 
   useEffect(() => {
     loadBaseData();
-  }, []);
+  }, [loadBaseData]);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -356,11 +350,11 @@ const KidsAdmin = () => {
 
   useEffect(() => {
     loadMonthData();
-  }, [activeKidId, monthParam]);
+  }, [activeKidId, loadMonthData, monthParam]);
 
   useEffect(() => {
     loadLedger();
-  }, [activeKidId]);
+  }, [activeKidId, loadLedger]);
 
   useEffect(() => {
     if (!activeKidId) {
@@ -369,25 +363,25 @@ const KidsAdmin = () => {
       return;
     }
     loadApprovals();
-  }, [activeKidId]);
+  }, [activeKidId, loadApprovals]);
 
   useEffect(() => {
     if (activeTab === "history") {
       loadHistory();
     }
-  }, [activeTab, activeKidId, monthParam]);
+  }, [activeTab, activeKidId, loadHistory, monthParam]);
 
   useEffect(() => {
     if (activeTab === "approvals") {
       loadApprovals();
     }
-  }, [activeTab, activeKidId]);
+  }, [activeTab, activeKidId, loadApprovals]);
 
   useEffect(() => {
     if (selectedDay) {
       loadDayDetail(selectedDay);
     }
-  }, [selectedDay, activeKidId]);
+  }, [selectedDay, activeKidId, loadDayDetail]);
 
   useEffect(() => {
     if (activeTab === "approvals" && approvalsLoaded && pendingApprovals.length === 0) {

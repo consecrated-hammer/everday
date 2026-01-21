@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
 import {
@@ -66,7 +66,7 @@ const KidsHome = () => {
   const [ledgerEntries, setLedgerEntries] = useState([]);
   const [busyChoreId, setBusyChoreId] = useState(null);
 
-  const loadOverview = async () => {
+  const loadOverview = useCallback(async () => {
     setStatus("loading");
     setError("");
     try {
@@ -77,7 +77,7 @@ const KidsHome = () => {
       setStatus("error");
       setError(err?.message || "Unable to load chores.");
     }
-  };
+  }, []);
 
   useEffect(() => {
     loadOverview();
@@ -90,11 +90,11 @@ const KidsHome = () => {
       }
     };
     loadLedger();
-  }, []);
+  }, [loadOverview]);
 
-  const chores = overview?.Chores || [];
-  const entries = overview?.Entries || [];
-  const projection = overview?.Projection || [];
+  const chores = useMemo(() => overview?.Chores || [], [overview]);
+  const entries = useMemo(() => overview?.Entries || [], [overview]);
+  const projection = useMemo(() => overview?.Projection || [], [overview]);
   const today = overview?.Today || overview?.SelectedDate || "";
   const dayProtected = overview?.DayProtected ?? false;
   const dailySlice = Number(overview?.DailySlice ?? 0);

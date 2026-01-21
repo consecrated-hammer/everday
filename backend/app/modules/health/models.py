@@ -75,6 +75,18 @@ class Settings(Base):
     BarOrder = Column(Text, nullable=False)
     AutoTuneTargetsWeekly = Column(Boolean, nullable=False, default=False)
     LastAutoTuneAt = Column(DateTime(timezone=True))
+    ShowWeightChartOnToday = Column(Boolean, nullable=False, default=True)
+    ShowWeightProjectionOnToday = Column(Boolean, nullable=False, default=True)
+    GoalType = Column(String(20))
+    GoalBmiMin = Column(Numeric(5, 2))
+    GoalBmiMax = Column(Numeric(5, 2))
+    GoalTargetBmi = Column(Numeric(5, 2))
+    GoalStartDate = Column(Date)
+    GoalEndDate = Column(Date)
+    GoalSetAt = Column(DateTime(timezone=True))
+    GoalUpdatedAt = Column(DateTime(timezone=True))
+    GoalCompletedAt = Column(DateTime(timezone=True))
+    GoalCompletionNotifiedAt = Column(DateTime(timezone=True))
     CreatedAt = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
 
 

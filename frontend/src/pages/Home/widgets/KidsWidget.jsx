@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
 import Icon from "../../../components/Icon.jsx";
@@ -98,6 +98,12 @@ const KidsWidget = () => {
     return () => window.removeEventListener("dashboard-widget-action", handler);
   }, []);
 
+  const closeModal = useCallback(() => {
+    setShowModal(false);
+    setFormError("");
+    setForm(EmptyTransaction(selectedKidId || kidOptions[0]?.Id));
+  }, [kidOptions, selectedKidId]);
+
   useEffect(() => {
     if (!showModal) {
       return;
@@ -110,13 +116,7 @@ const KidsWidget = () => {
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [showModal]);
-
-  const closeModal = () => {
-    setShowModal(false);
-    setFormError("");
-    setForm(EmptyTransaction(selectedKidId || kidOptions[0]?.Id));
-  };
+  }, [closeModal, showModal]);
 
   const onFormChange = (event) => {
     const { name, value } = event.target;

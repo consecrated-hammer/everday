@@ -28,6 +28,7 @@ When implementing a task, respond with:
 - What you changed (file paths)
 - How to run/verify (fast path first)
 - Any follow-ups or TODOs you intentionally deferred
+- Note any skipped checks (lint/tests/CI parity/audits) and why
 
 Do not ask questions unless truly blocking. Make a reasonable assumption and proceed, stating the assumption.
 
@@ -49,15 +50,17 @@ Do not ask questions unless truly blocking. Make a reasonable assumption and pro
   - Assumptions (explicit)
   - Decisions (defaults chosen)
   - OpenQuestions (only if non-blocking)
+- When listing QuickNotes/Assumptions/Decisions/OpenQuestions, prefix each item with a short id (q1:, a1:, d1:, o1:) instead of plain bullets.
 
 ### Discovery Mode
 - Challenge assumptions and confirm intent before feature implementation.
 - Ask questions in a single batch, grouped by:
   - MustAnswerNow (blocking)
-  - CanAssume (provide 1–2 recommended defaults for each)
+  - CanAssume (provide 1-2 recommended defaults for each)
 - QuestionLimit: 10 (total)
 - Do not start feature implementation until MustAnswerNow is answered.
 - You may proceed with scaffolding only if it is non-committal and clearly labelled as scaffolding.
+- When listing QuickNotes/MustAnswerNow/CanAssume, prefix each item with a short id (q1:, m1:, c1:) instead of plain bullets.
 
 ### Manual override
 - The user can always force a mode by starting the prompt with:
@@ -72,7 +75,7 @@ Do not ask questions unless truly blocking. Make a reasonable assumption and pro
 - Use a tiered verification approach:
 
 ### Tier 1: FastChecks (default, run frequently)
-- Lint/format/typecheck if available
+- Lint/format/typecheck if available (for frontend changes, run `npm run lint` when defined; if missing, report that)
 - Only the most relevant unit tests (single module or small subset)
 - Do not run full suites unless a change touches many modules or core utilities
 
@@ -136,9 +139,10 @@ If tests are slow, prioritise Tier 1 during implementation, then Tier 2 at the e
 A task is “done” when:
 - The feature works end-to-end in the intended flow
 - FastChecks pass
+- Lint is clean with zero warnings and errors when lint is available
 - Any new public behaviour is documented (README or inline docs)
 - Deferred items are captured as TODOs with clear next steps
-- `scripts/dev.sh` has been run after completing the task (unless the user requests skipping it)
+- `scripts/dev.sh` has been run after code changes (not docs-only) and before the final response (unless the user requests skipping it)
 
 
 # Household App Addendum (Project-Specific)

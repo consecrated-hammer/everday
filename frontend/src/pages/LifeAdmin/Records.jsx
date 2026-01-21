@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import DataTable from "../../components/DataTable.jsx";
 import { CreateLifeRecord, DeleteLifeRecord, UpdateLifeRecord } from "../../lib/lifeAdminApi.js";
@@ -282,7 +282,7 @@ const Records = () => {
     }
   };
 
-  const formatValue = (field, value) => {
+  const formatValue = useCallback((field, value) => {
     if (value === null || value === undefined) {
       return "";
     }
@@ -311,7 +311,7 @@ const Records = () => {
       return value ? "Yes" : "No";
     }
     return value;
-  };
+  }, [dropdownLabelMap, personMap, recordLabelMap]);
 
   const tableRows = useMemo(
     () =>
@@ -323,7 +323,7 @@ const Records = () => {
         });
         return row;
       }),
-    [records, fields, dropdownLabelMap, personMap, recordLabelMap]
+    [records, fields, formatValue]
   );
 
   const columns = useMemo(() => {
