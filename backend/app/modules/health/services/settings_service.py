@@ -7,7 +7,23 @@ from sqlalchemy.orm import Session
 
 from app.modules.auth.models import User
 from app.modules.health.models import Settings as SettingsModel
-from app.modules.health.schemas import Targets, UpdateProfileInput, UpdateSettingsInput, UserProfile, UserSettings
+from app.modules.health.schemas import (
+    GoalRecommendationInput,
+    GoalSummary,
+    GoalType,
+    Targets,
+    UpdateProfileInput,
+    UpdateSettingsInput,
+    UserProfile,
+    UserSettings,
+)
+from app.modules.health.services.goal_service import (
+    AddMonths,
+    CalculateBmi,
+    BuildGoalPlan,
+    BuildGoalSummary,
+    IsGoalMet,
+)
 from app.modules.health.services.daily_logs_service import UpdateUserWeightFromLatestLog
 from app.modules.health.services.nutrition_recommendations_service import (
     CalculateAge,
@@ -15,6 +31,7 @@ from app.modules.health.services.nutrition_recommendations_service import (
 )
 from app.modules.health.services.recommendation_logs_service import SaveRecommendationLog
 from app.modules.health.utils.defaults import DefaultTargets, DefaultTodayLayout
+from app.modules.notifications.services import CreateNotification
 
 Logger = logging.getLogger(__name__)
 
@@ -47,6 +64,11 @@ def _SerializeBarOrder(value: list[str]) -> str:
 def _ShouldAutoTuneTargets(record: SettingsModel) -> bool:
     if not record.AutoTuneTargetsWeekly:
         return False
+    Today = datetime.now(timezone.utc).date()
+    if record.GoalCompletedAt is not None:
+        return False
+    if record.GoalEndDate and Today > record.GoalEndDate:
+        return False
     if record.LastAutoTuneAt is None:
         return True
     return datetime.now(timezone.utc) - record.LastAutoTuneAt >= AutoTuneInterval
@@ -56,6 +78,121 @@ def _ProfileReady(profile: UserProfile) -> bool:
     return bool(
         profile.BirthDate and profile.HeightCm and profile.WeightKg and profile.ActivityLevel
     )
+
+
+def _GoalConfigReady(record: SettingsModel) -> bool:
+    return bool(
+        record.GoalType
+        and record.GoalBmiMin is not None
+        and record.GoalBmiMax is not None
+        and record.GoalStartDate
+        and record.GoalEndDate
+    )
+
+
+def _ParseGoalType(value: str | None) -> GoalType | None:
+    if not value:
+        return None
+    try:
+        return GoalType(value)
+    except ValueError:
+        return None
+
+
+def _BuildGoalPlanFromRecord(profile: UserProfile, record: SettingsModel):
+    GoalTypeValue = _ParseGoalType(record.GoalType)
+    if GoalTypeValue is None:
+        return None
+    if not record.GoalStartDate or not record.GoalEndDate:
+        return None
+    if not _ProfileReady(profile):
+        return None
+    Age = CalculateAge(profile.BirthDate.strftime("%Y-%m-%d"))
+    return BuildGoalPlan(
+        GoalTypeValue=GoalTypeValue,
+        BmiMin=float(record.GoalBmiMin),
+        BmiMax=float(record.GoalBmiMax),
+        StartDate=record.GoalStartDate,
+        EndDate=record.GoalEndDate,
+        CurrentWeightKg=float(profile.WeightKg),
+        HeightCm=profile.HeightCm,
+        Age=Age,
+        ActivityLevel=profile.ActivityLevel,
+        TargetBmiOverride=float(record.GoalTargetBmi) if record.GoalTargetBmi is not None else None,
+    )
+
+
+def _BuildGoalPlanFromInput(profile: UserProfile, Input: GoalRecommendationInput, Today: datetime):
+    if not _ProfileReady(profile):
+        raise ValueError("Complete birth date, height, weight, and activity level first.")
+    StartDate = Input.StartDate or Today.date()
+    EndDate = Input.EndDateOverride or AddMonths(StartDate, Input.DurationMonths)
+    Age = CalculateAge(profile.BirthDate.strftime("%Y-%m-%d"))
+    TargetBmiOverride = (
+        CalculateBmi(Input.TargetWeightKgOverride, profile.HeightCm)
+        if Input.TargetWeightKgOverride is not None
+        else None
+    )
+    return BuildGoalPlan(
+        GoalTypeValue=Input.GoalType,
+        BmiMin=float(Input.BmiMin),
+        BmiMax=float(Input.BmiMax),
+        StartDate=StartDate,
+        EndDate=EndDate,
+        CurrentWeightKg=float(profile.WeightKg),
+        HeightCm=profile.HeightCm,
+        Age=Age,
+        ActivityLevel=profile.ActivityLevel,
+        TargetBmiOverride=TargetBmiOverride,
+    )
+
+
+def _BuildGoalContext(Plan) -> str:
+    Direction = Plan.GoalType.value
+    return (
+        f"Goal type: {Direction}\n"
+        f"Target BMI range: {Plan.BmiMin:.1f}-{Plan.BmiMax:.1f}\n"
+        f"Current BMI: {Plan.CurrentBmi:.1f}\n"
+        f"Target BMI: {Plan.TargetBmi:.1f}\n"
+        f"Target weight: {Plan.TargetWeightKg:.1f} kg by {Plan.EndDate.isoformat()}\n"
+        f"Planned daily calorie delta: {Plan.DailyCalorieDelta:.0f} kcal"
+    )
+
+
+def _TryUpdateGoalStatus(
+    db: Session,
+    UserId: int,
+    record: SettingsModel,
+    profile: UserProfile,
+) -> GoalSummary | None:
+    if not _GoalConfigReady(record):
+        return None
+    Plan = _BuildGoalPlanFromRecord(profile, record)
+    if not Plan:
+        return None
+    Now = datetime.now(timezone.utc)
+    Summary = BuildGoalSummary(Plan, CompletedAt=record.GoalCompletedAt, Today=Now.date())
+    if record.GoalCompletedAt is None and IsGoalMet(Plan, Now.date()):
+        record.GoalCompletedAt = Now
+        if record.GoalCompletionNotifiedAt is None:
+            record.GoalCompletionNotifiedAt = Now
+        db.add(record)
+        db.commit()
+        db.refresh(record)
+        CreateNotification(
+            db,
+            user_id=UserId,
+            created_by_user_id=UserId,
+            title="Goal reached",
+            body="Your BMI target has been met. Update your goal to keep targets current.",
+            notification_type="Health",
+            link_url="/settings/health",
+            action_label="Update goal",
+            source_module="health",
+            source_id=str(record.SettingsId),
+        )
+        Summary = BuildGoalSummary(Plan, CompletedAt=record.GoalCompletedAt, Today=Now.date())
+    return Summary
 
 
 def _TryAutoTuneTargets(db: Session, UserId: int, record: SettingsModel) -> SettingsModel:
@@ -71,11 +208,16 @@ def _TryAutoTuneTargets(db: Session, UserId: int, record: SettingsModel) -> Sett
 
     try:
         age = CalculateAge(profile.BirthDate.strftime("%Y-%m-%d"))
+        GoalPlan = _BuildGoalPlanFromRecord(profile, record)
+        GoalContext = _BuildGoalContext(GoalPlan) if GoalPlan else None
+        DailyCalorieTarget = GoalPlan.DailyCalorieTarget if GoalPlan else None
         recommendation, _model_used = GetAiNutritionRecommendations(
             Age=age,
             HeightCm=profile.HeightCm,
             WeightKg=profile.WeightKg,
             ActivityLevel=profile.ActivityLevel,
+            DailyCalorieTarget=DailyCalorieTarget,
+            GoalContext=GoalContext,
         )
         SaveRecommendationLog(
             db,
@@ -135,6 +277,18 @@ def EnsureSettingsForUser(db: Session, UserId: int) -> SettingsModel:
         BarOrder=_SerializeBarOrder(DefaultTargets.BarOrder),
         AutoTuneTargetsWeekly=False,
         LastAutoTuneAt=None,
+        ShowWeightChartOnToday=True,
+        ShowWeightProjectionOnToday=True,
+        GoalType=None,
+        GoalBmiMin=None,
+        GoalBmiMax=None,
+        GoalTargetBmi=None,
+        GoalStartDate=None,
+        GoalEndDate=None,
+        GoalSetAt=None,
+        GoalUpdatedAt=None,
+        GoalCompletedAt=None,
+        GoalCompletionNotifiedAt=None,
     )
     db.add(record)
     db.commit()
@@ -170,15 +324,108 @@ def GetSettings(db: Session, UserId: int) -> Targets:
     )
 
 
+def GetGoalRecommendation(
+    db: Session,
+    UserId: int,
+    Input: GoalRecommendationInput | None,
+) -> tuple:
+    record = EnsureSettingsForUser(db, UserId)
+    profile = GetUserProfile(db, UserId, IsAdmin=False)
+    if not _ProfileReady(profile):
+        raise ValueError("Complete birth date, height, weight, and activity level first.")
+
+    Now = datetime.now(timezone.utc)
+    GoalPlan = None
+    GoalSummaryValue = None
+    if Input is not None:
+        GoalPlan = _BuildGoalPlanFromInput(profile, Input, Now)
+        GoalSummaryValue = BuildGoalSummary(GoalPlan, CompletedAt=None, Today=Now.date())
+    elif _GoalConfigReady(record):
+        GoalPlan = _BuildGoalPlanFromRecord(profile, record)
+        if GoalPlan:
+            GoalSummaryValue = BuildGoalSummary(
+                GoalPlan, CompletedAt=record.GoalCompletedAt, Today=Now.date()
+            )
+
+    GoalContext = _BuildGoalContext(GoalPlan) if GoalPlan else None
+    DailyCalorieTarget = GoalPlan.DailyCalorieTarget if GoalPlan else None
+    age = CalculateAge(profile.BirthDate.strftime("%Y-%m-%d"))
+    recommendation, model_used = GetAiNutritionRecommendations(
+        Age=age,
+        HeightCm=profile.HeightCm,
+        WeightKg=profile.WeightKg,
+        ActivityLevel=profile.ActivityLevel,
+        DailyCalorieTarget=DailyCalorieTarget,
+        GoalContext=GoalContext,
+    )
+
+    SaveRecommendationLog(
+        db,
+        UserId=UserId,
+        Age=age,
+        HeightCm=profile.HeightCm,
+        WeightKg=profile.WeightKg,
+        ActivityLevel=profile.ActivityLevel,
+        Recommendation=recommendation,
+    )
+
+    if Input is not None and Input.ApplyGoal and GoalPlan:
+        record.GoalType = GoalPlan.GoalType.value
+        record.GoalBmiMin = GoalPlan.BmiMin
+        record.GoalBmiMax = GoalPlan.BmiMax
+        record.GoalTargetBmi = (
+            GoalPlan.TargetBmi if Input.TargetWeightKgOverride is not None else None
+        )
+        record.GoalStartDate = GoalPlan.StartDate
+        record.GoalEndDate = GoalPlan.EndDate
+        record.GoalCompletedAt = None
+        record.GoalCompletionNotifiedAt = None
+        if record.GoalSetAt is None:
+            record.GoalSetAt = Now
+        record.GoalUpdatedAt = Now
+        if Input.DailyCalorieTargetOverride is not None:
+            recommendation.DailyCalorieTarget = Input.DailyCalorieTargetOverride
+        record.DailyCalorieTarget = recommendation.DailyCalorieTarget
+        record.ProteinTargetMin = recommendation.ProteinTargetMin
+        record.ProteinTargetMax = recommendation.ProteinTargetMax
+        record.FibreTarget = recommendation.FibreTarget
+        record.CarbsTarget = recommendation.CarbsTarget
+        record.FatTarget = recommendation.FatTarget
+        record.SaturatedFatTarget = recommendation.SaturatedFatTarget
+        record.SugarTarget = recommendation.SugarTarget
+        record.SodiumTarget = recommendation.SodiumTarget
+        db.add(record)
+        db.commit()
+        db.refresh(record)
+        GoalSummaryValue = BuildGoalSummary(GoalPlan, CompletedAt=None, Today=Now.date())
+
+    return recommendation, model_used, GoalSummaryValue
+
+
 def GetUserSettings(db: Session, UserId: int) -> UserSettings:
     record = EnsureSettingsForUser(db, UserId)
     record = _TryAutoTuneTargets(db, UserId, record)
+    GoalSummaryValue = None
+    if _GoalConfigReady(record):
+        try:
+            profile = GetUserProfile(db, UserId, IsAdmin=False)
+        except ValueError:
+            profile = None
+        if profile and _ProfileReady(profile):
+            GoalSummaryValue = _TryUpdateGoalStatus(db, UserId, record, profile)
     targets = GetSettings(db, UserId)
     return UserSettings(
         Targets=targets,
         TodayLayout=_ParseLayout(record.TodayLayout),
         AutoTuneTargetsWeekly=bool(record.AutoTuneTargetsWeekly),
         LastAutoTuneAt=record.LastAutoTuneAt,
+        Goal=GoalSummaryValue,
+        ShowWeightChartOnToday=bool(record.ShowWeightChartOnToday)
+        if record.ShowWeightChartOnToday is not None
+        else True,
+        ShowWeightProjectionOnToday=bool(record.ShowWeightProjectionOnToday)
+        if record.ShowWeightProjectionOnToday is not None
+        else True,
     )
 
 

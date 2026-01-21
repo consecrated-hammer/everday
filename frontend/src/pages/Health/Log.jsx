@@ -87,17 +87,6 @@ const FormatAmount = (value) => {
   }
   return Number.isInteger(numeric) ? String(numeric) : String(Number(numeric.toFixed(2)));
 };
-const NormalizeServingLabel = (value) => {
-  const label = (value || "").trim();
-  if (!label) {
-    return "";
-  }
-  const normalized = label.toLowerCase();
-  if (normalized === "serve" || normalized === "meal") {
-    return "serving";
-  }
-  return label;
-};
 const FormatNumber = (value, options = {}) => {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) {
@@ -973,11 +962,6 @@ const Log = ({ InitialDate, InitialAddMode }) => {
     [templates]
   );
 
-  const getTemplateServingLabel = (template) => {
-    const servings = resolveTemplateServings(template);
-    return servings > 1 ? `1 of ${FormatAmount(servings)} servings` : "1 serving";
-  };
-
   const templateCalories = useMemo(() => {
     const totals = {};
     templates.forEach((template) => {
@@ -1148,33 +1132,6 @@ const Log = ({ InitialDate, InitialAddMode }) => {
     }
     return EstimateNutrition(selectedFood, effectiveBaseAmount * quantityValue, effectiveBaseUnit);
   }, [effectiveBaseAmount, effectiveBaseUnit, quantityValue, selectedFood]);
-  const editCalories = useMemo(() => {
-    if (!form.SelectedId || !Number.isFinite(quantityValue)) {
-      return null;
-    }
-    if (isFoodSelected) {
-      if (Number.isFinite(estimatedCalories)) {
-        return estimatedCalories;
-      }
-      const base = Number(selectedFood?.CaloriesPerServing || 0);
-      return Math.round(base * quantityValue);
-    }
-    if (isTemplateSelected) {
-      const base = Number(templateCalories[selectedValue] || 0);
-      return Math.round(base * quantityValue);
-    }
-    return null;
-  }, [
-    estimatedCalories,
-    form.SelectedId,
-    isFoodSelected,
-    isTemplateSelected,
-    quantityValue,
-    selectedFood,
-    selectedValue,
-    templateCalories
-  ]);
-
   const startMealFlow = (mealType, backTarget = "slots") => {
     setActiveMealType(mealType);
     setReturnView(backTarget);
@@ -1649,7 +1606,10 @@ const Log = ({ InitialDate, InitialAddMode }) => {
     }
   };
 
-  const slotEntries = groupedEntries[activeMealType] || [];
+  const slotEntries = useMemo(
+    () => groupedEntries[activeMealType] || [],
+    [activeMealType, groupedEntries]
+  );
   const slotCalories = Math.round(slotTotals[activeMealType] || 0);
   const slotProtein = useMemo(() => {
     return slotEntries.reduce(

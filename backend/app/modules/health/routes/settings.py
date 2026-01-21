@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.db import GetDb
 from app.modules.auth.deps import RequireModuleRole, UserContext
 from app.modules.health.schemas import (
+    GoalRecommendationInput,
     NutritionRecommendationResponse,
     RecommendationLogListResponse,
     UpdateProfileInput,
@@ -11,15 +12,11 @@ from app.modules.health.schemas import (
     UserProfile,
     UserSettings,
 )
-from app.modules.health.services.nutrition_recommendations_service import (
-    CalculateAge,
-    GetAiNutritionRecommendations,
-)
 from app.modules.health.services.recommendation_logs_service import (
     GetRecommendationLogsByUser,
-    SaveRecommendationLog,
 )
 from app.modules.health.services.settings_service import (
+    GetGoalRecommendation,
     GetUserProfile,
     GetUserSettings,
     UpdateSettings,
@@ -75,40 +72,15 @@ def UpdateProfileRoute(
 
 @router.post("/ai-recommendations", response_model=NutritionRecommendationResponse)
 def GetAiRecommendations(
+    payload: GoalRecommendationInput | None = None,
     db: Session = Depends(GetDb),
     user: UserContext = Depends(RequireModuleRole("health", write=True)),
 ) -> NutritionRecommendationResponse:
-    profile = GetUserProfile(db, user.Id, IsAdmin=IsParent(user))
-    if not profile.BirthDate:
-        raise HTTPException(status_code=400, detail="Birthdate is required for recommendations.")
-    if not profile.HeightCm:
-        raise HTTPException(status_code=400, detail="Height is required for recommendations.")
-    if not profile.WeightKg:
-        raise HTTPException(status_code=400, detail="Weight is required for recommendations.")
-    if not profile.ActivityLevel:
-        raise HTTPException(status_code=400, detail="Activity level is required for recommendations.")
-
     try:
-        age = CalculateAge(profile.BirthDate.strftime("%Y-%m-%d"))
-        recommendation, model_used = GetAiNutritionRecommendations(
-            Age=age,
-            HeightCm=profile.HeightCm,
-            WeightKg=profile.WeightKg,
-            ActivityLevel=profile.ActivityLevel,
-        )
-
-        SaveRecommendationLog(
-            db,
-            UserId=user.Id,
-            Age=age,
-            HeightCm=profile.HeightCm,
-            WeightKg=profile.WeightKg,
-            ActivityLevel=profile.ActivityLevel,
-            Recommendation=recommendation,
-        )
-
+        recommendation, model_used, goal_summary = GetGoalRecommendation(db, user.Id, payload)
         response_data = recommendation.ToDict()
         response_data["ModelUsed"] = model_used
+        response_data["Goal"] = goal_summary
         return NutritionRecommendationResponse(**response_data)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

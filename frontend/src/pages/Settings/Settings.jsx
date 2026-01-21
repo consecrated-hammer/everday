@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { NavLink, useParams } from "react-router-dom";
 
 import {
   CreateUser,
@@ -37,6 +38,20 @@ const ActivityOptions = [
   { value: "very_active", label: "Very active" },
   { value: "extra_active", label: "Extra active" }
 ];
+const GoalTypeOptions = [
+  { value: "lose", label: "Lose weight" },
+  { value: "maintain", label: "Maintain weight" },
+  { value: "gain", label: "Gain weight" }
+];
+const BmiRangeOptions = [
+  { key: "underweight", label: "Underweight (below 18.5)", min: 0, max: 18.4 },
+  { key: "normal", label: "Normal (18.5 to 24.9)", min: 18.5, max: 24.9 },
+  { key: "overweight", label: "Overweight (25 to 29.9)", min: 25, max: 29.9 },
+  { key: "obese", label: "Obese (30 to 34.9)", min: 30, max: 34.9 },
+  { key: "severe", label: "Severe obesity (35 to 39.9)", min: 35, max: 39.9 },
+  { key: "extreme", label: "Extreme obesity (40+)", min: 40, max: 60 }
+];
+const GoalDurationOptions = [3, 6, 9, 12, 18, 24];
 const EmptyHealthProfile = {
   FirstName: "",
   LastName: "",
@@ -79,11 +94,77 @@ const BuildHealthTargetsState = (targets) => ({
   SodiumTarget: targets.SodiumTarget ?? ""
 });
 
+const CalculateBmi = (weightKg, heightCm) => {
+  const weight = Number(weightKg);
+  const height = Number(heightCm);
+  if (!weight || !height) return null;
+  const meters = height / 100;
+  if (!meters) return null;
+  return weight / (meters * meters);
+};
+
+const FormatNumber = (value, digits = 1) => {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) {
+    return "--";
+  }
+  return Number(value).toFixed(digits);
+};
+
+const FormatDate = (value) => {
+  if (!value) return "--";
+  const parsed =
+    typeof value === "string" && value.length === 10
+      ? new Date(`${value}T00:00:00`)
+      : new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return String(value);
+  }
+  return parsed.toLocaleDateString();
+};
+
+const FindBmiRangeForValue = (value) => {
+  if (value === null || value === undefined) return null;
+  return BmiRangeOptions.find((option) => value >= option.min && value <= option.max) || null;
+};
+
+const FindBmiRangeKey = (min, max) => {
+  if (min === null || max === null || min === undefined || max === undefined) {
+    return "normal";
+  }
+  const match = BmiRangeOptions.find(
+    (option) => Math.abs(option.min - min) < 0.2 && Math.abs(option.max - max) < 0.2
+  );
+  return match ? match.key : "normal";
+};
+
+const AddMonthsToDate = (value, months) => {
+  if (!value) return "";
+  const base = new Date(value);
+  if (Number.isNaN(base.getTime())) return "";
+  const month = base.getMonth();
+  base.setMonth(month + Number(months || 0));
+  return base.toISOString().slice(0, 10);
+};
+
+const CalculateDurationMonths = (startValue, endValue) => {
+  if (!startValue || !endValue) return 6;
+  const start = new Date(startValue);
+  const end = new Date(endValue);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return 6;
+  const months = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth());
+  return Math.max(1, months || 6);
+};
+
+const GetGoalTypeLabel = (value) => {
+  const match = GoalTypeOptions.find((option) => option.value === value);
+  return match ? match.label : value || "Goal";
+};
+
 const Settings = () => {
   const [users, setUsers] = useState([]);
   const [status, setStatus] = useState("idle");
   const [error, setError] = useState("");
-  const [activeSection, setActiveSection] = useState(null);
+  const { section } = useParams();
   const [passwordTarget, setPasswordTarget] = useState(null);
   const [passwordForm, setPasswordForm] = useState({ NewPassword: "", ConfirmPassword: "" });
   const [profileTarget, setProfileTarget] = useState(null);
@@ -102,6 +183,21 @@ const Settings = () => {
   const [healthRecommendationHistory, setHealthRecommendationHistory] = useState([]);
   const [healthAutoTuneWeekly, setHealthAutoTuneWeekly] = useState(false);
   const [healthAutoTuneLastRunAt, setHealthAutoTuneLastRunAt] = useState(null);
+  const [healthGoal, setHealthGoal] = useState(null);
+  const [healthShowWeightChart, setHealthShowWeightChart] = useState(true);
+  const [healthShowWeightProjection, setHealthShowWeightProjection] = useState(true);
+  const [goalWizardOpen, setGoalWizardOpen] = useState(false);
+  const [goalWizardStep, setGoalWizardStep] = useState(0);
+  const [goalWizardStatus, setGoalWizardStatus] = useState("idle");
+  const [goalWizardError, setGoalWizardError] = useState("");
+  const [goalWizardPreview, setGoalWizardPreview] = useState(null);
+  const [goalWizardAdjustments, setGoalWizardAdjustments] = useState(null);
+  const [goalWizardForm, setGoalWizardForm] = useState({
+    GoalType: "lose",
+    BmiRangeKey: "normal",
+    StartDate: "",
+    DurationMonths: 6
+  });
   const [uiSettings, setUiSettings] = useState(() => GetUiSettings());
   const [apiStatus, setApiStatus] = useState("checking");
   const [dbStatus, setDbStatus] = useState("checking");
@@ -119,6 +215,8 @@ const Settings = () => {
     RequirePasswordChange: false
   });
   const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:8100";
+  const settingsSections = ["appearance", "dashboard", "health", "system", "access"];
+  const activeSection = settingsSections.includes(section) ? section : null;
 
   const loadUsers = async () => {
     try {
@@ -149,7 +247,7 @@ const Settings = () => {
     }
   };
 
-  const loadSystemStatus = async () => {
+  const loadSystemStatus = useCallback(async () => {
     try {
       setSystemStatus("loading");
       setApiStatus("checking");
@@ -171,7 +269,7 @@ const Settings = () => {
     } finally {
       setSystemStatus("ready");
     }
-  };
+  }, [apiBaseUrl]);
 
   useEffect(() => {
     loadUsers();
@@ -182,7 +280,7 @@ const Settings = () => {
       return;
     }
     loadSystemStatus();
-  }, [activeSection, apiBaseUrl]);
+  }, [activeSection, loadSystemStatus]);
 
   const onNewUserChange = (event) => {
     const { name, value, type, checked } = event.target;
@@ -263,6 +361,9 @@ const Settings = () => {
       setHealthAutoTuneLastRunAt(
         settings.LastAutoTuneAt ? new Date(settings.LastAutoTuneAt) : null
       );
+      setHealthGoal(settings.Goal || null);
+      setHealthShowWeightChart(settings.ShowWeightChartOnToday !== false);
+      setHealthShowWeightProjection(settings.ShowWeightProjectionOnToday !== false);
       setHealthRecommendationHistory(history.Logs || []);
       setHealthStatus("ready");
     } catch (err) {
@@ -445,7 +546,9 @@ const Settings = () => {
         ShowFatOnToday: healthTargets.ShowFatOnToday,
         ShowSaturatedFatOnToday: healthTargets.ShowSaturatedFatOnToday,
         ShowSugarOnToday: healthTargets.ShowSugarOnToday,
-        ShowSodiumOnToday: healthTargets.ShowSodiumOnToday
+        ShowSodiumOnToday: healthTargets.ShowSodiumOnToday,
+        ShowWeightChartOnToday: healthShowWeightChart,
+        ShowWeightProjectionOnToday: healthShowWeightProjection
       });
       await loadHealthSettings();
     } catch (err) {
@@ -460,6 +563,9 @@ const Settings = () => {
       setHealthError("");
       const result = await GetAiRecommendations();
       setHealthRecommendation(result);
+      if (result?.Goal) {
+        setHealthGoal(result.Goal);
+      }
       setHealthAiStatus("ready");
     } catch (err) {
       setHealthAiStatus("error");
@@ -506,12 +612,166 @@ const Settings = () => {
     }
   };
 
+  const buildGoalFormDefaults = () => {
+    const today = new Date().toISOString().slice(0, 10);
+    if (!healthGoal) {
+      return {
+        GoalType: "lose",
+        BmiRangeKey: "normal",
+        StartDate: today,
+        DurationMonths: 6
+      };
+    }
+    return {
+      GoalType: healthGoal.GoalType || "lose",
+      BmiRangeKey: FindBmiRangeKey(healthGoal.BmiMin, healthGoal.BmiMax),
+      StartDate: healthGoal.StartDate || today,
+      DurationMonths: CalculateDurationMonths(healthGoal.StartDate, healthGoal.EndDate)
+    };
+  };
+
+  const openGoalWizard = () => {
+    setGoalWizardForm(buildGoalFormDefaults());
+    setGoalWizardStep(0);
+    setGoalWizardPreview(null);
+    setGoalWizardAdjustments(null);
+    setGoalWizardError("");
+    setGoalWizardStatus("idle");
+    setGoalWizardOpen(true);
+  };
+
+  const closeGoalWizard = () => {
+    setGoalWizardOpen(false);
+    setGoalWizardError("");
+    setGoalWizardPreview(null);
+    setGoalWizardAdjustments(null);
+  };
+
+  const onGoalFormChange = (event) => {
+    const { name, value } = event.target;
+    setGoalWizardForm((prev) => ({
+      ...prev,
+      [name]: name === "DurationMonths" ? Number(value) : value
+    }));
+  };
+
+  const onGoalAdjustmentChange = (event) => {
+    const { name, value } = event.target;
+    setGoalWizardAdjustments((prev) => ({
+      ...(prev || {}),
+      [name]: value
+    }));
+  };
+
+  const buildGoalPayload = (applyGoal) => {
+    const range =
+      BmiRangeOptions.find((option) => option.key === goalWizardForm.BmiRangeKey) ||
+      BmiRangeOptions[1];
+    const payload = {
+      GoalType: goalWizardForm.GoalType,
+      BmiMin: range.min,
+      BmiMax: range.max,
+      StartDate: goalWizardForm.StartDate || undefined,
+      DurationMonths: Number(goalWizardForm.DurationMonths || 6),
+      ApplyGoal: applyGoal
+    };
+    if (applyGoal && goalWizardAdjustments) {
+      const previewDaily = Number(goalWizardPreview?.DailyCalorieTarget);
+      const previewTargetWeight = Number(goalWizardPreview?.Goal?.TargetWeightKg);
+      const previewEndDate = goalWizardPreview?.Goal?.EndDate || "";
+      const nextDaily = Number(goalWizardAdjustments.DailyCalorieTarget);
+      if (Number.isFinite(nextDaily) && nextDaily !== previewDaily) {
+        payload.DailyCalorieTargetOverride = nextDaily;
+      }
+      const nextTargetWeight = Number(goalWizardAdjustments.TargetWeightKg);
+      if (Number.isFinite(nextTargetWeight) && nextTargetWeight !== previewTargetWeight) {
+        payload.TargetWeightKgOverride = nextTargetWeight;
+      }
+      if (goalWizardAdjustments.EndDate && goalWizardAdjustments.EndDate !== previewEndDate) {
+        payload.EndDateOverride = goalWizardAdjustments.EndDate;
+      }
+    }
+    return payload;
+  };
+
+  const previewGoalRecommendation = async () => {
+    try {
+      setGoalWizardStatus("loading");
+      setGoalWizardError("");
+      const response = await GetAiRecommendations(buildGoalPayload(false));
+      setGoalWizardPreview(response);
+      if (response?.Goal) {
+        setGoalWizardAdjustments({
+          DailyCalorieTarget:
+            response.DailyCalorieTarget !== null && response.DailyCalorieTarget !== undefined
+              ? String(response.DailyCalorieTarget)
+              : "",
+          TargetWeightKg:
+            response.Goal.TargetWeightKg !== null && response.Goal.TargetWeightKg !== undefined
+              ? String(response.Goal.TargetWeightKg)
+              : "",
+          EndDate: response.Goal.EndDate || ""
+        });
+      }
+      setGoalWizardStatus("ready");
+    } catch (err) {
+      setGoalWizardStatus("error");
+      setGoalWizardError(err?.message || "Failed to preview goal targets");
+    }
+  };
+
+  const applyGoalRecommendation = async () => {
+    try {
+      setGoalWizardStatus("saving");
+      setGoalWizardError("");
+      const response = await GetAiRecommendations(buildGoalPayload(true));
+      setHealthRecommendation(response);
+      await loadHealthSettings();
+      setGoalWizardOpen(false);
+      setGoalWizardStatus("ready");
+    } catch (err) {
+      setGoalWizardStatus("error");
+      setGoalWizardError(err?.message || "Failed to save goal targets");
+    }
+  };
+
+  const goToGoalStep = (step) => {
+    setGoalWizardStep(step);
+    if (step === 2) {
+      previewGoalRecommendation();
+    }
+  };
+
   const onUiChange = (event) => {
     const { name, value, type, checked } = event.target;
     const nextValue = type === "checkbox" ? checked : value;
     const updated = SetUiSettings({ [name]: nextValue });
     setUiSettings(updated);
   };
+
+  const currentBmi = CalculateBmi(healthProfile.WeightKg, healthProfile.HeightCm);
+  const currentBmiRange = FindBmiRangeForValue(currentBmi);
+  const isProfileComplete = Boolean(
+    healthProfile.BirthDate &&
+      healthProfile.HeightCm &&
+      healthProfile.WeightKg &&
+      healthProfile.ActivityLevel
+  );
+  const goalPreview = goalWizardPreview?.Goal || null;
+  const adjustedDailyCalories =
+    goalWizardAdjustments?.DailyCalorieTarget ??
+    goalWizardPreview?.DailyCalorieTarget ??
+    "--";
+  const adjustedTargetWeight =
+    goalWizardAdjustments?.TargetWeightKg ?? goalPreview?.TargetWeightKg ?? null;
+  const adjustedEndDate = goalWizardAdjustments?.EndDate ?? goalPreview?.EndDate ?? "";
+  const adjustedWeightDelta =
+    adjustedTargetWeight !== null &&
+    adjustedTargetWeight !== "" &&
+    goalPreview?.CurrentWeightKg !== null &&
+    goalPreview?.CurrentWeightKg !== undefined
+      ? Number(adjustedTargetWeight) - Number(goalPreview.CurrentWeightKg)
+      : goalPreview?.WeightDeltaKg ?? null;
 
   return (
     <div className="module-panel">
@@ -524,42 +784,47 @@ const Settings = () => {
       <div className="settings-layout">
         <aside className="settings-nav">
           <p className="settings-nav-title">Account</p>
-          <button
-            type="button"
-            className={`settings-nav-item${activeSection === "appearance" ? " is-active" : ""}`}
-            onClick={() => setActiveSection("appearance")}
+          <NavLink
+            to="/settings/appearance"
+            className={({ isActive }) =>
+              `settings-nav-item${isActive ? " is-active" : ""}`
+            }
           >
             Appearance
-          </button>
-          <button
-            type="button"
-            className={`settings-nav-item${activeSection === "dashboard" ? " is-active" : ""}`}
-            onClick={() => setActiveSection("dashboard")}
+          </NavLink>
+          <NavLink
+            to="/settings/dashboard"
+            className={({ isActive }) =>
+              `settings-nav-item${isActive ? " is-active" : ""}`
+            }
           >
             Dashboard
-          </button>
-          <button
-            type="button"
-            className={`settings-nav-item${activeSection === "health" ? " is-active" : ""}`}
-            onClick={() => setActiveSection("health")}
+          </NavLink>
+          <NavLink
+            to="/settings/health"
+            className={({ isActive }) =>
+              `settings-nav-item${isActive ? " is-active" : ""}`
+            }
           >
             Health
-          </button>
+          </NavLink>
           <p className="settings-nav-title">Workspace</p>
-          <button
-            type="button"
-            className={`settings-nav-item${activeSection === "system" ? " is-active" : ""}`}
-            onClick={() => setActiveSection("system")}
+          <NavLink
+            to="/settings/system"
+            className={({ isActive }) =>
+              `settings-nav-item${isActive ? " is-active" : ""}`
+            }
           >
             System status
-          </button>
-          <button
-            type="button"
-            className={`settings-nav-item${activeSection === "access" ? " is-active" : ""}`}
-            onClick={() => setActiveSection("access")}
+          </NavLink>
+          <NavLink
+            to="/settings/access"
+            className={({ isActive }) =>
+              `settings-nav-item${isActive ? " is-active" : ""}`
+            }
           >
             User profiles
-          </button>
+          </NavLink>
         </aside>
         <section className="settings-content">
           {activeSection === null ? (
@@ -740,6 +1005,62 @@ const Settings = () => {
                   </div>
                   <div className="settings-subsection">
                     <div className="settings-subsection-header">
+                      <h4>Goal</h4>
+                      <p>Set a BMI goal and timeline for AI targets.</p>
+                    </div>
+                    <div className="form-actions">
+                      <button
+                        type="button"
+                        className="primary-button"
+                        onClick={openGoalWizard}
+                        disabled={healthStatus === "loading"}
+                      >
+                        {healthGoal ? "Update goal" : "Set goal"}
+                      </button>
+                    </div>
+                    {healthGoal ? (
+                      <>
+                        <div className="health-summary-grid">
+                          <div>
+                            <p>Goal</p>
+                            <h3>{GetGoalTypeLabel(healthGoal.GoalType)}</h3>
+                          </div>
+                          <div>
+                            <p>BMI range</p>
+                            <h3>
+                              {FormatNumber(healthGoal.BmiMin)} to {FormatNumber(healthGoal.BmiMax)}
+                            </h3>
+                          </div>
+                          <div>
+                            <p>Current BMI</p>
+                            <h3>{FormatNumber(healthGoal.CurrentBmi)}</h3>
+                          </div>
+                          <div>
+                            <p>Target weight</p>
+                            <h3>{FormatNumber(healthGoal.TargetWeightKg)} kg</h3>
+                          </div>
+                          <div>
+                            <p>Target date</p>
+                            <h3>{FormatDate(healthGoal.EndDate)}</h3>
+                          </div>
+                          <div>
+                            <p>Daily calories</p>
+                            <h3>{healthGoal.DailyCalorieTarget}</h3>
+                          </div>
+                        </div>
+                        <p className="health-detail">
+                          Status: {healthGoal.Status}
+                          {healthGoal.CompletedAt
+                            ? ` · Completed ${FormatDate(healthGoal.CompletedAt)}`
+                            : ""}
+                        </p>
+                      </>
+                    ) : (
+                      <p className="form-note">No goal set yet.</p>
+                    )}
+                  </div>
+                  <div className="settings-subsection">
+                    <div className="settings-subsection-header">
                       <h4>AI targets</h4>
                       <p>Refresh AI suggestions and auto-tune weekly.</p>
                     </div>
@@ -787,7 +1108,11 @@ const Settings = () => {
                             <h3>{healthRecommendation.ProteinTargetMax}</h3>
                           </div>
                         </div>
-                        <button type="button" className="primary-button" onClick={applyHealthRecommendation}>
+                        <button
+                          type="button"
+                          className="primary-button health-ai-apply"
+                          onClick={applyHealthRecommendation}
+                        >
                           Apply suggested targets
                         </button>
                       </div>
@@ -977,6 +1302,22 @@ const Settings = () => {
                           name="ShowSodiumOnToday"
                           checked={healthTargets.ShowSodiumOnToday}
                           onChange={onHealthTargetsChange}
+                        />
+                      </div>
+                      <div className="form-switch-row">
+                        <span className="form-switch-label">Show weight chart on Today</span>
+                        <input
+                          type="checkbox"
+                          checked={healthShowWeightChart}
+                          onChange={(event) => setHealthShowWeightChart(event.target.checked)}
+                        />
+                      </div>
+                      <div className="form-switch-row">
+                        <span className="form-switch-label">Show weight projections on Today</span>
+                        <input
+                          type="checkbox"
+                          checked={healthShowWeightProjection}
+                          onChange={(event) => setHealthShowWeightProjection(event.target.checked)}
                         />
                       </div>
                       <div className="form-actions">
@@ -1206,6 +1547,206 @@ const Settings = () => {
 
         </section>
       </div>
+      {goalWizardOpen ? (
+        <div className="modal-backdrop">
+          <div className="modal">
+            <div className="modal-header">
+              <h3>Health goal</h3>
+              <button className="text-button" type="button" onClick={closeGoalWizard}>
+                Close
+              </button>
+            </div>
+            <p className="form-note">Step {goalWizardStep + 1} of 3</p>
+            {!isProfileComplete ? (
+              <p className="form-error">
+                Complete birth date, height, weight, and activity level first.
+              </p>
+            ) : null}
+            {goalWizardError ? <p className="form-error">{goalWizardError}</p> : null}
+            {goalWizardStep === 0 ? (
+              <>
+                <p className="form-note">
+                  Current BMI: {FormatNumber(currentBmi)}
+                  {currentBmiRange ? ` (${currentBmiRange.label})` : ""}
+                </p>
+                <div className="form-grid">
+                  <label>
+                    Goal type
+                    <select
+                      name="GoalType"
+                      value={goalWizardForm.GoalType}
+                      onChange={onGoalFormChange}
+                    >
+                      {GoalTypeOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Target BMI range
+                    <select
+                      name="BmiRangeKey"
+                      value={goalWizardForm.BmiRangeKey}
+                      onChange={onGoalFormChange}
+                    >
+                      {BmiRangeOptions.map((option) => (
+                        <option key={option.key} value={option.key}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+                <div className="form-actions health-goal-actions">
+                  <button className="button-secondary" type="button" onClick={closeGoalWizard}>
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => goToGoalStep(1)}
+                    disabled={!isProfileComplete}
+                  >
+                    Next
+                  </button>
+                </div>
+              </>
+            ) : null}
+            {goalWizardStep === 1 ? (
+              <>
+                <div className="form-grid">
+                  <label>
+                    Start date
+                    <input
+                      type="date"
+                      name="StartDate"
+                      value={goalWizardForm.StartDate}
+                      onChange={onGoalFormChange}
+                    />
+                  </label>
+                  <label>
+                    Timeframe
+                    <select
+                      name="DurationMonths"
+                      value={goalWizardForm.DurationMonths}
+                      onChange={onGoalFormChange}
+                    >
+                      {GoalDurationOptions.map((months) => (
+                        <option key={months} value={months}>
+                          {months} months
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+                <p className="form-note">
+                  End date: {AddMonthsToDate(goalWizardForm.StartDate, goalWizardForm.DurationMonths) || "--"}
+                </p>
+                <div className="form-actions health-goal-actions">
+                  <button
+                    className="button-secondary"
+                    type="button"
+                    onClick={() => goToGoalStep(0)}
+                  >
+                    Back
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => goToGoalStep(2)}
+                    disabled={!isProfileComplete || !goalWizardForm.StartDate}
+                  >
+                    Review
+                  </button>
+                </div>
+              </>
+            ) : null}
+            {goalWizardStep === 2 ? (
+              <>
+                {goalWizardStatus === "loading" ? (
+                  <p>Loading preview...</p>
+                ) : goalPreview ? (
+                  <>
+                    <p>{goalWizardPreview?.Explanation}</p>
+                    <div className="health-summary-grid">
+                      <div>
+                        <p>Daily calories</p>
+                        <h3>{adjustedDailyCalories}</h3>
+                      </div>
+                      <div>
+                        <p>Protein range</p>
+                        <h3>
+                          {FormatNumber(goalWizardPreview?.ProteinTargetMin)} to{" "}
+                          {FormatNumber(goalWizardPreview?.ProteinTargetMax)} g
+                        </h3>
+                      </div>
+                      <div>
+                        <p>Target weight</p>
+                        <h3>{FormatNumber(adjustedTargetWeight)} kg</h3>
+                      </div>
+                      <div>
+                        <p>Weight change</p>
+                        <h3>{FormatNumber(adjustedWeightDelta)} kg</h3>
+                      </div>
+                    </div>
+                    <div className="form-grid">
+                      <label>
+                        Daily calories
+                        <input
+                          type="number"
+                          name="DailyCalorieTarget"
+                          min="0"
+                          value={goalWizardAdjustments?.DailyCalorieTarget ?? ""}
+                          onChange={onGoalAdjustmentChange}
+                        />
+                      </label>
+                      <label>
+                        Target weight (kg)
+                        <input
+                          type="number"
+                          name="TargetWeightKg"
+                          min="0"
+                          step="0.1"
+                          value={goalWizardAdjustments?.TargetWeightKg ?? ""}
+                          onChange={onGoalAdjustmentChange}
+                        />
+                      </label>
+                      <label>
+                        End date
+                        <input
+                          type="date"
+                          name="EndDate"
+                          value={adjustedEndDate}
+                          onChange={onGoalAdjustmentChange}
+                        />
+                      </label>
+                    </div>
+                  </>
+                ) : (
+                  <p className="form-note">No preview available yet.</p>
+                )}
+                <div className="form-actions health-goal-actions">
+                  <button
+                    className="button-secondary"
+                    type="button"
+                    onClick={() => goToGoalStep(1)}
+                  >
+                    Back
+                  </button>
+                  <button
+                    type="button"
+                    className="primary-button"
+                    onClick={applyGoalRecommendation}
+                    disabled={goalWizardStatus === "saving" || goalWizardStatus === "loading" || !goalPreview}
+                  >
+                    {goalWizardStatus === "saving" ? "Saving..." : "Save goal"}
+                  </button>
+                </div>
+              </>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
       {passwordTarget ? (
         <div className="modal-backdrop">
           <div className="modal">

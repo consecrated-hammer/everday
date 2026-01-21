@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { FetchDailyLog } from "../../lib/healthApi.js";
@@ -48,7 +48,7 @@ const History = () => {
   const activeRange = RangeOptions.find((option) => option.key === range);
   const rangeDays = activeRange?.days ?? null;
 
-  const loadDays = async (nextOffset, count) => {
+  const loadDays = useCallback(async (nextOffset, count) => {
     try {
       setStatus("loading");
       setError("");
@@ -69,13 +69,13 @@ const History = () => {
       setStatus("error");
       setError(err?.message || "Failed to load history");
     }
-  };
+  }, []);
 
   useEffect(() => {
     setOffset(0);
     const count = rangeDays ?? PageSize;
     loadDays(0, count);
-  }, [range]);
+  }, [loadDays, rangeDays, range]);
 
   const onLoadMore = () => {
     const count = rangeDays ?? PageSize;

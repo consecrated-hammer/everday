@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import {
   FetchLifeCategories,
@@ -13,7 +13,7 @@ export const useLifeAdminCatalog = ({ includeInactive = false } = {}) => {
   const [status, setStatus] = useState("idle");
   const [error, setError] = useState("");
 
-  const loadCatalog = async () => {
+  const loadCatalog = useCallback(async () => {
     try {
       setStatus("loading");
       setError("");
@@ -30,11 +30,11 @@ export const useLifeAdminCatalog = ({ includeInactive = false } = {}) => {
       setStatus("error");
       setError(err?.message || "Failed to load life admin data");
     }
-  };
+  }, [includeInactive]);
 
   useEffect(() => {
     loadCatalog();
-  }, [includeInactive]);
+  }, [loadCatalog]);
 
   return {
     categories,

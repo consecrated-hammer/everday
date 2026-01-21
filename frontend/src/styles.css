@@ -25,6 +25,8 @@
   --health-meal: #f39c3d;
   --health-meal-bg: rgba(243, 156, 61, 0.2);
   --health-meta: rgba(43, 110, 246, 0.72);
+  --health-weight: #2b6ef6;
+  --health-trend: #8a96a6;
 }
 
 [data-theme="dark"] {
@@ -51,6 +53,8 @@
   --health-meal: #f6b26b;
   --health-meal-bg: rgba(246, 178, 107, 0.24);
   --health-meta: rgba(147, 182, 255, 0.8);
+  --health-weight: #7aa8ff;
+  --health-trend: #9aa6bb;
 }
 
 * {
@@ -306,6 +310,7 @@ iconify-icon {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  position: relative;
 }
 
 .app-main--compact {
@@ -316,21 +321,25 @@ iconify-icon {
   overflow: hidden;
 }
 
-.app-main--compact .app-topbar {
-  margin-bottom: 12px;
-}
-
 .app-topbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 24px;
+  margin-bottom: 0;
+  height: 0;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
 }
 
 .app-topbar-actions {
   display: flex;
   align-items: center;
   gap: 12px;
+  position: absolute;
+  top: 0;
+  right: 0;
 }
 
 .notifications-menu {
@@ -3722,8 +3731,78 @@ th {
   height: 260px;
 }
 
+.health-chart--weight {
+  height: 280px;
+}
+
 .health-chart .recharts-bar-rectangle {
   cursor: pointer;
+}
+
+.health-chart-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.health-chart-range {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.health-chart-note {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-soft);
+}
+
+.health-goal-toggle {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.health-goal-toggle.is-active {
+  color: var(--accent);
+}
+
+.health-goal-toggle:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.health-goal-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  border: 2px solid currentColor;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.health-goal-toggle.is-active .health-goal-dot {
+  background: currentColor;
+}
+
+.health-goal-actions {
+  margin-top: 12px;
+}
+
+.health-ai-apply {
+  margin-top: 10px;
 }
 
 .health-trends-toggle {

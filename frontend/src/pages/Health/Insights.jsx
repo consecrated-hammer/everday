@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { FetchAiSuggestions, FetchWeeklySummary } from "../../lib/healthApi.js";
 
@@ -44,7 +44,6 @@ const FormatSuggestedTime = (value) =>
 const Insights = () => {
   const [summary, setSummary] = useState(null);
   const [suggestions, setSuggestions] = useState([]);
-  const [status, setStatus] = useState("idle");
   const [suggestionsStatus, setSuggestionsStatus] = useState("idle");
   const [lastSuggestedAt, setLastSuggestedAt] = useState(null);
   const [error, setError] = useState("");
@@ -52,7 +51,7 @@ const Insights = () => {
   const weekStart = useMemo(() => FormatDate(GetRollingStart()), []);
   const today = useMemo(() => FormatDate(new Date()), []);
 
-  const loadSuggestions = async ({ force = false } = {}) => {
+  const loadSuggestions = useCallback(async ({ force = false } = {}) => {
     const cached = LoadSuggestionsCache(today);
     if (cached?.Timestamp) {
       setLastSuggestedAt(new Date(cached.Timestamp));
@@ -84,25 +83,22 @@ const Insights = () => {
       }
       setSuggestionsStatus("error");
     }
-  };
+  }, [today]);
 
-  const loadInsights = async () => {
+  const loadInsights = useCallback(async () => {
     try {
-      setStatus("loading");
       setError("");
       const weekly = await FetchWeeklySummary(weekStart);
       setSummary(weekly);
       await loadSuggestions();
-      setStatus("ready");
     } catch (err) {
-      setStatus("error");
       setError(err?.message || "Failed to load insights");
     }
-  };
+  }, [loadSuggestions, weekStart]);
 
   useEffect(() => {
     loadInsights();
-  }, []);
+  }, [loadInsights]);
 
 
   return (

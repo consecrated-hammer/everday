@@ -18,12 +18,14 @@ from app.modules.health.schemas import (
     StepUpdateInput,
     Targets,
     UpdateMealEntryInput,
+    WeightHistoryResponse,
 )
 from app.modules.health.services.calculations import BuildDailySummary, CalculateDailyTotals
 from app.modules.health.services.daily_logs_service import (
     CreateMealEntry,
     DeleteMealEntry,
     GetDailyLogByDate,
+    GetWeightHistory,
     GetEntriesForLog,
     ShareMealEntry,
     UpdateMealEntry,
@@ -101,6 +103,20 @@ def GetDailyLog(
         Summary=summary,
         Targets=settings,
     )
+
+
+@router.get("/weights/history", response_model=WeightHistoryResponse)
+def GetWeightHistoryRoute(
+    start_date: str,
+    end_date: str,
+    db: Session = Depends(GetDb),
+    user: UserContext = Depends(RequireModuleRole("health", write=False)),
+) -> WeightHistoryResponse:
+    try:
+        weights = GetWeightHistory(db, user.Id, start_date, end_date)
+        return WeightHistoryResponse(Weights=weights)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
 @router.patch("/{log_date}/steps", response_model=DailyLogCreateResponse)

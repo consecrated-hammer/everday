@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import DataTable from "../../components/DataTable.jsx";
 import { ExpenseTable } from "../../components/ExpenseTable.jsx";
@@ -103,25 +103,25 @@ const BudgetExpenses = () => {
 
   const expenseTableKey = "budget-expenses";
 
-  const loadExpenses = async () => {
+  const loadExpenses = useCallback(async () => {
     const data = await FetchExpenses();
     setExpenses(data);
     return data;
-  };
+  }, []);
 
-  const loadAccounts = async () => {
+  const loadAccounts = useCallback(async () => {
     const data = await FetchExpenseAccounts();
     setAccounts(data);
     return data;
-  };
+  }, []);
 
-  const loadTypes = async () => {
+  const loadTypes = useCallback(async () => {
     const data = await FetchExpenseTypes();
     setTypes(data);
     return data;
-  };
+  }, []);
 
-  const loadAll = async () => {
+  const loadAll = useCallback(async () => {
     try {
       setStatus("loading");
       setError("");
@@ -131,11 +131,11 @@ const BudgetExpenses = () => {
       setStatus("error");
       setError(err?.message || "Failed to load expenses");
     }
-  };
+  }, [loadAccounts, loadExpenses, loadTypes]);
 
   useEffect(() => {
     loadAll();
-  }, []);
+  }, [loadAll]);
 
   useEffect(() => {
     const stored = localStorage.getItem(BuildExpenseStorageKey(expenseTableKey));

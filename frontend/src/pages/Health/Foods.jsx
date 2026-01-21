@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
 import Icon from "../../components/Icon.jsx";
@@ -450,7 +450,7 @@ const Foods = () => {
       startAddMeal();
     }
     addHandledRef.current = addMode;
-  }, [searchParams, showMealForm]);
+  }, [searchParams, showMealForm, startAddFood, startAddMeal]);
 
   useEffect(() => {
     if (!lookupModalOpen) {
@@ -634,7 +634,7 @@ const Foods = () => {
     setLookupQuery(food.FoodName || "");
   };
 
-  const resetFoodForm = () => {
+  const resetFoodForm = useCallback(() => {
     setSelectedFoodId(null);
     setFoodForm(EmptyFoodForm);
     setFoodImageUrl("");
@@ -642,9 +642,9 @@ const Foods = () => {
     setFoodEntryMode("lookup");
     setSearchResults({ openfoodfacts: [], ai: [], aiFallbackAvailable: false });
     setDataSourceUsed(null);
-  };
+  }, []);
 
-  const clearAddModeParam = () => {
+  const clearAddModeParam = useCallback(() => {
     if (!searchParams.get("add")) {
       return;
     }
@@ -653,9 +653,9 @@ const Foods = () => {
       next.delete("add");
       return next;
     }, { replace: true });
-  };
+  }, [searchParams, setSearchParams]);
 
-  const startAddFood = () => {
+  const startAddFood = useCallback(() => {
     if (searchParams.get("add") !== "food") {
       setSearchParams((prev) => {
         const next = new URLSearchParams(prev);
@@ -668,14 +668,22 @@ const Foods = () => {
     setShowFoodForm(true);
     setShowAdvanced(false);
     setError("");
-  };
+  }, [
+    handleTabChange,
+    resetFoodForm,
+    searchParams,
+    setSearchParams,
+    setShowAdvanced,
+    setShowFoodForm,
+    setError
+  ]);
 
-  const closeFoodForm = () => {
+  const closeFoodForm = useCallback(() => {
     resetFoodForm();
     setShowFoodForm(false);
     setShowAdvanced(false);
     clearAddModeParam();
-  };
+  }, [clearAddModeParam, resetFoodForm, setShowAdvanced, setShowFoodForm]);
 
   const saveFood = async (event) => {
     event.preventDefault();
@@ -1123,7 +1131,7 @@ const Foods = () => {
     }
   };
 
-  const handleTabChange = (nextTab) => {
+  const handleTabChange = useCallback((nextTab) => {
     setActiveTab(nextTab);
     const keepMealDraft = showMealForm;
     if (nextTab === "all") {
@@ -1182,9 +1190,25 @@ const Foods = () => {
     } else {
       closeFoodForm();
     }
-  };
+  }, [
+    clearAddModeParam,
+    closeFoodForm,
+    showMealForm,
+    setActiveTab,
+    setMobileFilter,
+    setShowMealForm,
+    setEditingTemplateId,
+    setTemplateForm,
+    setMealEntryMode,
+    setMealParseText,
+    setMealParseResult,
+    setMealFoodSearch,
+    setMealFoodQuantities,
+    setAiMealNutrition,
+    setAiMealDescription
+  ]);
 
-  const startAddMeal = () => {
+  const startAddMeal = useCallback(() => {
     if (searchParams.get("add") !== "meal") {
       setSearchParams((prev) => {
         const next = new URLSearchParams(prev);
@@ -1203,7 +1227,21 @@ const Foods = () => {
     setMealFoodQuantities({});
     setAiMealNutrition(null);
     setAiMealDescription("");
-  };
+  }, [
+    handleTabChange,
+    searchParams,
+    setSearchParams,
+    setShowMealForm,
+    setMealEntryMode,
+    setEditingTemplateId,
+    setTemplateForm,
+    setMealParseResult,
+    setMealParseText,
+    setMealFoodSearch,
+    setMealFoodQuantities,
+    setAiMealNutrition,
+    setAiMealDescription
+  ]);
 
   const closeMealForm = () => {
     setShowMealForm(false);
@@ -1255,12 +1293,12 @@ const Foods = () => {
     setMobileFilter(value);
   };
 
-  const resolveTemplateServings = (template) => {
+  const resolveTemplateServings = useCallback((template) => {
     const servings = Number(template?.Template?.Servings || 1);
     return Number.isFinite(servings) && servings > 0 ? servings : 1;
-  };
+  }, []);
 
-  const getMealTotals = (template) => {
+  const getMealTotals = useCallback((template) => {
     const totals = template.Items.reduce(
       (acc, item) => {
         const food = foodsById[item.FoodId];
@@ -1292,7 +1330,7 @@ const Foods = () => {
       fat: totals.fat / servings,
       fibre: totals.fibre / servings
     };
-  };
+  }, [foodsById, resolveTemplateServings]);
 
   const addedMealCalories = useMemo(
     () =>
@@ -1330,7 +1368,7 @@ const Foods = () => {
       };
     });
     return [...foodItems, ...mealItems];
-  }, [filteredMealFoods, filteredMealTemplates, foodsById]);
+  }, [filteredMealFoods, filteredMealTemplates, getMealTotals, resolveTemplateServings]);
 
   const buildCombinedItems = (foodList, templateList) => {
     const items = [

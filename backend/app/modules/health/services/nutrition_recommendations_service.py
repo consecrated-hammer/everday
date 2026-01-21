@@ -88,6 +88,8 @@ def GetAiNutritionRecommendations(
     HeightCm: int,
     WeightKg: float,
     ActivityLevel: str,
+    DailyCalorieTarget: int | None = None,
+    GoalContext: str | None = None,
 ) -> tuple[NutritionRecommendation, str]:
     if not Settings.OpenAiApiKey:
         raise ValueError("OpenAI API key not configured.")
@@ -117,6 +119,11 @@ def GetAiNutritionRecommendations(
         "- Sugar: <50g per day\n"
         "- Sodium: <2300mg per day"
     )
+    if DailyCalorieTarget is not None:
+        SystemPrompt = (
+            SystemPrompt
+            + f"\nDailyCalorieTarget is fixed at {DailyCalorieTarget} and must be used exactly."
+        )
 
     UserPrompt = (
         f"User profile:\n"
@@ -126,6 +133,10 @@ def GetAiNutritionRecommendations(
         f"- Activity Level: {ActivityLevel}\n\n"
         "Provide personalized daily nutrition targets."
     )
+    if DailyCalorieTarget is not None:
+        UserPrompt = UserPrompt + f"\nDaily calorie target: {DailyCalorieTarget} kcal."
+    if GoalContext:
+        UserPrompt = UserPrompt + f"\nGoal context:\n{GoalContext}"
 
     Content, ModelUsed = GetOpenAiContentWithModel(
         [
@@ -171,7 +182,11 @@ def GetAiNutritionRecommendations(
         ModelUsed = RetryModelUsed
 
     Recommendation = NutritionRecommendation(
-        DailyCalorieTarget=int(RecommendationData.get("DailyCalorieTarget", 2000)),
+        DailyCalorieTarget=int(
+            DailyCalorieTarget
+            if DailyCalorieTarget is not None
+            else RecommendationData.get("DailyCalorieTarget", 2000)
+        ),
         ProteinTargetMin=float(RecommendationData.get("ProteinTargetMin", 60)),
         ProteinTargetMax=float(RecommendationData.get("ProteinTargetMax", 120)),
         FibreTarget=float(RecommendationData.get("FibreTarget", 30))

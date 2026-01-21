@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
   FetchLifeDropdownOptions,
@@ -36,7 +36,7 @@ export const useLifeAdminRecords = (categoryId, fields) => {
   const linkedCategoryIds = useMemo(() => GetLinkedCategoryIds(fields), [fields]);
   const dropdownIds = useMemo(() => GetDropdownIds(fields), [fields]);
 
-  const loadRecords = async () => {
+  const loadRecords = useCallback(async () => {
     if (!categoryId) {
       setRecords([]);
       return;
@@ -51,9 +51,9 @@ export const useLifeAdminRecords = (categoryId, fields) => {
       setRecordStatus("error");
       setRecordError(err?.message || "Failed to load records");
     }
-  };
+  }, [categoryId]);
 
-  const loadLookups = async () => {
+  const loadLookups = useCallback(async () => {
     if (linkedCategoryIds.length === 0) {
       setRecordLookups({});
       return;
@@ -66,9 +66,9 @@ export const useLifeAdminRecords = (categoryId, fields) => {
       nextLookup[id] = items;
     });
     setRecordLookups(nextLookup);
-  };
+  }, [linkedCategoryIds]);
 
-  const loadDropdownOptions = async () => {
+  const loadDropdownOptions = useCallback(async () => {
     if (dropdownIds.length === 0) {
       setDropdownOptions({});
       return;
@@ -81,19 +81,19 @@ export const useLifeAdminRecords = (categoryId, fields) => {
       nextOptions[id] = items;
     });
     setDropdownOptions(nextOptions);
-  };
+  }, [dropdownIds]);
 
   useEffect(() => {
     loadRecords();
-  }, [categoryId]);
+  }, [loadRecords]);
 
   useEffect(() => {
     loadLookups();
-  }, [linkedCategoryIds.join("-")]);
+  }, [loadLookups]);
 
   useEffect(() => {
     loadDropdownOptions();
-  }, [dropdownIds.join("-")]);
+  }, [loadDropdownOptions]);
 
   return {
     records,

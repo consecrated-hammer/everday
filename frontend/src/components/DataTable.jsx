@@ -91,7 +91,7 @@ const DataTable = ({
       setColumnWidths(defaultsWidths);
     }
     setHydratedKey(storageKey);
-  }, [storageKey, columnsSignature]);
+  }, [storageKey, columnsSignature, columns]);
 
   useEffect(() => {
     if (hydratedKey !== storageKey) {

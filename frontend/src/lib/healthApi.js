@@ -14,9 +14,10 @@ export const UpdateHealthProfile = (payload) =>
     method: "PATCH",
     body: JSON.stringify(payload)
   });
-export const GetAiRecommendations = () =>
+export const GetAiRecommendations = (payload) =>
   RequestJson(`${Health}/settings/ai-recommendations`, {
-    method: "POST"
+    method: "POST",
+    body: payload ? JSON.stringify(payload) : undefined
   });
 export const FetchRecommendationHistory = () =>
   RequestJson(`${Health}/settings/ai-recommendations/history`);
@@ -118,6 +119,13 @@ export const ParseMealTemplateText = (payload) =>
 
 export const FetchWeeklySummary = (startDate) =>
   RequestJson(`${Health}/summary/weekly?start_date=${encodeURIComponent(startDate)}`);
+
+export const FetchWeightHistory = (startDate, endDate) =>
+  RequestJson(
+    `${Health}/daily-logs/weights/history?start_date=${encodeURIComponent(
+      startDate
+    )}&end_date=${encodeURIComponent(endDate)}`
+  );
 
 export const FetchAiSuggestions = (logDate) =>
   RequestJson(`${Health}/suggestions/ai?LogDate=${encodeURIComponent(logDate)}`);
