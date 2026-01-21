@@ -25,3 +25,18 @@
 
 ## Health photos
 - Food scan photos are stored under `/uploads/health/foods/shared/` and served by the app for previews.
+
+## Health Auto Export (HAE)
+### Endpoint
+- `POST /api/health/import/hae`
+
+### Auth
+- `X-API-Key: <key>` (recommended)
+- `Authorization: Bearer <key>` (also accepted)
+
+### Key management
+- Generate or rotate the API key in **Settings → Health → Integrations**.
+- Keys are stored hashed; the full key is only shown once at creation.
+
+### Notes
+- Full payloads are stored; steps and weight are applied when the incoming timestamp is newer than any existing manual update.

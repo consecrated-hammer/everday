@@ -11,6 +11,7 @@ from app.modules.health.routes.summary import router as summary_router
 from app.modules.health.routes.suggestions import router as suggestions_router
 from app.modules.health.routes.food_lookup import router as food_lookup_router
 from app.modules.health.routes.portion_options import router as portion_options_router
+from app.modules.health.routes.imports import router as imports_router
 
 router = APIRouter(prefix="/api/health", tags=["health"])
 logger = logging.getLogger("health")
@@ -31,3 +32,4 @@ router.include_router(summary_router, prefix="/summary", tags=["health-summary"]
 router.include_router(suggestions_router, prefix="/suggestions", tags=["health-suggestions"])
 router.include_router(food_lookup_router, prefix="/food-lookup", tags=["health-lookup"])
 router.include_router(portion_options_router, prefix="/portion-options", tags=["health-portions"])
+router.include_router(imports_router, prefix="/import", tags=["health-import"])

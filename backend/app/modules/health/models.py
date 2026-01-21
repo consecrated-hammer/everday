@@ -87,6 +87,9 @@ class Settings(Base):
     GoalUpdatedAt = Column(DateTime(timezone=True))
     GoalCompletedAt = Column(DateTime(timezone=True))
     GoalCompletionNotifiedAt = Column(DateTime(timezone=True))
+    HaeApiKeyHash = Column(Text)
+    HaeApiKeyLast4 = Column(String(8))
+    HaeApiKeyCreatedAt = Column(DateTime(timezone=True))
     CreatedAt = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
 
 
@@ -103,6 +106,10 @@ class DailyLog(Base):
     Steps = Column(Integer, nullable=False, default=0)
     StepKcalFactorOverride = Column(Numeric(10, 4))
     WeightKg = Column(Numeric(6, 2))
+    StepsUpdatedAt = Column(DateTime(timezone=True))
+    WeightUpdatedAt = Column(DateTime(timezone=True))
+    StepsSource = Column(String(20))
+    WeightSource = Column(String(20))
     Notes = Column(Text)
     CreatedAt = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
 
@@ -209,3 +216,30 @@ class RecommendationLog(Base):
     SugarTarget = Column(Numeric(10, 2))
     SodiumTarget = Column(Numeric(10, 2))
     Explanation = Column(Text, nullable=False)
+
+
+class ImportLog(Base):
+    __tablename__ = "import_logs"
+    __table_args__ = {"schema": "health"}
+
+    ImportLogId = Column(String(36), primary_key=True, index=True)
+    UserId = Column(Integer, nullable=False, index=True)
+    Source = Column(String(40), nullable=False)
+    Payload = Column(Text, nullable=False)
+    MetricsCount = Column(Integer, nullable=False, default=0)
+    WorkoutsCount = Column(Integer, nullable=False, default=0)
+    ImportedAt = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+
+
+class MetricEntry(Base):
+    __tablename__ = "metric_entries"
+    __table_args__ = {"schema": "health"}
+
+    MetricEntryId = Column(String(36), primary_key=True, index=True)
+    UserId = Column(Integer, nullable=False, index=True)
+    LogDate = Column(Date, nullable=False, index=True)
+    MetricType = Column(String(20), nullable=False, index=True)
+    Value = Column(Numeric(12, 2), nullable=False)
+    OccurredAt = Column(DateTime(timezone=True), nullable=False)
+    Source = Column(String(20), nullable=False)
+    CreatedAt = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)

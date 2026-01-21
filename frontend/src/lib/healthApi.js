@@ -14,6 +14,10 @@ export const UpdateHealthProfile = (payload) =>
     method: "PATCH",
     body: JSON.stringify(payload)
   });
+export const RotateHaeApiKey = () =>
+  RequestJson(`${Health}/settings/hae-key/rotate`, {
+    method: "POST"
+  });
 export const GetAiRecommendations = (payload) =>
   RequestJson(`${Health}/settings/ai-recommendations`, {
     method: "POST",

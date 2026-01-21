@@ -168,6 +168,9 @@ class UserSettings(BaseModel):
     Goal: "GoalSummary | None" = None
     ShowWeightChartOnToday: bool = True
     ShowWeightProjectionOnToday: bool = True
+    HaeApiKeyConfigured: bool = False
+    HaeApiKeyLast4: str | None = None
+    HaeApiKeyCreatedAt: datetime | None = None
 
 
 class UpdateSettingsInput(BaseModel):
@@ -271,6 +274,20 @@ class WeightHistoryEntry(BaseModel):
 
 class WeightHistoryResponse(BaseModel):
     Weights: list[WeightHistoryEntry]
+
+
+class HaeImportResponse(BaseModel):
+    ImportId: str
+    MetricsCount: int
+    WorkoutsCount: int
+    StepsUpdated: int
+    WeightUpdated: int
+
+
+class HaeApiKeyResponse(BaseModel):
+    ApiKey: str
+    Last4: str
+    CreatedAt: datetime
 
 
 class UserProfile(BaseModel):

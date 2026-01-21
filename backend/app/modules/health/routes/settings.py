@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.db import GetDb
 from app.modules.auth.deps import RequireModuleRole, UserContext
 from app.modules.health.schemas import (
+    HaeApiKeyResponse,
     GoalRecommendationInput,
     NutritionRecommendationResponse,
     RecommendationLogListResponse,
@@ -19,6 +20,7 @@ from app.modules.health.services.settings_service import (
     GetGoalRecommendation,
     GetUserProfile,
     GetUserSettings,
+    RotateHaeApiKey,
     UpdateSettings,
     UpdateUserProfile,
 )
@@ -96,3 +98,11 @@ def GetRecommendationHistory(
 ) -> RecommendationLogListResponse:
     logs = GetRecommendationLogsByUser(db, user.Id, Limit=limit)
     return RecommendationLogListResponse(Logs=logs)
+
+
+@router.post("/hae-key/rotate", response_model=HaeApiKeyResponse)
+def RotateHaeKeyRoute(
+    db: Session = Depends(GetDb),
+    user: UserContext = Depends(RequireModuleRole("health", write=True)),
+) -> HaeApiKeyResponse:
+    return RotateHaeApiKey(db, user.Id)

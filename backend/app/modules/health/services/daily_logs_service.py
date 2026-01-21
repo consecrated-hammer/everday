@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 from datetime import date
 
@@ -25,6 +25,7 @@ from app.modules.health.schemas import (
     WeightHistoryEntry,
 )
 from app.modules.health.services.portion_entry_service import BuildPortionValues
+from app.modules.health.services.metric_entries_service import RecordMetricEntry
 from app.modules.health.utils.dates import ParseIsoDate
 from app.modules.notifications.services import CreateNotification
 
@@ -283,6 +284,7 @@ def GetEntriesForLog(db: Session, UserId: int, DailyLogId: str) -> list[MealEntr
 
 def UpsertDailyLog(db: Session, UserId: int, Input: CreateDailyLogInput) -> DailyLog:
     LogDateValue = ParseIsoDate(Input.LogDate)
+    occurred_at = datetime.now(tz=timezone.utc)
 
     record = (
         db.query(DailyLogModel)
@@ -291,10 +293,41 @@ def UpsertDailyLog(db: Session, UserId: int, Input: CreateDailyLogInput) -> Dail
     )
 
     if record:
-        record.Steps = Input.Steps
+        steps_changed = record.Steps != Input.Steps
+        weight_changed = (
+            (record.WeightKg is None and Input.WeightKg is not None)
+            or (record.WeightKg is not None and Input.WeightKg is None)
+            or (record.WeightKg is not None and Input.WeightKg is not None and float(record.WeightKg) != Input.WeightKg)
+        )
         record.StepKcalFactorOverride = Input.StepKcalFactorOverride
-        record.WeightKg = Input.WeightKg
         record.Notes = Input.Notes
+        if steps_changed:
+            RecordMetricEntry(
+                db,
+                record,
+                UserId,
+                LogDateValue,
+                "steps",
+                float(Input.Steps),
+                occurred_at,
+                "user",
+            )
+        if weight_changed:
+            if Input.WeightKg is None:
+                record.WeightKg = None
+                record.WeightUpdatedAt = occurred_at
+                record.WeightSource = "user"
+            else:
+                RecordMetricEntry(
+                    db,
+                    record,
+                    UserId,
+                    LogDateValue,
+                    "weight",
+                    float(Input.WeightKg),
+                    occurred_at,
+                    "user",
+                )
     else:
         record = DailyLogModel(
             DailyLogId=str(uuid.uuid4()),
@@ -305,7 +338,35 @@ def UpsertDailyLog(db: Session, UserId: int, Input: CreateDailyLogInput) -> Dail
             WeightKg=Input.WeightKg,
             Notes=Input.Notes,
         )
+        if Input.Steps != 0:
+            record.StepsUpdatedAt = occurred_at
+            record.StepsSource = "user"
+        if Input.WeightKg is not None:
+            record.WeightUpdatedAt = occurred_at
+            record.WeightSource = "user"
         db.add(record)
+        if Input.Steps != 0:
+            RecordMetricEntry(
+                db,
+                record,
+                UserId,
+                LogDateValue,
+                "steps",
+                float(Input.Steps),
+                occurred_at,
+                "user",
+            )
+        if Input.WeightKg is not None:
+            RecordMetricEntry(
+                db,
+                record,
+                UserId,
+                LogDateValue,
+                "weight",
+                float(Input.WeightKg),
+                occurred_at,
+                "user",
+            )
 
     db.commit()
     db.refresh(record)
@@ -325,6 +386,7 @@ def UpdateSteps(
     WeightKg: float | None = None,
 ) -> DailyLog:
     LogDateValue = ParseIsoDate(LogDate)
+    updated_at = datetime.now(tz=timezone.utc)
 
     record = (
         db.query(DailyLogModel)
@@ -333,10 +395,39 @@ def UpdateSteps(
     )
 
     if record:
-        record.Steps = Steps
+        existing_step_override = (
+            float(record.StepKcalFactorOverride) if record.StepKcalFactorOverride is not None else None
+        )
+        steps_changed = record.Steps != Steps or existing_step_override != StepKcalFactorOverride
         record.StepKcalFactorOverride = StepKcalFactorOverride
+        if steps_changed:
+            RecordMetricEntry(
+                db,
+                record,
+                UserId,
+                LogDateValue,
+                "steps",
+                float(Steps),
+                updated_at,
+                "user",
+            )
         if WeightKg is not None:
-            record.WeightKg = WeightKg
+            weight_changed = record.WeightKg is None or float(record.WeightKg) != WeightKg
+            if weight_changed:
+                RecordMetricEntry(
+                    db,
+                    record,
+                    UserId,
+                    LogDateValue,
+                    "weight",
+                    float(WeightKg),
+                    updated_at,
+                    "user",
+                )
+        elif record.WeightKg is not None:
+            record.WeightKg = None
+            record.WeightUpdatedAt = updated_at
+            record.WeightSource = "user"
     else:
         record = DailyLogModel(
             DailyLogId=str(uuid.uuid4()),
@@ -347,6 +438,27 @@ def UpdateSteps(
             WeightKg=WeightKg,
         )
         db.add(record)
+        RecordMetricEntry(
+            db,
+            record,
+            UserId,
+            LogDateValue,
+            "steps",
+            float(Steps),
+            updated_at,
+            "user",
+        )
+        if WeightKg is not None:
+            RecordMetricEntry(
+                db,
+                record,
+                UserId,
+                LogDateValue,
+                "weight",
+                float(WeightKg),
+                updated_at,
+                "user",
+            )
 
     db.commit()
     db.refresh(record)

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { NavLink, useParams } from "react-router-dom";
 
 import {
@@ -13,6 +13,7 @@ import {
   FetchHealthSettings,
   FetchRecommendationHistory,
   GetAiRecommendations,
+  RotateHaeApiKey,
   UpdateHealthProfile,
   UpdateHealthSettings
 } from "../../lib/healthApi.js";
@@ -186,6 +187,13 @@ const Settings = () => {
   const [healthGoal, setHealthGoal] = useState(null);
   const [healthShowWeightChart, setHealthShowWeightChart] = useState(true);
   const [healthShowWeightProjection, setHealthShowWeightProjection] = useState(true);
+  const [healthHaeConfigured, setHealthHaeConfigured] = useState(false);
+  const [healthHaeLast4, setHealthHaeLast4] = useState("");
+  const [healthHaeCreatedAt, setHealthHaeCreatedAt] = useState(null);
+  const [healthHaeKey, setHealthHaeKey] = useState("");
+  const [healthHaeKeyStatus, setHealthHaeKeyStatus] = useState("idle");
+  const [healthHaeCopied, setHealthHaeCopied] = useState(false);
+  const healthHaeCopyTimer = useRef(null);
   const [goalWizardOpen, setGoalWizardOpen] = useState(false);
   const [goalWizardStep, setGoalWizardStep] = useState(0);
   const [goalWizardStatus, setGoalWizardStatus] = useState("idle");
@@ -364,6 +372,12 @@ const Settings = () => {
       setHealthGoal(settings.Goal || null);
       setHealthShowWeightChart(settings.ShowWeightChartOnToday !== false);
       setHealthShowWeightProjection(settings.ShowWeightProjectionOnToday !== false);
+      setHealthHaeConfigured(Boolean(settings.HaeApiKeyConfigured));
+      setHealthHaeLast4(settings.HaeApiKeyLast4 || "");
+      setHealthHaeCreatedAt(settings.HaeApiKeyCreatedAt ? new Date(settings.HaeApiKeyCreatedAt) : null);
+      setHealthHaeKey("");
+      setHealthHaeKeyStatus("idle");
+      setHealthHaeCopied(false);
       setHealthRecommendationHistory(history.Logs || []);
       setHealthStatus("ready");
     } catch (err) {
@@ -556,6 +570,50 @@ const Settings = () => {
       setHealthError(err?.message || "Failed to update health targets");
     }
   };
+
+  const rotateHaeApiKey = async () => {
+    try {
+      setHealthHaeKeyStatus("loading");
+      setHealthError("");
+      const result = await RotateHaeApiKey();
+      setHealthHaeKey(result.ApiKey || "");
+      setHealthHaeLast4(result.Last4 || result.ApiKey?.slice(-4) || "");
+      setHealthHaeCreatedAt(result.CreatedAt ? new Date(result.CreatedAt) : new Date());
+      setHealthHaeConfigured(true);
+      setHealthHaeCopied(false);
+      setHealthHaeKeyStatus("ready");
+    } catch (err) {
+      setHealthHaeKeyStatus("error");
+      setHealthError(err?.message || "Failed to rotate API key");
+    }
+  };
+
+  const copyHaeKey = async () => {
+    if (!healthHaeKey) {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(healthHaeKey);
+      setHealthHaeCopied(true);
+    } catch (err) {
+      setHealthError("Clipboard access failed. Copy the key manually.");
+      return;
+    }
+    if (healthHaeCopyTimer.current) {
+      clearTimeout(healthHaeCopyTimer.current);
+    }
+    healthHaeCopyTimer.current = setTimeout(() => {
+      setHealthHaeCopied(false);
+    }, 1800);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (healthHaeCopyTimer.current) {
+        clearTimeout(healthHaeCopyTimer.current);
+      }
+    };
+  }, []);
 
   const runHealthRecommendation = async () => {
     try {
@@ -1117,6 +1175,57 @@ const Settings = () => {
                         </button>
                       </div>
                     ) : null}
+                  </div>
+                  <div className="settings-subsection">
+                    <div className="settings-subsection-header">
+                      <h4>Integrations</h4>
+                      <p>Generate an API key for Health Auto Export.</p>
+                    </div>
+                    <div className="health-integrations">
+                      <div className="health-integrations-status">
+                        <p>
+                          Status: {healthHaeConfigured ? "Key configured" : "No key configured"}
+                        </p>
+                        {healthHaeLast4 ? <p>Key ending: •••• {healthHaeLast4}</p> : null}
+                        {healthHaeCreatedAt ? (
+                          <p>Created: {healthHaeCreatedAt.toLocaleString()}</p>
+                        ) : null}
+                      </div>
+                      <div className="form-actions health-integrations-actions">
+                        <button
+                          type="button"
+                          className="primary-button"
+                          onClick={rotateHaeApiKey}
+                          disabled={healthHaeKeyStatus === "loading"}
+                        >
+                          {healthHaeConfigured ? "Rotate key" : "Generate key"}
+                        </button>
+                      </div>
+                      {healthHaeKey ? (
+                        <div className="health-key-reveal">
+                          <label>
+                            New API key
+                            <input type="text" readOnly value={healthHaeKey} className="form-input" />
+                          </label>
+                          <div className="health-key-actions">
+                            <button type="button" className="button-secondary" onClick={copyHaeKey}>
+                              Copy key
+                            </button>
+                            {healthHaeCopied ? (
+                              <span className="health-key-status" role="status" aria-live="polite">
+                                Key copied
+                              </span>
+                            ) : null}
+                          </div>
+                          <p className="form-note">
+                            Copy this key now. It will not be shown again.
+                          </p>
+                          <p className="form-note">
+                            Use header name <strong>X-API-Key</strong> in Health Auto Export.
+                          </p>
+                        </div>
+                      ) : null}
+                    </div>
                   </div>
                   <div className="settings-subsection">
                     <div className="settings-subsection-header">
