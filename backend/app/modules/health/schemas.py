@@ -257,6 +257,12 @@ class DailySummary(BaseModel):
     LogDate: date
     TotalCalories: int
     TotalProtein: float
+    TotalFibre: float = 0
+    TotalCarbs: float = 0
+    TotalFat: float = 0
+    TotalSaturatedFat: float = 0
+    TotalSugar: float = 0
+    TotalSodium: float = 0
     Steps: int
     NetCalories: int
 
