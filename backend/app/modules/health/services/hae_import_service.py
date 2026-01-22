@@ -190,7 +190,7 @@ def _ParseMetrics(
     entries: list[ParsedMetricEntry] = []
     latest_steps: dict[date, ParsedMetricEntry] = {}
     latest_weight: dict[date, ParsedMetricEntry] = {}
-    step_totals: dict[date, int] = {}
+    step_totals: dict[date, float] = {}
     step_latest: dict[date, datetime] = {}
 
     for metric in metrics:
@@ -213,7 +213,7 @@ def _ParseMetrics(
                     OccurredAt=timestamp,
                 )
                 entries.append(entry)
-                step_totals[log_date] = step_totals.get(log_date, 0) + normalized
+                step_totals[log_date] = step_totals.get(log_date, 0.0) + normalized
                 existing_timestamp = step_latest.get(log_date)
                 if existing_timestamp is None or timestamp > existing_timestamp:
                     step_latest[log_date] = timestamp
@@ -356,10 +356,10 @@ def _MergeLatestEntry(target: dict[date, ParsedMetricEntry], entry: ParsedMetric
         target[entry.LogDate] = entry
 
 
-def _NormalizeSteps(value: float) -> int | None:
+def _NormalizeSteps(value: float) -> float | None:
     if value < 0:
         return None
-    return int(round(value))
+    return float(value)
 
 
 def _NormalizeWeight(value: float, units: str) -> float | None:
