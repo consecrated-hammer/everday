@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   Bar,
   CartesianGrid,
+  Cell,
   ComposedChart,
   Legend,
   Line,
@@ -17,6 +18,7 @@ import Icon from "../../components/Icon.jsx";
 import {
   FetchDailyLog,
   FetchHealthSettings,
+  FetchStepsHistory,
   FetchWeeklySummary,
   FetchWeightHistory,
   UpdateDailySteps
@@ -69,9 +71,9 @@ const FormatMetricValue = (value, key) => {
     return `${FormatNumber(numeric)} steps`;
   }
   if (key === "Calories") {
-    return `${FormatNumber(numeric)}kcal`;
+    return `${FormatNumber(numeric)} kcal`;
   }
-  return `${FormatNumber(numeric)}g`;
+  return `${FormatNumber(numeric)} g`;
 };
 
 const NutrientLabels = {
@@ -85,6 +87,19 @@ const NutrientLabels = {
   Sugar: "Sugar",
   Sodium: "Sodium"
 };
+
+const FoodTargetKeys = [
+  "Calories",
+  "Protein",
+  "Fibre",
+  "Carbs",
+  "Fat",
+  "SaturatedFat",
+  "Sugar",
+  "Sodium"
+];
+
+const GetMetricUnit = (key) => (key === "Calories" ? "kcal" : "g");
 
 const GetBarValue = (totals, log, key) => {
   if (!totals) return 0;
@@ -137,7 +152,57 @@ const ShouldShowBar = (targets, key) => {
   return true;
 };
 
-const BuildWeeklySeries = (startDate, summary, target) => {
+const FormatTargetLine = (key, value, target) => {
+  const safeValue = Number(value ?? 0);
+  const safeTarget = Number(target ?? 0);
+  const unit = GetMetricUnit(key);
+  if (!safeTarget) {
+    return `${FormatNumber(safeValue)} ${unit}`;
+  }
+  const percent = Math.round((safeValue / safeTarget) * 100);
+  const delta = safeTarget - safeValue;
+  const deltaLabel = `${FormatNumber(Math.abs(delta))} ${unit} ${delta >= 0 ? "under" : "over"} target`;
+  return `${FormatNumber(safeValue)} / ${FormatNumber(safeTarget)} ${unit} • ${percent}% of target • ${deltaLabel}`;
+};
+
+const BuildCalorieTooltipLines = (entry, targets) => {
+  if (!entry || !targets) return [];
+  const log = {
+    Steps: entry.Steps ?? 0,
+    StepKcalFactorOverride: null
+  };
+  return FoodTargetKeys.reduce((lines, key) => {
+    if (!ShouldShowBar(targets, key)) {
+      return lines;
+    }
+    const target = GetBarTarget(targets, log, key);
+    if (!target) {
+      return lines;
+    }
+    const value = Number(entry[key] ?? 0);
+    lines.push({
+      Key: key,
+      Label: NutrientLabels[key],
+      Value: FormatTargetLine(key, value, target)
+    });
+    return lines;
+  }, []);
+};
+
+const GetCalorieFill = (value, target) => {
+  if (!target) {
+    return "var(--chart-primary)";
+  }
+  if (value > target * 1.05) {
+    return "var(--chart-danger)";
+  }
+  if (value > target) {
+    return "var(--health-meal)";
+  }
+  return "var(--chart-primary)";
+};
+
+const BuildWeeklySeries = (startDate, summary, targets) => {
   const days = summary?.Days || [];
   const byDate = new Map(days.map((day) => [day.LogDate, day]));
   const series = [];
@@ -148,15 +213,54 @@ const BuildWeeklySeries = (startDate, summary, target) => {
     current.setDate(start.getDate() + i);
     const iso = FormatDate(current);
     const record = byDate.get(iso);
+    const steps = record?.Steps ?? 0;
+    const dayTarget = GetBarTarget(targets, { Steps: steps }, "Calories");
+    const calories = record?.TotalCalories ?? 0;
     series.push({
       Date: iso,
       Label: current.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-      Calories: record?.TotalCalories ?? 0,
-      Target: target ?? 0
+      Calories: calories,
+      Protein: record?.TotalProtein ?? 0,
+      Fibre: record?.TotalFibre ?? 0,
+      Carbs: record?.TotalCarbs ?? 0,
+      Fat: record?.TotalFat ?? 0,
+      SaturatedFat: record?.TotalSaturatedFat ?? 0,
+      Sugar: record?.TotalSugar ?? 0,
+      Sodium: record?.TotalSodium ?? 0,
+      Steps: steps,
+      Target: dayTarget ?? 0,
+      Fill: GetCalorieFill(calories, dayTarget ?? 0)
     });
   }
 
   return series;
+};
+
+const CalorieTrendsTooltip = ({ active, payload, label, targets }) => {
+  if (!active || !payload?.length) {
+    return null;
+  }
+  const entry = payload[0]?.payload;
+  if (!entry) {
+    return null;
+  }
+  const lines = BuildCalorieTooltipLines(entry, targets);
+  if (!lines.length) {
+    return null;
+  }
+  return (
+    <div className="health-trends-tooltip">
+      <p className="health-trends-tooltip-title">{label}</p>
+      <div className="health-trends-tooltip-list">
+        {lines.map((line) => (
+          <div key={line.Key} className="health-trends-tooltip-row">
+            <span className="health-trends-tooltip-label">{line.Label}</span>
+            <span className="health-trends-tooltip-value">{line.Value}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 };
 
 const BuildTrendLine = (entries) => {
@@ -213,6 +317,31 @@ const BuildWeightDomain = (series) => {
   return [lower, upper];
 };
 
+const BuildStepsSeries = (startDate, endDate, history, target) => {
+  const byDate = new Map((history || []).map((entry) => [entry.LogDate, entry]));
+  const series = [];
+  const start = ParseLocalDate(startDate);
+  const end = ParseLocalDate(endDate);
+  for (let current = new Date(start); current <= end; current.setDate(current.getDate() + 1)) {
+    const iso = FormatDate(current);
+    const record = byDate.get(iso);
+    const steps = record?.Steps ?? 0;
+    const fill = target
+      ? steps >= target
+        ? "var(--health-food)"
+        : "var(--health-meal)"
+      : "var(--chart-primary)";
+    series.push({
+      Date: iso,
+      Label: current.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+      Steps: steps,
+      Target: target ?? 0,
+      Fill: fill
+    });
+  }
+  return series;
+};
+
 const Today = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -235,12 +364,34 @@ const Today = () => {
   const [goal, setGoal] = useState(null);
   const [showWeightChart, setShowWeightChart] = useState(true);
   const [showWeightProjection, setShowWeightProjection] = useState(true);
-  const [weightRangeKey, setWeightRangeKey] = useState("30");
-  const [weightGoalEnabled, setWeightGoalEnabled] = useState(false);
-  const [weightGoalReady, setWeightGoalReady] = useState(false);
+  const [showStepsChart, setShowStepsChart] = useState(true);
+  const [weightRangeKey, setWeightRangeKey] = useState(() => {
+    const stored = localStorage.getItem("health.weightRange");
+    if (stored === "7" || stored === "30" || stored === "90" || stored === "all") {
+      return stored;
+    }
+    return "30";
+  });
+  const [weightGoalEnabled, setWeightGoalEnabled] = useState(() => {
+    const stored = localStorage.getItem("health.weightGoalEnabled");
+    return stored === "true";
+  });
+  const [weightGoalReady, setWeightGoalReady] = useState(
+    () => localStorage.getItem("health.weightGoalEnabled") !== null
+  );
   const [weightHistory, setWeightHistory] = useState([]);
   const [weightHistoryStatus, setWeightHistoryStatus] = useState("idle");
   const [weightHistoryError, setWeightHistoryError] = useState("");
+  const [stepsRangeKey, setStepsRangeKey] = useState(() => {
+    const stored = localStorage.getItem("health.stepsRange");
+    if (stored === "7" || stored === "30" || stored === "90" || stored === "all") {
+      return stored;
+    }
+    return "7";
+  });
+  const [stepsHistory, setStepsHistory] = useState([]);
+  const [stepsHistoryStatus, setStepsHistoryStatus] = useState("idle");
+  const [stepsHistoryError, setStepsHistoryError] = useState("");
   const [stepsForm, setStepsForm] = useState({
     Steps: ""
   });
@@ -274,6 +425,7 @@ const Today = () => {
       setTargets(settings.Targets);
       setGoal(settings.Goal || null);
       setShowWeightChart(settings.ShowWeightChartOnToday !== false);
+      setShowStepsChart(settings.ShowStepsChartOnToday !== false);
       setShowWeightProjection(settings.ShowWeightProjectionOnToday !== false);
       setLog(dailyData.DailyLog);
       setTotals(dailyData.Totals || null);
@@ -299,7 +451,7 @@ const Today = () => {
   }, [goal, today, weightGoalReady]);
 
   useEffect(() => {
-    if (!goal?.EndDate || goal.EndDate < today) {
+    if (goal?.EndDate && goal.EndDate < today) {
       setWeightGoalEnabled(false);
     }
   }, [goal, today]);
@@ -324,6 +476,18 @@ const Today = () => {
   useEffect(() => {
     localStorage.setItem("health.trendsOpen", String(trendsOpen));
   }, [trendsOpen]);
+
+  useEffect(() => {
+    localStorage.setItem("health.weightRange", weightRangeKey);
+  }, [weightRangeKey]);
+
+  useEffect(() => {
+    localStorage.setItem("health.weightGoalEnabled", String(weightGoalEnabled));
+  }, [weightGoalEnabled]);
+
+  useEffect(() => {
+    localStorage.setItem("health.stepsRange", stepsRangeKey);
+  }, [stepsRangeKey]);
 
   useEffect(() => {
     if (!stepsModalOpen && !weightModalOpen) {
@@ -467,7 +631,7 @@ const Today = () => {
 
   const barOrder = targets?.BarOrder || ["Calories", "Protein", "Steps"];
   const weeklySeries = useMemo(
-    () => BuildWeeklySeries(startDate, weeklySummary, targets?.DailyCalorieTarget ?? 0),
+    () => BuildWeeklySeries(startDate, weeklySummary, targets),
     [startDate, weeklySummary, targets]
   );
   const goalEndDate = goal?.EndDate && goal.EndDate >= today ? goal.EndDate : null;
@@ -477,6 +641,7 @@ const Today = () => {
     { key: "90", label: "90d" },
     { key: "all", label: "All" }
   ];
+  const stepsRangeOptions = weightRangeOptions;
   const weightHistoryStartDate = useMemo(() => {
     if (weightRangeKey === "all") {
       return "1900-01-01";
@@ -671,6 +836,55 @@ const Today = () => {
     };
     loadWeights();
   }, [showWeightChart, weightHistoryStartDate, weightHistoryEndDate]);
+
+  const stepsHistoryStartDate = useMemo(() => {
+    if (stepsRangeKey === "all") {
+      return "1900-01-01";
+    }
+    const days = Number(stepsRangeKey);
+    return AddDays(today, -(days - 1));
+  }, [today, stepsRangeKey]);
+  const earliestStepsDate = useMemo(() => {
+    if (!stepsHistory?.length) return null;
+    return stepsHistory.reduce((earliest, entry) => {
+      if (!earliest || entry.LogDate < earliest) {
+        return entry.LogDate;
+      }
+      return earliest;
+    }, stepsHistory[0]?.LogDate || null);
+  }, [stepsHistory]);
+  const stepsStartDate = useMemo(() => {
+    if (stepsRangeKey !== "all") {
+      return stepsHistoryStartDate;
+    }
+    if (earliestStepsDate) {
+      return earliestStepsDate;
+    }
+    return AddDays(today, -6);
+  }, [stepsRangeKey, stepsHistoryStartDate, earliestStepsDate, today]);
+  const stepsEndDate = today;
+  const stepsSeries = useMemo(
+    () => BuildStepsSeries(stepsStartDate, stepsEndDate, stepsHistory, targets?.StepTarget ?? 0),
+    [stepsStartDate, stepsEndDate, stepsHistory, targets]
+  );
+  useEffect(() => {
+    if (!showStepsChart || !stepsHistoryStartDate || !stepsEndDate) {
+      return;
+    }
+    const loadSteps = async () => {
+      try {
+        setStepsHistoryStatus("loading");
+        setStepsHistoryError("");
+        const data = await FetchStepsHistory(stepsHistoryStartDate, stepsEndDate);
+        setStepsHistory(data?.Steps || []);
+        setStepsHistoryStatus("ready");
+      } catch (err) {
+        setStepsHistoryStatus("error");
+        setStepsHistoryError(err?.message || "Failed to load steps history");
+      }
+    };
+    loadSteps();
+  }, [showStepsChart, stepsHistoryStartDate, stepsEndDate]);
   const handleBarClick = (data) => {
     const dateValue = data?.payload?.Date;
     if (!dateValue) {
@@ -787,8 +1001,8 @@ const Today = () => {
       <section className="module-panel">
         <header className="module-panel-header">
           <div>
-            <h3>Last 7 days</h3>
-            <p>Calories with your daily target as a guide.</p>
+            <h3>Calorie trends</h3>
+            <p>Last 7 days with your daily target as a guide.</p>
           </div>
           <button
             type="button"
@@ -800,14 +1014,15 @@ const Today = () => {
             <span className={`health-trends-caret${trendsOpen ? " is-open" : ""}`}>▸</span>
           </button>
         </header>
-        {trendsOpen ? (
-          <div className="health-chart">
-            <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={weeklySeries} margin={{ top: 10, right: 24, left: 8, bottom: 0 }}>
+      {trendsOpen ? (
+        <div className="health-chart">
+          <ResponsiveContainer width="100%" height="100%">
+            <ComposedChart data={weeklySeries} margin={{ top: 10, right: 24, left: 8, bottom: 0 }}>
                 <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" />
                 <XAxis dataKey="Label" tick={{ fill: "var(--text-muted)", fontSize: 12 }} />
                 <YAxis tick={{ fill: "var(--text-muted)", fontSize: 12 }} allowDecimals={false} />
                 <Tooltip
+                  content={(props) => <CalorieTrendsTooltip {...props} targets={targets} />}
                   contentStyle={{
                     background: "var(--surface-strong)",
                     border: "1px solid var(--border)",
@@ -820,10 +1035,13 @@ const Today = () => {
                 <Bar
                   dataKey="Calories"
                   name="Calories"
-                  fill="var(--chart-primary)"
                   radius={[10, 10, 0, 0]}
                   onClick={handleBarClick}
-                />
+                >
+                  {weeklySeries.map((entry) => (
+                    <Cell key={entry.Date} fill={entry.Fill} />
+                  ))}
+                </Bar>
                 <Line
                   type="monotone"
                   dataKey="Target"
@@ -833,10 +1051,73 @@ const Today = () => {
                   dot={false}
                 />
               </ComposedChart>
-            </ResponsiveContainer>
+          </ResponsiveContainer>
+        </div>
+      ) : null}
+    </section>
+
+      {showStepsChart ? (
+        <section className="module-panel">
+          <header className="module-panel-header">
+            <div>
+              <h3>Steps trend</h3>
+              <p>Steps per day with your target line.</p>
+            </div>
+          </header>
+          {stepsHistoryError ? <p className="form-error">{stepsHistoryError}</p> : null}
+          {stepsHistoryStatus === "loading" ? (
+            <p>Loading steps history...</p>
+          ) : (
+            <div className="health-chart">
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart data={stepsSeries} margin={{ top: 10, right: 24, left: 8, bottom: 0 }}>
+                  <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" />
+                  <XAxis dataKey="Label" tick={{ fill: "var(--text-muted)", fontSize: 12 }} />
+                  <YAxis tick={{ fill: "var(--text-muted)", fontSize: 12 }} allowDecimals={false} />
+                  <Tooltip
+                    contentStyle={{
+                      background: "var(--surface-strong)",
+                      border: "1px solid var(--border)",
+                      borderRadius: "12px",
+                      boxShadow: "0 12px 24px rgba(20, 16, 12, 0.18)"
+                    }}
+                    labelStyle={{ color: "var(--text)" }}
+                  />
+                  <Legend />
+                  <Bar dataKey="Steps" name="Steps" radius={[10, 10, 0, 0]}>
+                    {stepsSeries.map((entry) => (
+                      <Cell key={entry.Date} fill={entry.Fill} />
+                    ))}
+                  </Bar>
+                  <Line
+                    type="monotone"
+                    dataKey="Target"
+                    name="Target"
+                    stroke="var(--text-soft)"
+                    strokeDasharray="4 4"
+                    dot={false}
+                  />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+          <div className="health-chart-footer">
+            <div className="health-chart-range">
+              <span className="health-chart-note">Range</span>
+              {stepsRangeOptions.map((option) => (
+                <button
+                  key={option.key}
+                  type="button"
+                  className={`button-secondary-pill${stepsRangeKey === option.key ? " is-active" : ""}`}
+                  onClick={() => setStepsRangeKey(option.key)}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
           </div>
-        ) : null}
-      </section>
+        </section>
+      ) : null}
 
       {showWeightChart ? (
         <section className="module-panel">

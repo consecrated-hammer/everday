@@ -187,6 +187,7 @@ const Settings = () => {
   const [healthGoal, setHealthGoal] = useState(null);
   const [healthShowWeightChart, setHealthShowWeightChart] = useState(true);
   const [healthShowWeightProjection, setHealthShowWeightProjection] = useState(true);
+  const [healthShowStepsChart, setHealthShowStepsChart] = useState(true);
   const [healthHaeConfigured, setHealthHaeConfigured] = useState(false);
   const [healthHaeLast4, setHealthHaeLast4] = useState("");
   const [healthHaeCreatedAt, setHealthHaeCreatedAt] = useState(null);
@@ -371,6 +372,7 @@ const Settings = () => {
       );
       setHealthGoal(settings.Goal || null);
       setHealthShowWeightChart(settings.ShowWeightChartOnToday !== false);
+      setHealthShowStepsChart(settings.ShowStepsChartOnToday !== false);
       setHealthShowWeightProjection(settings.ShowWeightProjectionOnToday !== false);
       setHealthHaeConfigured(Boolean(settings.HaeApiKeyConfigured));
       setHealthHaeLast4(settings.HaeApiKeyLast4 || "");
@@ -562,6 +564,7 @@ const Settings = () => {
         ShowSugarOnToday: healthTargets.ShowSugarOnToday,
         ShowSodiumOnToday: healthTargets.ShowSodiumOnToday,
         ShowWeightChartOnToday: healthShowWeightChart,
+        ShowStepsChartOnToday: healthShowStepsChart,
         ShowWeightProjectionOnToday: healthShowWeightProjection
       });
       await loadHealthSettings();
@@ -1419,6 +1422,14 @@ const Settings = () => {
                           type="checkbox"
                           checked={healthShowWeightChart}
                           onChange={(event) => setHealthShowWeightChart(event.target.checked)}
+                        />
+                      </div>
+                      <div className="form-switch-row">
+                        <span className="form-switch-label">Show steps chart on Today</span>
+                        <input
+                          type="checkbox"
+                          checked={healthShowStepsChart}
+                          onChange={(event) => setHealthShowStepsChart(event.target.checked)}
                         />
                       </div>
                       <div className="form-switch-row">

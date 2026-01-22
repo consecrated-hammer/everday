@@ -17,6 +17,7 @@
   --accent-soft: rgba(43, 110, 246, 0.12);
   --accent-muted: rgba(43, 110, 246, 0.22);
   --chart-primary: #20b2aa;
+  --chart-danger: #d04c3f;
   --shadow: 0 16px 34px rgba(19, 35, 62, 0.12);
   --chip-bg: #e6eeff;
   --chip-text: #2b57b0;
@@ -45,6 +46,7 @@
   --accent-soft: rgba(75, 140, 255, 0.16);
   --accent-muted: rgba(75, 140, 255, 0.26);
   --chart-primary: #37d6c2;
+  --chart-danger: #f08a7e;
   --shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
   --chip-bg: rgba(75, 140, 255, 0.2);
   --chip-text: #d7e5ff;
@@ -90,6 +92,8 @@ p {
   display: grid;
   grid-template-columns: 80px minmax(0, 1fr);
   min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
   background: var(--bg);
   transition: grid-template-columns 0.2s ease;
 }
@@ -110,7 +114,9 @@ p {
   display: flex;
   flex-direction: column;
   gap: 20px;
-  overflow: visible;
+  height: 100vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .nav-toggle {
@@ -311,6 +317,7 @@ iconify-icon {
   flex-direction: column;
   min-height: 0;
   position: relative;
+  overflow-y: auto;
 }
 
 .app-main--compact {
@@ -327,19 +334,22 @@ iconify-icon {
   justify-content: space-between;
   margin-bottom: 0;
   height: 0;
-  position: absolute;
+  position: fixed;
   top: 0;
   left: 0;
   right: 0;
+  pointer-events: none;
+  z-index: 20;
 }
 
 .app-topbar-actions {
   display: flex;
   align-items: center;
   gap: 12px;
-  position: absolute;
-  top: 0;
-  right: 0;
+  position: fixed;
+  top: 24px;
+  right: 32px;
+  pointer-events: auto;
 }
 
 .notifications-menu {
@@ -3789,6 +3799,48 @@ th {
 
 .health-chart .recharts-bar-rectangle {
   cursor: pointer;
+}
+
+.health-trends-tooltip {
+  display: grid;
+  gap: 10px;
+  min-width: 240px;
+  color: var(--text);
+  background: var(--surface-strong);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 12px 24px rgba(20, 16, 12, 0.18);
+  padding: 12px;
+}
+
+.health-trends-tooltip-title {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.health-trends-tooltip-list {
+  display: grid;
+  gap: 8px;
+}
+
+.health-trends-tooltip-row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 12px;
+  align-items: start;
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.health-trends-tooltip-label {
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.health-trends-tooltip-value {
+  color: var(--text-muted);
+  text-align: right;
 }
 
 .health-chart-footer {

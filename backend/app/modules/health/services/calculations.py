@@ -76,6 +76,12 @@ def BuildDailySummary(LogDate, Steps: int, Totals: DailyTotals) -> DailySummary:
         LogDate=LogDate,
         TotalCalories=Totals.TotalCalories,
         TotalProtein=Totals.TotalProtein,
+        TotalFibre=Totals.TotalFibre,
+        TotalCarbs=Totals.TotalCarbs,
+        TotalFat=Totals.TotalFat,
+        TotalSaturatedFat=Totals.TotalSaturatedFat,
+        TotalSugar=Totals.TotalSugar,
+        TotalSodium=Totals.TotalSodium,
         Steps=max(0, round(Steps)),
         NetCalories=Totals.NetCalories,
     )
@@ -86,6 +92,12 @@ def CalculateWeeklySummary(Days: list[DailySummary]) -> WeeklySummary:
     Totals = {
         "TotalCalories": sum(Day.TotalCalories for Day in Days),
         "TotalProtein": sum(Day.TotalProtein for Day in Days),
+        "TotalFibre": sum(Day.TotalFibre for Day in Days),
+        "TotalCarbs": sum(Day.TotalCarbs for Day in Days),
+        "TotalFat": sum(Day.TotalFat for Day in Days),
+        "TotalSaturatedFat": sum(Day.TotalSaturatedFat for Day in Days),
+        "TotalSugar": sum(Day.TotalSugar for Day in Days),
+        "TotalSodium": sum(Day.TotalSodium for Day in Days),
         "TotalSteps": sum(Day.Steps for Day in Days),
         "TotalNetCalories": sum(Day.NetCalories for Day in Days),
     }
@@ -93,6 +105,12 @@ def CalculateWeeklySummary(Days: list[DailySummary]) -> WeeklySummary:
     Averages = {
         "AverageCalories": RoundCalories(Totals["TotalCalories"] / Count),
         "AverageProtein": RoundNutrient(Totals["TotalProtein"] / Count),
+        "AverageFibre": RoundNutrient(Totals["TotalFibre"] / Count),
+        "AverageCarbs": RoundNutrient(Totals["TotalCarbs"] / Count),
+        "AverageFat": RoundNutrient(Totals["TotalFat"] / Count),
+        "AverageSaturatedFat": RoundNutrient(Totals["TotalSaturatedFat"] / Count),
+        "AverageSugar": RoundNutrient(Totals["TotalSugar"] / Count),
+        "AverageSodium": RoundNutrient(Totals["TotalSodium"] / Count),
         "AverageSteps": RoundCalories(Totals["TotalSteps"] / Count),
         "AverageNetCalories": RoundCalories(Totals["TotalNetCalories"] / Count),
     }

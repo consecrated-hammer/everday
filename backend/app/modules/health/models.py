@@ -76,6 +76,7 @@ class Settings(Base):
     AutoTuneTargetsWeekly = Column(Boolean, nullable=False, default=False)
     LastAutoTuneAt = Column(DateTime(timezone=True))
     ShowWeightChartOnToday = Column(Boolean, nullable=False, default=True)
+    ShowStepsChartOnToday = Column(Boolean, nullable=False, default=True)
     ShowWeightProjectionOnToday = Column(Boolean, nullable=False, default=True)
     GoalType = Column(String(20))
     GoalBmiMin = Column(Numeric(5, 2))
