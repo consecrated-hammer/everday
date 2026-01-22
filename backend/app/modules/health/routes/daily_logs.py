@@ -15,6 +15,7 @@ from app.modules.health.schemas import (
     MealEntry,
     MealEntryWithFood,
     ShareMealEntryInput,
+    StepsHistoryResponse,
     StepUpdateInput,
     Targets,
     UpdateMealEntryInput,
@@ -26,6 +27,7 @@ from app.modules.health.services.daily_logs_service import (
     DeleteMealEntry,
     GetDailyLogByDate,
     GetWeightHistory,
+    GetStepsHistory,
     GetEntriesForLog,
     ShareMealEntry,
     UpdateMealEntry,
@@ -115,6 +117,20 @@ def GetWeightHistoryRoute(
     try:
         weights = GetWeightHistory(db, user.Id, start_date, end_date)
         return WeightHistoryResponse(Weights=weights)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.get("/steps/history", response_model=StepsHistoryResponse)
+def GetStepsHistoryRoute(
+    start_date: str,
+    end_date: str,
+    db: Session = Depends(GetDb),
+    user: UserContext = Depends(RequireModuleRole("health", write=False)),
+) -> StepsHistoryResponse:
+    try:
+        steps = GetStepsHistory(db, user.Id, start_date, end_date)
+        return StepsHistoryResponse(Steps=steps)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 

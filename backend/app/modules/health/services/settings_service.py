@@ -281,6 +281,7 @@ def EnsureSettingsForUser(db: Session, UserId: int) -> SettingsModel:
         AutoTuneTargetsWeekly=False,
         LastAutoTuneAt=None,
         ShowWeightChartOnToday=True,
+        ShowStepsChartOnToday=True,
         ShowWeightProjectionOnToday=True,
         GoalType=None,
         GoalBmiMin=None,
@@ -425,6 +426,9 @@ def GetUserSettings(db: Session, UserId: int) -> UserSettings:
         Goal=GoalSummaryValue,
         ShowWeightChartOnToday=bool(record.ShowWeightChartOnToday)
         if record.ShowWeightChartOnToday is not None
+        else True,
+        ShowStepsChartOnToday=bool(record.ShowStepsChartOnToday)
+        if record.ShowStepsChartOnToday is not None
         else True,
         ShowWeightProjectionOnToday=bool(record.ShowWeightProjectionOnToday)
         if record.ShowWeightProjectionOnToday is not None

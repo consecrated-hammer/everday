@@ -124,6 +124,13 @@ export const ParseMealTemplateText = (payload) =>
 export const FetchWeeklySummary = (startDate) =>
   RequestJson(`${Health}/summary/weekly?start_date=${encodeURIComponent(startDate)}`);
 
+export const FetchStepsHistory = (startDate, endDate) =>
+  RequestJson(
+    `${Health}/daily-logs/steps/history?start_date=${encodeURIComponent(
+      startDate
+    )}&end_date=${encodeURIComponent(endDate)}`
+  );
+
 export const FetchWeightHistory = (startDate, endDate) =>
   RequestJson(
     `${Health}/daily-logs/weights/history?start_date=${encodeURIComponent(

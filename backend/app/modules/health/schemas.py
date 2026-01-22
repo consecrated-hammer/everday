@@ -167,6 +167,7 @@ class UserSettings(BaseModel):
     LastAutoTuneAt: datetime | None = None
     Goal: "GoalSummary | None" = None
     ShowWeightChartOnToday: bool = True
+    ShowStepsChartOnToday: bool = True
     ShowWeightProjectionOnToday: bool = True
     HaeApiKeyConfigured: bool = False
     HaeApiKeyLast4: str | None = None
@@ -197,6 +198,7 @@ class UpdateSettingsInput(BaseModel):
     BarOrder: list[str] | None = None
     AutoTuneTargetsWeekly: bool | None = None
     ShowWeightChartOnToday: bool | None = None
+    ShowStepsChartOnToday: bool | None = None
     ShowWeightProjectionOnToday: bool | None = None
 
 
@@ -257,6 +259,12 @@ class DailySummary(BaseModel):
     LogDate: date
     TotalCalories: int
     TotalProtein: float
+    TotalFibre: float
+    TotalCarbs: float
+    TotalFat: float
+    TotalSaturatedFat: float
+    TotalSugar: float
+    TotalSodium: float
     Steps: int
     NetCalories: int
 
@@ -274,6 +282,15 @@ class WeightHistoryEntry(BaseModel):
 
 class WeightHistoryResponse(BaseModel):
     Weights: list[WeightHistoryEntry]
+
+
+class StepsHistoryEntry(BaseModel):
+    LogDate: date
+    Steps: int
+
+
+class StepsHistoryResponse(BaseModel):
+    Steps: list[StepsHistoryEntry]
 
 
 class HaeImportResponse(BaseModel):

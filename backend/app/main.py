@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 import time
@@ -64,6 +65,18 @@ def _append_fallback_request_log(message: str) -> None:
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     with open(log_path, "a", encoding="utf-8") as handle:
         handle.write(f"{timestamp} INFO app.request {message}\n")
+
+
+def _append_fallback_startup_log(message: str) -> None:
+    log_path = os.getenv("LOG_FILE_PATH", "/app/logs/backend.log")
+    if not os.path.isabs(log_path):
+        log_path = os.path.abspath(log_path)
+    log_dir = os.path.dirname(log_path)
+    if log_dir:
+        os.makedirs(log_dir, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    with open(log_path, "a", encoding="utf-8") as handle:
+        handle.write(f"{timestamp} ERROR app.startup {message}\n")
 
 
 def _resolve_client_ip(request: Request) -> str:
@@ -184,10 +197,50 @@ if static_dir.exists():
 
 @app.on_event("startup")
 async def startup_tasks() -> None:
+    await _run_startup_db_tasks()
+
+
+def _env_int(name: str, default: int) -> int:
     try:
-        EnsureDatabaseSetup()
-        RunMigrations()
-        startup_logger.info("startup complete")
-    except Exception:
-        startup_logger.exception("startup failed")
-        raise
+        return int(os.getenv(name, "").strip() or default)
+    except ValueError:
+        return default
+
+
+def _env_float(name: str, default: float) -> float:
+    try:
+        return float(os.getenv(name, "").strip() or default)
+    except ValueError:
+        return default
+
+
+async def _run_startup_db_tasks() -> None:
+    retries = _env_int("DB_STARTUP_RETRIES", 12)
+    delay_seconds = _env_float("DB_STARTUP_RETRY_SECONDS", 5.0)
+    startup_logger.info(
+        "startup tasks scheduled (retries=%s, delay=%ss)",
+        retries,
+        delay_seconds,
+    )
+    for attempt in range(1, retries + 1):
+        try:
+            await asyncio.to_thread(EnsureDatabaseSetup)
+            await asyncio.to_thread(RunMigrations)
+            startup_logger.info("startup complete")
+            return
+        except Exception as exc:  # noqa: BLE001
+            if attempt >= retries:
+                startup_logger.exception(
+                    "startup failed after %s attempts, aborting startup: %s",
+                    attempt,
+                    exc,
+                )
+                _append_fallback_startup_log(f"startup failed after {attempt} attempts: {exc}")
+                raise
+            startup_logger.warning(
+                "startup attempt %s failed, retrying in %ss: %s",
+                attempt,
+                delay_seconds,
+                exc,
+            )
+            await asyncio.sleep(delay_seconds)

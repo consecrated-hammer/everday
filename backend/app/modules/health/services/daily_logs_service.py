@@ -21,6 +21,7 @@ from app.modules.health.schemas import (
     MealEntry,
     MealEntryWithFood,
     ShareMealEntryInput,
+    StepsHistoryEntry,
     UpdateMealEntryInput,
     WeightHistoryEntry,
 )
@@ -110,6 +111,29 @@ def GetWeightHistory(
         for row in rows
         if row.WeightKg is not None
     ]
+
+
+def GetStepsHistory(
+    db: Session,
+    UserId: int,
+    StartDate: str,
+    EndDate: str,
+) -> list[StepsHistoryEntry]:
+    StartValue = ParseIsoDate(StartDate)
+    EndValue = ParseIsoDate(EndDate)
+    if EndValue < StartValue:
+        raise ValueError("End date must be on or after the start date.")
+    rows = (
+        db.query(DailyLogModel)
+        .filter(
+            DailyLogModel.UserId == UserId,
+            DailyLogModel.LogDate >= StartValue,
+            DailyLogModel.LogDate <= EndValue,
+        )
+        .order_by(DailyLogModel.LogDate.asc())
+        .all()
+    )
+    return [StepsHistoryEntry(LogDate=row.LogDate, Steps=int(row.Steps or 0)) for row in rows]
 
 
 def _BuildMealEntrySchema(entry: MealEntryModel) -> MealEntry:
