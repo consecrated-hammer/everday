@@ -12,9 +12,8 @@ You are a coding agent operating in a VS Code + remote Linux host workflow. Deli
   - DEV = `scripts/dev.sh` with `docker-compose.traefik.dev.yml` using `.env.dev`
   - PROD = main stack compose at `/mnt/docker/config/dockerconfigs/docker-compose.yml`
 - Shared SQL lives in the main stack at `/mnt/docker/config/dockerconfigs/docker-compose.yml`:
-  - DEV uses `batserver-sql-dev` (port `14333` on host, `1433` in-network)
-  - PROD uses `batserver-sql-prod` (port `14335` on host, `1433` in-network)
-  - Data paths are bind-mounted under `/mnt/docker/config/dockerconfigs/batserver-sql-<env>`
+  - Single SQL Server container: `batserver-sql`
+  - Databases: `EVERDAY-DEV` and `EVERDAY-PROD`
   - Bootstrap schema/login with `scripts/sql/bootstrap-everday.sh <dev|prod>`
 ## Prod Deployment Steps (Everday)
 - Update `/mnt/docker/config/dockerconfigs/.env` for prod variables.
