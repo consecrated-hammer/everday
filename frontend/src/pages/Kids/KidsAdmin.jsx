@@ -90,6 +90,15 @@ const BuildDateTimeLabel = (dateValue) =>
     minute: "2-digit"
   });
 
+const BuildSignedCurrency = (amountValue) => {
+  const numericValue = Number(amountValue || 0);
+  if (!Number.isFinite(numericValue) || numericValue === 0) {
+    return "";
+  }
+  const formatted = FormatCurrency(Math.abs(numericValue));
+  return numericValue > 0 ? `+${formatted}` : `-${formatted}`;
+};
+
 const EmptyChoreForm = () => ({
   Label: "",
   Type: "Daily",
@@ -439,6 +448,40 @@ const KidsAdmin = () => {
     return map;
   }, [monthOverview]);
 
+  const ledgerTotalsByDate = useMemo(() => {
+    const totals = {};
+    ledgerEntries.forEach((entry) => {
+      if (!entry?.EntryDate) {
+        return;
+      }
+      const amount = Number(entry.Amount || 0);
+      if (!Number.isFinite(amount) || amount === 0) {
+        return;
+      }
+      totals[entry.EntryDate] = (totals[entry.EntryDate] || 0) + amount;
+    });
+    return totals;
+  }, [ledgerEntries]);
+
+  const dayMoneyTotalsByDate = useMemo(() => {
+    const totals = {};
+    const dailySliceValue = Number(monthSummary?.DailySlice || 0);
+    (monthOverview?.Days || []).forEach((day) => {
+      const ledgerTotal = ledgerTotalsByDate[day.Date] || 0;
+      const isDone = day.DailyTotal === 0 || day.DailyDone >= day.DailyTotal;
+      const dailyContribution = isDone ? dailySliceValue : 0;
+      const bonusTotal = Number(day.BonusApprovedTotal || 0);
+      const combinedTotal = ledgerTotal + dailyContribution + bonusTotal;
+      totals[day.Date] = combinedTotal;
+    });
+    Object.keys(ledgerTotalsByDate).forEach((dateKey) => {
+      if (!(dateKey in totals)) {
+        totals[dateKey] = ledgerTotalsByDate[dateKey];
+      }
+    });
+    return totals;
+  }, [ledgerTotalsByDate, monthOverview, monthSummary]);
+
   const calendarCells = useMemo(() => {
     const start = new Date(monthCursor.getFullYear(), monthCursor.getMonth(), 1);
     const daysInMonth = new Date(monthCursor.getFullYear(), monthCursor.getMonth() + 1, 0).getDate();
@@ -492,12 +535,12 @@ const KidsAdmin = () => {
         statusText,
         statusTone,
         statusIcon,
-        bonusTotal: data?.BonusApprovedTotal || 0,
-        pendingCount: data?.PendingCount || 0
+        pendingCount: data?.PendingCount || 0,
+        moneyTotal: dayMoneyTotalsByDate[dateKey] || 0
       });
     }
     return cells;
-  }, [monthCursor, overviewByDate, todayKey]);
+  }, [monthCursor, overviewByDate, todayKey, dayMoneyTotalsByDate]);
 
   const choresForKid = useMemo(() => {
     if (!activeKidId) {
@@ -812,6 +855,18 @@ const KidsAdmin = () => {
         new Date(`${b}T00:00:00`).getTime() - new Date(`${a}T00:00:00`).getTime()
     );
   }, [historyByDate]);
+
+  const dayLedgerEntries = useMemo(() => {
+    if (!selectedDay) {
+      return [];
+    }
+    const entries = ledgerEntries.filter((entry) => entry.EntryDate === selectedDay);
+    return entries.sort((a, b) => {
+      const aTime = new Date(a.CreatedAt).getTime();
+      const bTime = new Date(b.CreatedAt).getTime();
+      return bTime - aTime;
+    });
+  }, [ledgerEntries, selectedDay]);
 
   const entryByChoreId = useMemo(() => {
     const map = new Map();
@@ -1484,10 +1539,12 @@ const KidsAdmin = () => {
                       {label}
                     </div>
                   ))}
-                  {calendarCells.map((cell) =>
-                    cell.isEmpty ? (
-                      <div key={cell.key} className="kids-admin-day is-empty" />
-                    ) : (
+                  {calendarCells.map((cell) => {
+                    if (cell.isEmpty) {
+                      return <div key={cell.key} className="kids-admin-day is-empty" />;
+                    }
+                    const moneyLabel = BuildSignedCurrency(cell.moneyTotal);
+                    return (
                       <button
                         key={cell.key}
                         type="button"
@@ -1512,14 +1569,18 @@ const KidsAdmin = () => {
                             ) : null}
                           </span>
                         ) : null}
-                        {cell.bonusTotal ? (
-                          <span className="kids-admin-day-bonus">
-                            +{FormatCurrency(cell.bonusTotal)}
+                        {moneyLabel ? (
+                          <span
+                            className={`kids-admin-day-money${
+                              cell.moneyTotal < 0 ? " is-negative" : " is-positive"
+                            }`}
+                          >
+                            {moneyLabel}
                           </span>
                         ) : null}
                       </button>
-                    )
-                  )}
+                    );
+                  })}
                 </div>
               </section>
             </div>
@@ -1695,7 +1756,8 @@ const KidsAdmin = () => {
                   const dailySummary = dailyTotal
                     ? `${dailyDone}/${dailyTotal} daily jobs done`
                     : "No daily jobs";
-                  const bonusTotal = overview?.BonusApprovedTotal || 0;
+                  const moneyTotal = dayMoneyTotalsByDate[dateKey] || 0;
+                  const moneyLabel = BuildSignedCurrency(moneyTotal);
                   const pendingCount = overview?.PendingCount || 0;
                   const isPastOrToday = dateKey <= todayKey;
                   let dayTone = "";
@@ -1729,12 +1791,18 @@ const KidsAdmin = () => {
                                 <span className="kids-admin-day-pending">!</span>
                               ) : null}
                             </div>
-                            <span className="kids-admin-history-date-meta">{dailySummary}</span>
-                            {bonusTotal ? (
-                              <span className="kids-admin-history-day-bonus">
-                                +{FormatCurrency(bonusTotal)}
-                              </span>
-                            ) : null}
+                            <span className="kids-admin-history-date-meta">
+                              {dailySummary}
+                              {moneyLabel ? (
+                                <span
+                                  className={`kids-admin-history-day-money${
+                                    moneyTotal < 0 ? " is-negative" : " is-positive"
+                                  }`}
+                                >
+                                  {` • ${moneyLabel}`}
+                                </span>
+                              ) : null}
+                            </span>
                           </div>
                           <Icon
                             name="chevronDown"
@@ -2417,6 +2485,42 @@ const KidsAdmin = () => {
                           </div>
                         </div>
                       ))
+                  )}
+                </section>
+
+                <section className="kids-admin-drawer-section">
+                  <h4>Money entries</h4>
+                  {dayLedgerEntries.length === 0 ? (
+                    <p className="text-muted">No money entries for this date.</p>
+                  ) : (
+                    dayLedgerEntries.map((entry) => {
+                      const amountValue = Number(entry.Amount || 0);
+                      return (
+                        <div key={`ledger-${entry.Id}`} className="kids-admin-money-row">
+                          <div>
+                            <span>{entry.Narrative?.trim() || MoneyTypeLabel(entry.EntryType)}</span>
+                            <div className="kids-admin-money-meta">
+                              <span className="kids-pill kids-pill--muted">
+                                {MoneyTypeLabel(entry.EntryType)}
+                              </span>
+                              {entry.CreatedByName ? (
+                                <span className="kids-pill">{entry.CreatedByName}</span>
+                              ) : null}
+                            </div>
+                            {entry.Notes ? (
+                              <p className="kids-muted">{entry.Notes}</p>
+                            ) : null}
+                          </div>
+                          <span
+                            className={`kids-admin-money-amount${
+                              amountValue < 0 ? " is-negative" : ""
+                            }`}
+                          >
+                            {FormatCurrency(amountValue)}
+                          </span>
+                        </div>
+                      );
+                    })
                   )}
                 </section>
 
