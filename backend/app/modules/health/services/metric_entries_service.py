@@ -22,8 +22,15 @@ def ApplyMetricToDailyLog(
 ) -> bool:
     if MetricTypeValue == "steps":
         existing = record.StepsUpdatedAt
-        if existing is not None and OccurredAt <= existing:
-            return False
+        existing_source = record.StepsSource
+        if Source == "automation":
+            if existing_source == "automation" and existing is not None and OccurredAt <= existing:
+                return False
+        else:
+            if existing_source == "automation":
+                return False
+            if existing is not None and OccurredAt <= existing:
+                return False
         record.Steps = int(round(Value))
         record.StepsUpdatedAt = OccurredAt
         record.StepsSource = Source
