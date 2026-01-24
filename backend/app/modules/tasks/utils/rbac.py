@@ -17,6 +17,4 @@ def CanAccessTask(user: UserContext, owner_user_id: int, assignee_user_ids: set[
 
 
 def CanReassignTask(user: UserContext, owner_user_id: int) -> bool:
-    if IsAdmin(user):
-        return True
     return user.Id == owner_user_id
