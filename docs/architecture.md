@@ -1,7 +1,7 @@
 # Architecture
 
 ## Overview
-Everday is a multi-user household app with a FastAPI backend, SQL Server database, and a React + Vite frontend. The backend is the source of truth for calculations and access control.
+Everday is a multi-user household app with a FastAPI backend, SQL Server database, and a React + Vite frontend. The backend is the source of truth for calculations and access control. The frontend follows a strict UI primitives and layout contract to ensure consistent theming and predictable behaviour.
 
 ## Stack
 - Backend: FastAPI, SQLAlchemy, Alembic
@@ -21,7 +21,9 @@ Everday is a multi-user household app with a FastAPI backend, SQL Server databas
 - Module gating uses `RequireModuleRole(module, write=...)`:
   - `Kid` can only access the `kids` module.
   - `Parent` can access all modules; write endpoints require `Parent`.
-- Authorization is enforced server-side per route and per record.
+- Authorisation is enforced server-side:
+  - per route (module role)
+  - per record (ownership)
 
 ## Authentication
 - Passwords are hashed with Argon2id.
@@ -42,3 +44,51 @@ Everday is a multi-user household app with a FastAPI backend, SQL Server databas
 ## Data and Migrations
 - All schema changes go through Alembic migrations.
 - Migrations and seed scripts must be idempotent.
+
+## Frontend UI Architecture (Refresh Contract)
+The UI refresh is implemented without changing the backend stack. To prevent layout drift and theming inconsistencies, the following constraints apply.
+
+### AppShell is the single source of truth for layout
+- All authenticated pages render inside a single `AppShell` component that owns:
+  - Docked left navigation (desktop)
+  - Collapsible sidebar behaviour
+  - Top bar (page title, search, global actions)
+  - Content padding and desktop density defaults
+- Pages must not re-implement global layout behaviour.
+
+### UI primitives are mandatory
+All modules must use shared primitives. Do not introduce one-off styling for core controls.
+Required primitives:
+- `Button` (primary, secondary, ghost, destructive, icon)
+- `Input`, `TextArea`
+- `Select` / `DropdownMenu`
+- `Modal` / `Dialog`
+- `Popover`
+- `Drawer`
+- `Tabs` / `SegmentedControl`
+- `DataTable` (dense defaults)
+- `StatusPill` / `Badge`
+- `ConfirmDialog`
+- `Toast` / notifications
+
+### Overlay and z-index rules (no clipping bugs)
+- Dropdowns, popovers, and menus must render via a portal to a root overlay container.
+- Do not “fix” overlay issues with arbitrary z-index values in page CSS.
+- All overlays must be keyboard accessible and focus-managed (trap focus in modals).
+
+### Commit UX pattern (Dockhand-style)
+- Primary commit actions (Save/Update/Create) are disabled until:
+  - the form is dirty (a change has been made), and
+  - the form is valid
+- “Advanced options” are collapsed by default (accordion/expander).
+
+### Visual system alignment
+- UI styling must follow `STYLE_GUIDE.md`, including:
+  - Blue for active navigation/selection states
+  - Teal for primary commit actions and focus rings
+  - Dense desktop spacing rules for tables and forms
+
+## Documentation
+- UI rules: `STYLE_GUIDE.md`
+- Agent rules: `AGENTS.md`
+- This architecture document is evergreen and describes intended design constraints.
