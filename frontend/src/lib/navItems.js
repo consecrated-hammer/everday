@@ -6,6 +6,12 @@ export const NavItems = [
     MatchPrefixes: ["/"]
   },
   {
+    Label: "Tasks",
+    Path: "/tasks",
+    Icon: "tasks",
+    MatchPrefixes: ["/tasks"]
+  },
+  {
     Label: "Health",
     Path: "/health/today",
     Icon: "health",

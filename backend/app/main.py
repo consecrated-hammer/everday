@@ -26,6 +26,8 @@ from app.modules.shopping.router import router as shopping_router
 from app.modules.integrations.alexa.router import router as alexa_router
 from app.modules.life_admin.router import router as life_admin_router
 from app.modules.notifications.router import router as notifications_router
+from app.modules.tasks.router import router as tasks_router
+from app.modules.integrations.google.router import router as google_router
 
 setup_logging()
 warnings.filterwarnings(
@@ -172,6 +174,8 @@ app.include_router(shopping_router)
 app.include_router(alexa_router)
 app.include_router(life_admin_router)
 app.include_router(notifications_router)
+app.include_router(tasks_router)
+app.include_router(google_router)
 
 class SpaStaticFiles(StaticFiles):
     async def get_response(self, path: str, scope):

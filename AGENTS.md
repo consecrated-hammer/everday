@@ -117,7 +117,7 @@ If tests are slow, prioritise Tier 1 during implementation, then Tier 2 at the e
 - Apply least privilege defaults.
 
 ## UI/UX Implementation Rules
-- Follow the style guide in `docs/STYLE_GUIDE.md` for all UI work.
+- Follow the style guide in `docs/style_guide.md` for all UI work.
 - Desktop-first with mobile-friendly critical flows (quick add, review).
 - Accessibility as default (labels, focus states, contrast).
 - No em dashes in UI copy.
@@ -168,10 +168,8 @@ A task is “done” when:
 ## Roles and Permissions (RBAC)
 
 ### Roles
-- Admin
-- Editor
-- User
-- ReadOnly
+- Parent
+- Kid
 
 ### Scope model
 - Every domain record is owned by a `UserId`.
@@ -180,42 +178,34 @@ A task is “done” when:
   - Ownership (which records are permitted)
 
 ### Default permissions
-- ReadOnly:
-  - Can view summaries and lists.
-  - Cannot create/update/delete anything.
-- User:
-  - Full CRUD on their own records only.
-  - Cannot manage users/roles.
-- Editor:
-  - Full CRUD on their own records only.
-  - Cannot manage users/roles.
-- Admin:
-  - Can manage users, roles, password resets, and any global settings.
-  - Can view all records (or all household records if a household concept exists).
-  - Can reassign ownership when needed.
+- Kid:
+  - Can use the kids portal and kids APIs.
+  - Cannot access non-kids modules.
+- Parent:
+  - Full read/write across modules and settings.
+  - Can manage users/roles and link kids.
 
 ### Enforcement rules
 - Never trust role claims from the client.
 - Authorisation must be enforced in backend dependencies/middleware and checked per route.
 - Add explicit policy helpers, e.g.:
   - RequireAuthenticated
-  - RequireRoleAdmin
-  - RequireCanReadRecord(UserId)
-  - RequireCanWriteRecord(UserId)
+  - RequireModuleRole(module, write)
+  - RequireKidsMember
+  - RequireKidsManager
 - Unit test policy decisions (happy + deny paths).
 
 ## Logging (Built Upfront)
-- Use structured logs with fields:
-  - Timestamp, Level, Message, LoggerName, RequestId, UserId (when available)
+- Request middleware logs method/path/status/latency and sets `X-Request-Id` on responses.
 - Log to file with rotation.
 - All log configuration is driven by `.env`:
-  - LogLevel
-  - LogFilePath
-  - LogMaxBytes
-  - LogBackupCount
-  - LogJsonEnabled
+  - LOG_LEVEL
+  - LOG_FILE_PATH
+  - FRONTEND_LOG_FILE_PATH
+  - LOG_MAX_BYTES
+  - LOG_BACKUP_COUNT
+  - LOG_JSON_ENABLED
 - Never log secrets (tokens, passwords, auth headers). Redact sensitive headers by default.
-- Add request middleware to log method/path/status/latency and attach RequestId.
 
 ## Adhoc Scripts and Documentation
 - Place one-off validation scripts in `./_temp/` (create the folder if missing).

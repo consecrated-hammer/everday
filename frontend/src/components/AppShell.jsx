@@ -12,6 +12,7 @@ const navSections = [
     label: "Modules",
     items: [
       { label: "Dashboard", path: "/", icon: "dashboard", tone: "sunrise" },
+      { label: "Tasks", path: "/tasks", icon: "tasks", tone: "mint" },
       { label: "Budget", path: "/budget/allocations", icon: "budget", tone: "mint" },
       { label: "Shopping", path: "/shopping", icon: "shopping", tone: "sky" },
       { label: "Life admin", path: "/life-admin/records", icon: "agenda", tone: "sky" },

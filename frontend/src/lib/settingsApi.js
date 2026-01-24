@@ -31,3 +31,12 @@ export const UpdateUserProfile = async (userId, payload) => {
     body: JSON.stringify(payload)
   });
 };
+
+export const FetchGoogleAuthUrl = async () => {
+  return RequestJson("/integrations/google/oauth/start");
+};
+
+export const FetchGoogleStatus = async (validate = false) => {
+  const query = validate ? "?validate=1" : "";
+  return RequestJson(`/integrations/google/status${query}`);
+};
