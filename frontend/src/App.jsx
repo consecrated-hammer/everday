@@ -27,6 +27,7 @@ import KidsAdmin from "./pages/Kids/KidsAdmin.jsx";
 import LifeAdminLayout from "./pages/LifeAdmin/LifeAdminLayout.jsx";
 import LifeAdminRecords from "./pages/LifeAdmin/Records.jsx";
 import LifeAdminBuilder from "./pages/LifeAdmin/Builder.jsx";
+import Tasks from "./pages/Tasks/Tasks.jsx";
 
 const HealthHistoryRedirect = () => {
   const { date } = useParams();
@@ -66,6 +67,7 @@ const App = () => (
           <Route path="insights" element={<HealthInsights />} />
         </Route>
         <Route path="/shopping" element={<Shopping />} />
+        <Route path="/tasks" element={<Tasks />} />
         <Route path="/notifications" element={<Notifications />} />
         <Route path="/life-admin" element={<LifeAdminLayout />}>
           <Route index element={<Navigate to="/life-admin/records" replace />} />

@@ -7,16 +7,20 @@ import {
   CreateKidStartingBalance,
   CreateKidWithdrawal,
   FetchKidLedger,
+  FetchKidMonthOverview,
+  FetchKidMonthSummary,
   FetchLinkedKids
 } from "../../../lib/kidsApi.js";
 import { FormatCurrency } from "../../../lib/formatters.js";
+import { BuildKidsTotals } from "../../../lib/kidsTotals.js";
 
 const BuildKidName = (kid) => kid.FirstName || kid.Username || `Kid ${kid.KidUserId}`;
 const BuildToday = () => {
   const now = new Date();
-  return new Date(now.getFullYear(), now.getMonth(), now.getDate())
-    .toISOString()
-    .slice(0, 10);
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 };
 
 const EmptyTransaction = (kidId) => ({
@@ -60,12 +64,36 @@ const KidsWidget = () => {
         setStatus("ready");
         return;
       }
-      const ledgerResults = await Promise.all(
-        kidsList.map((kid) => FetchKidLedger(kid.KidUserId, 200))
+      const kidResults = await Promise.all(
+        kidsList.map(async (kid) => {
+          const [ledger, monthSummary, monthOverview] = await Promise.all([
+            FetchKidLedger(kid.KidUserId, 500),
+            FetchKidMonthSummary(kid.KidUserId),
+            FetchKidMonthOverview(kid.KidUserId)
+          ]);
+          const todayKey = BuildToday();
+          const monthStartKey = monthSummary?.MonthStart || monthOverview?.MonthStart || todayKey;
+          const monthEndKey = monthSummary?.MonthEnd || monthOverview?.MonthEnd || todayKey;
+          const totals = BuildKidsTotals({
+            TodayKey: todayKey,
+            MonthStartKey: monthStartKey,
+            MonthEndKey: monthEndKey,
+            MonthlyAllowance: monthSummary?.MonthlyAllowance ?? 0,
+            DailySlice: monthSummary?.DailySlice ?? 0,
+            OverviewDays: monthOverview?.Days || [],
+            LedgerEntries: ledger?.Entries || [],
+            IsCurrentMonth: true
+          });
+          return {
+            KidUserId: kid.KidUserId,
+            CurrentTotal: totals.CurrentTotal,
+            LedgerBalance: ledger?.Balance ?? 0
+          };
+        })
       );
       const balanceMap = {};
-      kidsList.forEach((kid, index) => {
-        balanceMap[kid.KidUserId] = ledgerResults[index]?.Balance ?? 0;
+      kidResults.forEach((result) => {
+        balanceMap[result.KidUserId] = result.CurrentTotal ?? result.LedgerBalance ?? 0;
       });
       setBalances(balanceMap);
       setStatus("ready");

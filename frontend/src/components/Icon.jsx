@@ -68,6 +68,11 @@ const IconMap = {
     material: "material-symbols:event",
     lucide: "lucide:calendar-check"
   },
+  tasks: {
+    phosphor: "ph:check-square",
+    material: "material-symbols:task-alt",
+    lucide: "lucide:check-square-2"
+  },
   inbox: {
     phosphor: "ph:inbox",
     material: "material-symbols:inbox",
@@ -177,6 +182,16 @@ const IconMap = {
     phosphor: "ph:check",
     material: "material-symbols:check",
     lucide: "lucide:check"
+  },
+  star: {
+    phosphor: "ph:star",
+    material: "material-symbols:star",
+    lucide: "lucide:star"
+  },
+  starFilled: {
+    phosphor: "ph:star-fill",
+    material: "material-symbols:star",
+    lucide: "lucide:star"
   },
   lock: {
     phosphor: "ph:lock",

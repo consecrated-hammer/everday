@@ -426,33 +426,6 @@ const Foods = () => {
   ]);
 
   useEffect(() => {
-    const addMode = searchParams.get("add");
-    const draft = LoadMealDraft();
-    if (!addMode) {
-      addHandledRef.current = null;
-      if (draft && !showMealForm) {
-        applyMealDraft(draft);
-      }
-      return;
-    }
-    if (addHandledRef.current === addMode) {
-      return;
-    }
-    if (addMode === "meal" && draft) {
-      applyMealDraft(draft);
-      addHandledRef.current = addMode;
-      return;
-    }
-    if (addMode === "food") {
-      startAddFood();
-    }
-    if (addMode === "meal") {
-      startAddMeal();
-    }
-    addHandledRef.current = addMode;
-  }, [searchParams, showMealForm, startAddFood, startAddMeal]);
-
-  useEffect(() => {
     if (!lookupModalOpen) {
       return undefined;
     }
@@ -655,6 +628,90 @@ const Foods = () => {
     }, { replace: true });
   }, [searchParams, setSearchParams]);
 
+  const closeFoodForm = useCallback(() => {
+    resetFoodForm();
+    setShowFoodForm(false);
+    setShowAdvanced(false);
+    clearAddModeParam();
+  }, [clearAddModeParam, resetFoodForm, setShowAdvanced, setShowFoodForm]);
+
+  const handleTabChange = useCallback((nextTab) => {
+    setActiveTab(nextTab);
+    const keepMealDraft = showMealForm;
+    if (nextTab === "all") {
+      setMobileFilter("all");
+      closeFoodForm();
+      if (!keepMealDraft) {
+        setShowMealForm(false);
+        clearAddModeParam();
+        setEditingTemplateId(null);
+        setTemplateForm({ ...EmptyTemplateForm });
+        setMealEntryMode("assistant");
+        setMealParseText("");
+        setMealParseResult(null);
+        setMealFoodSearch("");
+        setMealFoodQuantities({});
+        setAiMealNutrition(null);
+        setAiMealDescription("");
+      }
+      return;
+    }
+    if (nextTab === "foods" || nextTab === "meals") {
+      setMobileFilter(nextTab);
+    }
+    if (nextTab === "favourites") {
+      setMobileFilter("favourites");
+      closeFoodForm();
+      if (!keepMealDraft) {
+        setShowMealForm(false);
+        clearAddModeParam();
+        setEditingTemplateId(null);
+        setTemplateForm({ ...EmptyTemplateForm });
+        setMealEntryMode("assistant");
+        setMealParseText("");
+        setMealParseResult(null);
+        setMealFoodSearch("");
+        setMealFoodQuantities({});
+        setAiMealNutrition(null);
+        setAiMealDescription("");
+      }
+      return;
+    }
+    if (nextTab === "foods") {
+      if (!keepMealDraft) {
+        setShowMealForm(false);
+        clearAddModeParam();
+        setEditingTemplateId(null);
+        setTemplateForm({ ...EmptyTemplateForm });
+        setMealEntryMode("assistant");
+        setMealParseText("");
+        setMealParseResult(null);
+        setMealFoodSearch("");
+        setMealFoodQuantities({});
+        setAiMealNutrition(null);
+        setAiMealDescription("");
+      }
+    } else {
+      closeFoodForm();
+    }
+  }, [
+    clearAddModeParam,
+    closeFoodForm,
+    showMealForm,
+    setActiveTab,
+    setMobileFilter,
+    setShowMealForm,
+    setEditingTemplateId,
+    setTemplateForm,
+    setMealEntryMode,
+    setMealParseText,
+    setMealParseResult,
+    setMealFoodSearch,
+    setMealFoodQuantities,
+    setAiMealNutrition,
+    setAiMealDescription
+  ]);
+
   const startAddFood = useCallback(() => {
     if (searchParams.get("add") !== "food") {
       setSearchParams((prev) => {
@@ -677,13 +734,6 @@ const Foods = () => {
     setShowFoodForm,
     setError
   ]);
-
-  const closeFoodForm = useCallback(() => {
-    resetFoodForm();
-    setShowFoodForm(false);
-    setShowAdvanced(false);
-    clearAddModeParam();
-  }, [clearAddModeParam, resetFoodForm, setShowAdvanced, setShowFoodForm]);
 
   const saveFood = async (event) => {
     event.preventDefault();
@@ -1131,83 +1181,6 @@ const Foods = () => {
     }
   };
 
-  const handleTabChange = useCallback((nextTab) => {
-    setActiveTab(nextTab);
-    const keepMealDraft = showMealForm;
-    if (nextTab === "all") {
-      setMobileFilter("all");
-      closeFoodForm();
-      if (!keepMealDraft) {
-        setShowMealForm(false);
-        clearAddModeParam();
-        setEditingTemplateId(null);
-        setTemplateForm({ ...EmptyTemplateForm });
-        setMealEntryMode("assistant");
-        setMealParseText("");
-        setMealParseResult(null);
-        setMealFoodSearch("");
-        setMealFoodQuantities({});
-        setAiMealNutrition(null);
-        setAiMealDescription("");
-      }
-      return;
-    }
-    if (nextTab === "foods" || nextTab === "meals") {
-      setMobileFilter(nextTab);
-    }
-    if (nextTab === "favourites") {
-      setMobileFilter("favourites");
-      closeFoodForm();
-      if (!keepMealDraft) {
-        setShowMealForm(false);
-        clearAddModeParam();
-        setEditingTemplateId(null);
-        setTemplateForm({ ...EmptyTemplateForm });
-        setMealEntryMode("assistant");
-        setMealParseText("");
-        setMealParseResult(null);
-        setMealFoodSearch("");
-        setMealFoodQuantities({});
-        setAiMealNutrition(null);
-        setAiMealDescription("");
-      }
-      return;
-    }
-    if (nextTab === "foods") {
-      if (!keepMealDraft) {
-        setShowMealForm(false);
-        clearAddModeParam();
-        setEditingTemplateId(null);
-        setTemplateForm({ ...EmptyTemplateForm });
-        setMealEntryMode("assistant");
-        setMealParseText("");
-        setMealParseResult(null);
-        setMealFoodSearch("");
-        setMealFoodQuantities({});
-        setAiMealNutrition(null);
-        setAiMealDescription("");
-      }
-    } else {
-      closeFoodForm();
-    }
-  }, [
-    clearAddModeParam,
-    closeFoodForm,
-    showMealForm,
-    setActiveTab,
-    setMobileFilter,
-    setShowMealForm,
-    setEditingTemplateId,
-    setTemplateForm,
-    setMealEntryMode,
-    setMealParseText,
-    setMealParseResult,
-    setMealFoodSearch,
-    setMealFoodQuantities,
-    setAiMealNutrition,
-    setAiMealDescription
-  ]);
-
   const startAddMeal = useCallback(() => {
     if (searchParams.get("add") !== "meal") {
       setSearchParams((prev) => {
@@ -1242,6 +1215,33 @@ const Foods = () => {
     setAiMealNutrition,
     setAiMealDescription
   ]);
+
+  useEffect(() => {
+    const addMode = searchParams.get("add");
+    const draft = LoadMealDraft();
+    if (!addMode) {
+      addHandledRef.current = null;
+      if (draft && !showMealForm) {
+        applyMealDraft(draft);
+      }
+      return;
+    }
+    if (addHandledRef.current === addMode) {
+      return;
+    }
+    if (addMode === "meal" && draft) {
+      applyMealDraft(draft);
+      addHandledRef.current = addMode;
+      return;
+    }
+    if (addMode === "food") {
+      startAddFood();
+    }
+    if (addMode === "meal") {
+      startAddMeal();
+    }
+    addHandledRef.current = addMode;
+  }, [searchParams, showMealForm, startAddFood, startAddMeal]);
 
   const closeMealForm = () => {
     setShowMealForm(false);

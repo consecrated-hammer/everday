@@ -37,6 +37,12 @@ This document is the source of truth for UI and visual style decisions. Use it f
 - Default buttons are compact pill styles with clear hover/active states.
 - Avoid icons on text buttons; reserve icon-only buttons for obvious actions (edit, delete, filter, overflow).
 - Buttons should not wrap or resize; keep labels on one line.
+- Use standard button classes (no unstyled buttons):
+  - `primary-button` for the main CTA.
+  - `button-secondary` for secondary/neutral actions.
+  - `primary-button button-danger` for destructive actions (solid red background, white text).
+  - `button-secondary button-danger` for secondary destructive actions (outlined).
+  - `icon-button` for icon-only actions.
 
 ## Themes
 - Support Light, Dark, and Auto (system) themes.

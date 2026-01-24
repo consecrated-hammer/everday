@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { NavLink, useParams } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { NavLink, useParams, useSearchParams } from "react-router-dom";
 
 import {
   CreateUser,
+  FetchGoogleAuthUrl,
+  FetchGoogleStatus,
   FetchUsers,
   UpdateUserPassword,
   UpdateUserProfile,
@@ -17,7 +19,12 @@ import {
   UpdateHealthProfile,
   UpdateHealthSettings
 } from "../../lib/healthApi.js";
-import { GetTokens, GetUserId, SetTokens } from "../../lib/authStorage.js";
+import {
+  FetchTaskSettings,
+  RunTaskOverdueNotifications,
+  UpdateTaskSettings
+} from "../../lib/tasksApi.js";
+import { GetRole, GetTokens, GetUserId, SetTokens } from "../../lib/authStorage.js";
 import { ResetDashboardLayout } from "../../lib/dashboardLayout.js";
 import { GetUiSettings, SetUiSettings } from "../../lib/uiSettings.js";
 
@@ -83,6 +90,28 @@ const EmptyHealthTargets = {
   ShowSugarOnToday: false,
   ShowSodiumOnToday: false
 };
+
+const ResolveUserTimeZone = () => {
+  if (typeof Intl === "undefined" || !Intl.DateTimeFormat) {
+    return "UTC";
+  }
+  return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+};
+
+const BuildTimeOptions = (stepMinutes = 15) => {
+  const options = [];
+  for (let minutes = 0; minutes < 24 * 60; minutes += stepMinutes) {
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    const value = `${String(hours).padStart(2, "0")}:${String(mins).padStart(2, "0")}`;
+    const date = new Date(2000, 0, 1, hours, mins);
+    const label = date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    options.push({ value, label });
+  }
+  return options;
+};
+
+const TimeOptions = BuildTimeOptions();
 
 const BuildHealthTargetsState = (targets) => ({
   ...EmptyHealthTargets,
@@ -212,6 +241,23 @@ const Settings = () => {
   const [dbStatus, setDbStatus] = useState("checking");
   const [systemStatus, setSystemStatus] = useState("idle");
   const [dashboardNotice, setDashboardNotice] = useState("");
+  const [googleAuthStatus, setGoogleAuthStatus] = useState("idle");
+  const [googleAuthError, setGoogleAuthError] = useState("");
+  const [googleStatus, setGoogleStatus] = useState(null);
+  const [googleStatusState, setGoogleStatusState] = useState("idle");
+  const [googleStatusError, setGoogleStatusError] = useState("");
+  const [googleNotice, setGoogleNotice] = useState("");
+  const [taskSettings, setTaskSettings] = useState(null);
+  const [taskSettingsForm, setTaskSettingsForm] = useState({
+    OverdueReminderTime: "08:00",
+    OverdueReminderTimeZone: ResolveUserTimeZone()
+  });
+  const [taskSettingsStatus, setTaskSettingsStatus] = useState("idle");
+  const [taskSettingsError, setTaskSettingsError] = useState("");
+  const [taskSettingsNotice, setTaskSettingsNotice] = useState("");
+  const [taskOverdueRunStatus, setTaskOverdueRunStatus] = useState("idle");
+  const [taskOverdueRunNotice, setTaskOverdueRunNotice] = useState("");
+  const userTimeZone = useMemo(() => ResolveUserTimeZone(), []);
   const [showAddUser, setShowAddUser] = useState(false);
   const [newUserForm, setNewUserForm] = useState({
     Username: "",
@@ -224,8 +270,18 @@ const Settings = () => {
     RequirePasswordChange: false
   });
   const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:8100";
-  const settingsSections = ["appearance", "dashboard", "health", "system", "access"];
+  const settingsSections = [
+    "appearance",
+    "dashboard",
+    "health",
+    "tasks",
+    "system",
+    "integrations",
+    "access"
+  ];
   const activeSection = settingsSections.includes(section) ? section : null;
+  const isParent = GetRole() === "Parent";
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const loadUsers = async () => {
     try {
@@ -291,6 +347,114 @@ const Settings = () => {
     loadSystemStatus();
   }, [activeSection, loadSystemStatus]);
 
+  const loadGoogleStatus = useCallback(
+    async (validate = false) => {
+      try {
+        setGoogleStatusState("loading");
+        setGoogleStatusError("");
+        const response = await FetchGoogleStatus(validate);
+        setGoogleStatus(response || null);
+        setGoogleStatusState("ready");
+      } catch (err) {
+        setGoogleStatusState("error");
+        setGoogleStatusError(err?.message || "Failed to load Google status.");
+      }
+    },
+    []
+  );
+
+  const loadTaskSettings = useCallback(async () => {
+    try {
+      setTaskSettingsStatus("loading");
+      setTaskSettingsError("");
+      const response = await FetchTaskSettings();
+      setTaskSettings(response || null);
+      setTaskSettingsForm({
+        OverdueReminderTime: response?.OverdueReminderTime || "08:00",
+        OverdueReminderTimeZone: userTimeZone
+      });
+      setTaskSettingsStatus("ready");
+    } catch (err) {
+      setTaskSettingsStatus("error");
+      setTaskSettingsError(err?.message || "Failed to load task settings.");
+    }
+  }, [userTimeZone]);
+
+  const onTaskSettingsChange = useCallback((event) => {
+    const { name, value } = event.target;
+    setTaskSettingsForm((current) => ({
+      ...current,
+      [name]: value
+    }));
+  }, []);
+
+  const onTaskSettingsSave = useCallback(async () => {
+    try {
+      setTaskSettingsStatus("saving");
+      setTaskSettingsError("");
+      setTaskSettingsNotice("");
+      const payload = {
+        OverdueReminderTime: taskSettingsForm.OverdueReminderTime || null,
+        OverdueReminderTimeZone: taskSettingsForm.OverdueReminderTimeZone || userTimeZone
+      };
+      const response = await UpdateTaskSettings(payload);
+      setTaskSettings(response || null);
+      setTaskSettingsNotice("Task settings saved.");
+      setTaskSettingsStatus("ready");
+    } catch (err) {
+      setTaskSettingsStatus("error");
+      setTaskSettingsError(err?.message || "Failed to save task settings.");
+    }
+  }, [taskSettingsForm, userTimeZone]);
+
+  const onTaskOverdueRun = useCallback(async () => {
+    try {
+      setTaskOverdueRunStatus("loading");
+      setTaskOverdueRunNotice("");
+      const response = await RunTaskOverdueNotifications(true);
+      const sent = response?.NotificationsSent ?? 0;
+      const overdue = response?.OverdueTasks ?? 0;
+      const users = response?.UsersProcessed ?? 0;
+      setTaskOverdueRunNotice(
+        `Sent ${sent} notification${sent === 1 ? "" : "s"} for ${overdue} overdue task${
+          overdue === 1 ? "" : "s"
+        } across ${users} user${users === 1 ? "" : "s"}.`
+      );
+      setTaskOverdueRunStatus("ready");
+      await loadTaskSettings();
+    } catch (err) {
+      setTaskOverdueRunStatus("error");
+      setTaskOverdueRunNotice(err?.message || "Failed to run overdue notifications.");
+    }
+  }, [loadTaskSettings]);
+
+  useEffect(() => {
+    if (activeSection !== "integrations") {
+      return;
+    }
+    loadGoogleStatus(true);
+  }, [activeSection, loadGoogleStatus]);
+
+  useEffect(() => {
+    if (activeSection !== "integrations") {
+      return;
+    }
+    if (searchParams.get("connected") !== "google") {
+      return;
+    }
+    setGoogleNotice("Google connected successfully.");
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete("connected");
+    setSearchParams(nextParams, { replace: true });
+  }, [activeSection, searchParams, setSearchParams]);
+
+  useEffect(() => {
+    if (activeSection !== "tasks") {
+      return;
+    }
+    loadTaskSettings();
+  }, [activeSection, loadTaskSettings]);
+
   const onNewUserChange = (event) => {
     const { name, value, type, checked } = event.target;
     setNewUserForm((prev) => ({
@@ -306,6 +470,25 @@ const Settings = () => {
     ResetDashboardLayout(GetUserId());
     setDashboardNotice("Dashboard layout reset. Return to the dashboard to see it.");
   };
+
+  const onGoogleAuth = useCallback(async () => {
+    if (!isParent || googleAuthStatus === "loading") {
+      return;
+    }
+    try {
+      setGoogleAuthStatus("loading");
+      setGoogleAuthError("");
+      const response = await FetchGoogleAuthUrl();
+      const authUrl = response?.Url;
+      if (!authUrl) {
+        throw new Error("Google auth URL not available.");
+      }
+      window.location.assign(authUrl);
+    } catch (err) {
+      setGoogleAuthError(err?.message || "Failed to start Google sign in.");
+      setGoogleAuthStatus("idle");
+    }
+  }, [googleAuthStatus, isParent]);
 
   const onCreateUser = async (event) => {
     event.preventDefault();
@@ -833,6 +1016,18 @@ const Settings = () => {
     goalPreview?.CurrentWeightKg !== undefined
       ? Number(adjustedTargetWeight) - Number(goalPreview.CurrentWeightKg)
       : goalPreview?.WeightDeltaKg ?? null;
+  const googleConnected = Boolean(googleStatus?.Connected);
+  const googleNeedsReauth = Boolean(googleStatus?.NeedsReauth);
+  const googleConnectedAt = googleStatus?.ConnectedAt ? new Date(googleStatus.ConnectedAt) : null;
+  const googleValidatedAt = googleStatus?.ValidatedAt ? new Date(googleStatus.ValidatedAt) : null;
+  const googleConnectedBy = googleStatus?.ConnectedBy;
+  const googleConnectionLabel = googleConnected
+    ? googleNeedsReauth
+      ? "Re-authentication required"
+      : "Connected"
+    : "Not connected";
+  const googleActionLabel = googleConnected ? "Re-authenticate with Google" : "Authenticate with Google";
+  const googleStatusClass = googleConnected && !googleNeedsReauth ? "ok" : "error";
 
   return (
     <div className="module-panel">
@@ -871,12 +1066,28 @@ const Settings = () => {
           </NavLink>
           <p className="settings-nav-title">Workspace</p>
           <NavLink
+            to="/settings/tasks"
+            className={({ isActive }) =>
+              `settings-nav-item${isActive ? " is-active" : ""}`
+            }
+          >
+            Tasks
+          </NavLink>
+          <NavLink
             to="/settings/system"
             className={({ isActive }) =>
               `settings-nav-item${isActive ? " is-active" : ""}`
             }
           >
             System status
+          </NavLink>
+          <NavLink
+            to="/settings/integrations"
+            className={({ isActive }) =>
+              `settings-nav-item${isActive ? " is-active" : ""}`
+            }
+          >
+            Integrations
           </NavLink>
           <NavLink
             to="/settings/access"
@@ -966,6 +1177,87 @@ const Settings = () => {
             </div>
           ) : null}
 
+          {activeSection === "tasks" ? (
+            <div className="settings-section">
+              <div className="settings-section-header">
+                <div className="settings-section-header-row">
+                  <div>
+                    <h3>Tasks</h3>
+                    <p>Control overdue reminders and manual runs for Google Tasks.</p>
+                  </div>
+                  <button
+                    type="button"
+                    className="button-secondary"
+                    onClick={loadTaskSettings}
+                    disabled={taskSettingsStatus === "loading"}
+                  >
+                    {taskSettingsStatus === "loading" ? "Refreshing..." : "Refresh"}
+                  </button>
+                </div>
+              </div>
+              {taskSettingsNotice ? <p className="form-note">{taskSettingsNotice}</p> : null}
+              {taskSettingsError ? <p className="form-error">{taskSettingsError}</p> : null}
+              {taskOverdueRunNotice ? (
+                <p className={taskOverdueRunStatus === "error" ? "form-error" : "form-note"}>
+                  {taskOverdueRunNotice}
+                </p>
+              ) : null}
+              <div className="settings-list">
+                <div className="settings-item">
+                  <div>
+                    <h4>Overdue reminder time</h4>
+                    <p>Time of day to send overdue task notifications (local time: {userTimeZone}).</p>
+                  </div>
+                  <select
+                    name="OverdueReminderTime"
+                    value={taskSettingsForm.OverdueReminderTime}
+                    onChange={onTaskSettingsChange}
+                  >
+                    {TimeOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="settings-item">
+                  <div>
+                    <h4>Last reminder run</h4>
+                    <p>Latest date overdue reminders were sent.</p>
+                  </div>
+                  <p>
+                    {taskSettings?.OverdueLastNotifiedDate
+                      ? FormatDate(taskSettings.OverdueLastNotifiedDate)
+                      : "Not run yet"}
+                  </p>
+                </div>
+              </div>
+              <div className="form-actions">
+                <button
+                  type="button"
+                  className="primary-button"
+                  onClick={onTaskSettingsSave}
+                  disabled={taskSettingsStatus === "saving"}
+                >
+                  {taskSettingsStatus === "saving" ? "Saving..." : "Save changes"}
+                </button>
+                <button
+                  type="button"
+                  className="button-secondary"
+                  onClick={onTaskOverdueRun}
+                  disabled={!isParent || taskOverdueRunStatus === "loading"}
+                >
+                  {taskOverdueRunStatus === "loading"
+                    ? "Running overdue reminders..."
+                    : "Run overdue notifications now"}
+                </button>
+              </div>
+              {!isParent ? (
+                <p className="form-note">Only parent accounts can run overdue reminders.</p>
+              ) : null}
+            </div>
+          ) : null}
+
           {activeSection === "system" ? (
             <div className="settings-section">
               <div className="settings-section-header">
@@ -993,6 +1285,111 @@ const Settings = () => {
                   <span className="status-dot" aria-hidden="true" />
                   <span>Database {dbStatus === "ok" ? "connected" : dbStatus}</span>
                 </div>
+              </div>
+            </div>
+          ) : null}
+
+          {activeSection === "integrations" ? (
+            <div className="settings-section">
+              <div className="settings-section-header">
+                <div className="settings-section-header-row">
+                  <div>
+                    <h3>Integrations</h3>
+                    <p>Connect Everday to external services.</p>
+                  </div>
+                  <button
+                    type="button"
+                    className="button-secondary"
+                    onClick={() => loadGoogleStatus(true)}
+                    disabled={googleStatusState === "loading"}
+                  >
+                    {googleStatusState === "loading" ? "Checking..." : "Check connection"}
+                  </button>
+                </div>
+              </div>
+              <div className="settings-subsection">
+                <div className="settings-subsection-header">
+                  <h4>Google Tasks and Calendar</h4>
+                  <p>Sync tasks and events using the shared family account.</p>
+                </div>
+                {googleNotice ? <p className="form-note">{googleNotice}</p> : null}
+                {googleStatusError ? <p className="form-error">{googleStatusError}</p> : null}
+                {googleAuthError ? <p className="form-error">{googleAuthError}</p> : null}
+                <div className="settings-status-grid">
+                  <div className={`status-pill status-${googleStatusClass}`}>
+                    <span className="status-dot" aria-hidden="true" />
+                    <span>{googleConnectionLabel}</span>
+                  </div>
+                  {googleValidatedAt ? (
+                    <div className="status-pill">
+                      <span className="status-dot" aria-hidden="true" />
+                      <span>Checked {googleValidatedAt.toLocaleString()}</span>
+                    </div>
+                  ) : null}
+                </div>
+                {googleNeedsReauth ? (
+                  <p className="form-note">
+                    Google needs you to re-authenticate to keep tasks and events synced.
+                  </p>
+                ) : null}
+                <div className="settings-list settings-list--integrations">
+                  <div className="settings-item">
+                    <div>
+                      <h4>Connection</h4>
+                      <p>Launch the Google consent flow to link the shared calendar.</p>
+                    </div>
+                    <button
+                      type="button"
+                      className="primary-button settings-google-auth-button"
+                      onClick={onGoogleAuth}
+                      disabled={!isParent || googleAuthStatus === "loading"}
+                    >
+                      {googleAuthStatus === "loading" ? "Opening Google..." : googleActionLabel}
+                    </button>
+                  </div>
+                  <div className="settings-item">
+                    <div>
+                      <h4>Connected by</h4>
+                      <p>Parent account that completed the connection.</p>
+                    </div>
+                    <p>
+                      {googleConnectedBy
+                        ? `${googleConnectedBy.FirstName || ""} ${googleConnectedBy.LastName || ""}`.trim() ||
+                          googleConnectedBy.Username
+                        : "Not connected"}
+                    </p>
+                  </div>
+                  <div className="settings-item">
+                    <div>
+                      <h4>Connected at</h4>
+                      <p>Time the integration was last connected.</p>
+                    </div>
+                    <p>{googleConnectedAt ? googleConnectedAt.toLocaleString() : "Not connected"}</p>
+                  </div>
+                  <div className="settings-item">
+                    <div>
+                      <h4>Calendar ID</h4>
+                      <p>Google Calendar used for shared events.</p>
+                    </div>
+                    <p>{googleStatus?.CalendarId || "Not set"}</p>
+                  </div>
+                  <div className="settings-item">
+                    <div>
+                      <h4>Task list ID</h4>
+                      <p>Google Tasks list used for Everday tasks.</p>
+                    </div>
+                    <p>{googleStatus?.TaskListId || "Not set"}</p>
+                  </div>
+                </div>
+                {!isParent ? (
+                  <p className="form-note">
+                    Only a parent account can connect or disconnect this integration.
+                  </p>
+                ) : (
+                  <p className="form-note">
+                    This opens Google sign in for the shared account in the current browser.
+                  </p>
+                )}
               </div>
             </div>
           ) : null}
