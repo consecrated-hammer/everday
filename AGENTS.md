@@ -160,6 +160,11 @@ A task is “done” when:
 - Any schema change requires an Alembic migration.
 - Migrations and seed scripts must be idempotent and safe to rerun.
 - Keep backward compatibility where practical.
+- Migration revision IDs must be full strings (e.g., `"0041_health_ai_suggestion_runs"`), not just numbers.
+- SQL Server migration patterns:
+  - Use conditional schema creation: `IF NOT EXISTS (SELECT 1 FROM sys.schemas WHERE name = 'health') BEGIN EXEC('CREATE SCHEMA health') END`
+  - GRANT permissions use `EverdayCrud` role in prod (not `everday_app_user`).
+  - Consider skipping GRANT in migrations for dev-only ease; apply manually in prod.
 
 ### Security (RBAC + ownership)
 Core principles:
@@ -234,3 +239,23 @@ Enforcement rules:
 - Feature logic lives in hooks under `/src/hooks` (fetching, mutations, table prefs, calculations).
 - Shared UI goes in `/src/components`; shared utilities/constants in `/src/lib`.
 - Routing is required for top-level areas (e.g. /income, /expenses, /allocations, /settings).
+
+### Notifications and deep-linking
+- Use `CreateNotification` from `app.modules.notifications.services` to create notifications.
+- Notification link URLs can include anchor fragments (e.g., `/health/insights#ai-suggestions`).
+- To enable deep-linking, add `id="anchor-name"` to the target section in the frontend component.
+- Common notification types: `General`, `TaskReminder`, `TaskOverdue`, `HealthAiSuggestion`.
+
+### Admin-only endpoints
+- Check admin role using a local helper: `def _IsAdmin(user: UserContext) -> bool: return user.Role == "Admin"`.
+- Alternatively, import from existing RBAC utils: `app.modules.tasks.utils.rbac.IsAdmin` or `app.modules.notifications.utils.rbac.IsAdmin`.
+- Raise `HTTPException(status_code=403, detail="Access denied")` if not admin.
+
+### Automated run patterns
+- For scheduled/automated tasks (e.g., daily AI suggestions, notification runs):
+  - Create a tracking table to record runs: `UserId`, `RunDate`, success/failure, counts, timestamps.
+  - Check for existing run before processing to avoid duplicates.
+  - Use a service function with signature like `RunDailyX(db, admin_user_id, run_date)`.
+  - Expose via admin-only POST endpoint (e.g., `/api/module/feature/run-daily`).
+  - Return summary counts: eligible, processed, sent, errors.
+- Scheduling (future): cron job or task scheduler calls endpoint with admin auth token.

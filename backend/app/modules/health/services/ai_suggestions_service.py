@@ -2,13 +2,14 @@ import json
 from datetime import timedelta
 
 from app.modules.health.schemas import Suggestion
-from app.modules.health.models import DailyLog as DailyLogModel
+from app.modules.health.models import AiSuggestion, AiSuggestionRun, DailyLog as DailyLogModel
 from app.modules.health.services.daily_logs_service import GetDailyLogByDate, GetEntriesForLog
 from app.modules.health.services.settings_service import GetSettings
 from app.modules.health.services.summary_service import GetWeeklySummary
 from app.modules.health.services.openai_client import GetOpenAiContentWithModel
 from app.modules.health.utils.config import Settings
 from app.modules.health.utils.dates import ParseIsoDate
+from app.modules.auth.deps import NowUtc
 
 
 def _BuildWeeklyContext(Summary) -> list[str]:
@@ -160,11 +161,53 @@ def ParseAiSuggestions(Content: str) -> list[Suggestion]:
     return Suggestions
 
 
-def GetAiSuggestions(db, UserId: int, LogDate: str) -> tuple[list[Suggestion], str]:
+def GetAiSuggestions(db, UserId: int, LogDate: str, save_to_db: bool = True) -> tuple[list[Suggestion], str]:
+    """
+    Generate AI suggestions for a user on a specific date.
+    
+    Args:
+        db: Database session
+        UserId: User ID
+        LogDate: ISO date string (YYYY-MM-DD)
+        save_to_db: If True, save suggestions to database for cross-device sync
+    
+    Returns:
+        Tuple of (suggestions list, model_used string)
+    """
     if not Settings.OpenAiApiKey:
         raise ValueError("OpenAI API key not configured.")
 
     LogDateValue = ParseIsoDate(LogDate)
+    
+    # Check if we already have stored suggestions for this date
+    if save_to_db:
+        existing_run = (
+            db.query(AiSuggestionRun)
+            .filter(
+                AiSuggestionRun.UserId == UserId,
+                AiSuggestionRun.RunDate == LogDateValue,
+                AiSuggestionRun.SuggestionsGenerated > 0,
+            )
+            .order_by(AiSuggestionRun.CreatedAt.desc())
+            .first()
+        )
+        if existing_run:
+            stored_suggestions = (
+                db.query(AiSuggestion)
+                .filter(AiSuggestion.RunId == existing_run.Id)
+                .order_by(AiSuggestion.Id.asc())
+                .all()
+            )
+            if stored_suggestions:
+                return [
+                    Suggestion(
+                        SuggestionType=s.SuggestionType,
+                        Title=s.Title,
+                        Detail=s.Detail,
+                    )
+                    for s in stored_suggestions
+                ], existing_run.ModelUsed or "unknown"
+
     LogItem = GetDailyLogByDate(db, UserId, LogDateValue)
 
     Entries = GetEntriesForLog(db, UserId, LogItem.DailyLogId) if LogItem else []
@@ -220,7 +263,8 @@ def GetAiSuggestions(db, UserId: int, LogDate: str) -> tuple[list[Suggestion], s
         raise ValueError("No AI response content.")
 
     try:
-        return ParseAiSuggestions(Content), ModelUsed
+        suggestions = ParseAiSuggestions(Content)
+        model_used = ModelUsed
     except ValueError:
         RetryContent, RetryModelUsed = GetOpenAiContentWithModel(
             [
@@ -237,4 +281,53 @@ def GetAiSuggestions(db, UserId: int, LogDate: str) -> tuple[list[Suggestion], s
         )
         if not RetryContent:
             raise ValueError("No AI response content.")
-        return ParseAiSuggestions(RetryContent), RetryModelUsed
+        suggestions = ParseAiSuggestions(RetryContent)
+        model_used = RetryModelUsed
+    
+    # Save to database if requested
+    if save_to_db and suggestions:
+        now = NowUtc()
+        # Create or update run record
+        run_record = (
+            db.query(AiSuggestionRun)
+            .filter(
+                AiSuggestionRun.UserId == UserId,
+                AiSuggestionRun.RunDate == LogDateValue,
+            )
+            .first()
+        )
+        if not run_record:
+            run_record = AiSuggestionRun(
+                UserId=UserId,
+                RunDate=LogDateValue,
+                SuggestionsGenerated=len(suggestions),
+                ModelUsed=model_used,
+                NotificationSent=False,
+                CreatedAt=now,
+            )
+            db.add(run_record)
+            db.flush()
+        else:
+            run_record.SuggestionsGenerated = len(suggestions)
+            run_record.ModelUsed = model_used
+            db.add(run_record)
+            db.flush()
+        
+        # Delete old suggestions for this run
+        db.query(AiSuggestion).filter(AiSuggestion.RunId == run_record.Id).delete()
+        
+        # Save new suggestions
+        for suggestion in suggestions:
+            db.add(
+                AiSuggestion(
+                    UserId=UserId,
+                    RunId=run_record.Id,
+                    SuggestionType=suggestion.SuggestionType,
+                    Title=suggestion.Title,
+                    Detail=suggestion.Detail,
+                    CreatedAt=now,
+                )
+            )
+        db.commit()
+    
+    return suggestions, model_used
