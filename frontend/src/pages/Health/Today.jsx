@@ -632,51 +632,6 @@ const Today = () => {
     localStorage.setItem("health.stepsRange", stepsRangeKey);
   }, [stepsRangeKey]);
 
-  const onDragStart = (widgetId) => (event) => {
-    event.dataTransfer.setData("text/plain", widgetId);
-    event.dataTransfer.effectAllowed = "move";
-    setDraggingId(widgetId);
-  };
-
-  const onDragOver = (widgetId) => (event) => {
-    event.preventDefault();
-    if (widgetId !== draggingId) {
-      setDropTargetId(widgetId);
-    }
-  };
-
-  const onDrop = (widgetId) => (event) => {
-    event.preventDefault();
-    const sourceId = draggingId || event.dataTransfer.getData("text/plain");
-    if (!sourceId || sourceId === widgetId) {
-      return;
-    }
-    setLayout((prev) => SwapLayoutItems(prev, sourceId, widgetId));
-    setDraggingId(null);
-    setDropTargetId(null);
-  };
-
-  const onDragEnd = () => {
-    setDraggingId(null);
-    setDropTargetId(null);
-  };
-
-  const onResize = (widgetId) => {
-    setLayout((prev) =>
-      prev.map((item) => {
-        if (item.Id !== widgetId) {
-          return item;
-        }
-        const sizes = widgetMap.get(widgetId)?.Sizes || [];
-        return { ...item, Size: NextSize(item.Size, sizes) };
-      })
-    );
-  };
-
-  const onMove = (widgetId, direction) => {
-    setLayout((prev) => MoveLayoutItem(prev, widgetId, direction));
-  };
-
   const toggleWeightProjection = useCallback(async () => {
     const next = !showWeightProjection;
     setShowWeightProjection(next);

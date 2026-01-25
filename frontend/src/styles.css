@@ -8475,6 +8475,15 @@ th {
     align-items: flex-start;
   }
 
+  .settings-switch-inline {
+    justify-content: flex-start;
+  }
+
+  .settings-item {
+    grid-template-columns: 1fr;
+    align-items: flex-start;
+  }
+
   .settings-section .switch-pill {
     justify-self: end;
     margin-left: auto;
