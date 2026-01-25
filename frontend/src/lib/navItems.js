@@ -6,22 +6,16 @@ export const NavItems = [
     MatchPrefixes: ["/"]
   },
   {
-    Label: "Tasks",
-    Path: "/tasks",
-    Icon: "tasks",
-    MatchPrefixes: ["/tasks"]
-  },
-  {
     Label: "Health",
     Path: "/health/today",
     Icon: "health",
     MatchPrefixes: ["/health"]
   },
   {
-    Label: "Budget",
-    Path: "/budget/allocations",
-    Icon: "budget",
-    MatchPrefixes: ["/budget"]
+    Label: "Kids",
+    Path: "/kids-admin",
+    Icon: "team",
+    MatchPrefixes: ["/kids-admin"]
   },
   {
     Label: "Shopping",
@@ -36,10 +30,16 @@ export const NavItems = [
     MatchPrefixes: ["/life-admin"]
   },
   {
-    Label: "Kids",
-    Path: "/kids-admin",
-    Icon: "team",
-    MatchPrefixes: ["/kids-admin"]
+    Label: "Tasks",
+    Path: "/tasks",
+    Icon: "tasks",
+    MatchPrefixes: ["/tasks"]
+  },
+  {
+    Label: "Budget",
+    Path: "/budget/allocations",
+    Icon: "budget",
+    MatchPrefixes: ["/budget"]
   },
   {
     Label: "Settings",

@@ -72,6 +72,8 @@ Neutral colours handle:
 - Use shared primitives (`<Input />`, `<Select />`, `<TextArea />`, `<Checkbox />`, etc.) where available.
 - If primitives are not available in a context, apply the standard classes (do not leave controls unstyled).
 - Error, disabled, and focus states must be consistent across all controls.
+- Settings switch pills (appearance/health/tasks):
+  - Mobile view: right-align on/off pill toggles.
 
 ### Tables
 - Sortable columns, filterable category columns, resizable widths.

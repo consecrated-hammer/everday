@@ -2,6 +2,7 @@ import json
 from datetime import timedelta
 
 from app.modules.health.schemas import Suggestion
+from app.modules.health.models import DailyLog as DailyLogModel
 from app.modules.health.services.daily_logs_service import GetDailyLogByDate, GetEntriesForLog
 from app.modules.health.services.settings_service import GetSettings
 from app.modules.health.services.summary_service import GetWeeklySummary
@@ -60,8 +61,45 @@ def _ExtractJsonArray(Content: str) -> str:
     return Cleaned
 
 
+def _BuildRecentEntriesContext(db, UserId: int, LogDateValue, days: int = 7) -> list[str]:
+    start_date = LogDateValue - timedelta(days=days - 1)
+    rows = (
+        db.query(DailyLogModel)
+        .filter(
+            DailyLogModel.UserId == UserId,
+            DailyLogModel.LogDate >= start_date,
+            DailyLogModel.LogDate <= LogDateValue,
+        )
+        .order_by(DailyLogModel.LogDate.asc())
+        .all()
+    )
+    lines: list[str] = []
+    for log in rows:
+        entries = GetEntriesForLog(db, UserId, log.DailyLogId)
+        if not entries:
+            continue
+        for entry in entries:
+            meal_type = entry.MealType.value if hasattr(entry.MealType, "value") else entry.MealType
+            created_at = entry.CreatedAt
+            time_label = created_at.strftime("%H:%M") if created_at else "time unknown"
+            calories = round((entry.CaloriesPerServing or 0) * entry.Quantity, 1)
+            protein = round((entry.ProteinPerServing or 0) * entry.Quantity, 1)
+            lines.append(
+                (
+                    f"- {log.LogDate.isoformat()} {meal_type} at {time_label}: "
+                    f"{entry.FoodName} x{entry.Quantity} ({calories} kcal, {protein} g protein)"
+                )
+            )
+    return lines
+
+
 def BuildAiPrompt(
-    LogDate: str, Steps: int, Entries: list[dict], Targets: dict, WeeklySummary
+    LogDate: str,
+    Steps: int,
+    Entries: list[dict],
+    Targets: dict,
+    WeeklySummary,
+    RecentEntries: list[str] | None = None,
 ) -> str:
     Lines = [
         "Use today's log as the primary context. Use the weekly summary for trends and fallback.",
@@ -81,6 +119,12 @@ def BuildAiPrompt(
             )
 
     Lines.extend(_BuildWeeklyContext(WeeklySummary))
+    if RecentEntries is not None:
+        Lines.append("Recent intake (last 7 days):")
+        if RecentEntries:
+            Lines.extend(RecentEntries)
+        else:
+            Lines.append("- No recent meals logged.")
     Lines.append("Provide 2-4 concise suggestions focused on protein, calories, or meal balance.")
     return "\n".join(Lines)
 
@@ -145,12 +189,17 @@ def GetAiSuggestions(db, UserId: int, LogDate: str) -> tuple[list[Suggestion], s
         "ProteinTargetMax": Targets.ProteinTargetMax,
     }
 
+    recent_entries = None
+    if len(PayloadEntries) < 3:
+        recent_entries = _BuildRecentEntriesContext(db, UserId, LogDateValue, days=7)
+
     Prompt = BuildAiPrompt(
         LogDate,
         LogItem.Steps if LogItem else 0,
         PayloadEntries,
         TargetsPayload,
         WeeklySummary,
+        RecentEntries=recent_entries,
     )
 
     Messages = [
