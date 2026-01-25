@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { NavLink, useParams, useSearchParams } from "react-router-dom";
+import { createPortal } from "react-dom";
 
 import {
   CreateUser,
@@ -20,25 +21,33 @@ import {
   UpdateHealthSettings
 } from "../../lib/healthApi.js";
 import {
+  FetchTaskOverdueHistory,
   FetchTaskSettings,
   RunTaskOverdueNotifications,
   UpdateTaskSettings
 } from "../../lib/tasksApi.js";
 import { GetRole, GetTokens, GetUserId, SetTokens } from "../../lib/authStorage.js";
-import { ResetDashboardLayout } from "../../lib/dashboardLayout.js";
 import { GetUiSettings, SetUiSettings } from "../../lib/uiSettings.js";
+import { FormatDateTime } from "../../lib/formatters.js";
+import Icon from "../../components/Icon.jsx";
+import DataTable from "../../components/DataTable.jsx";
+import { GetGravatarUrl } from "../../lib/gravatar.js";
 
 const RoleOptions = ["Parent", "Kid"];
-const ThemeOptions = [
-  { value: "auto", label: "Auto" },
-  { value: "light", label: "Light" },
-  { value: "dark", label: "Dark" }
-];
 const IconOptions = [
   { value: "phosphor", label: "Phosphor" },
   { value: "material", label: "Material Symbols" },
   { value: "lucide", label: "Lucide" }
 ];
+const SettingsTabs = [
+  { id: "appearance", label: "Appearance", path: "/settings/appearance" },
+  { id: "health", label: "Health", path: "/settings/health" },
+  { id: "tasks", label: "Tasks", path: "/settings/tasks" },
+  { id: "system", label: "System", path: "/settings/system" },
+  { id: "integrations", label: "Integrations", path: "/settings/integrations" },
+  { id: "access", label: "Users", path: "/settings/access" }
+];
+const SettingsSections = SettingsTabs.map((tab) => tab.id);
 const ActivityOptions = [
   { value: "sedentary", label: "Sedentary" },
   { value: "lightly_active", label: "Lightly active" },
@@ -152,6 +161,74 @@ const FormatDate = (value) => {
   return parsed.toLocaleDateString();
 };
 
+const BuildHealthProfilePayload = (profile) => ({
+  FirstName: profile.FirstName || null,
+  LastName: profile.LastName || null,
+  Email: profile.Email || null,
+  BirthDate: profile.BirthDate || null,
+  HeightCm: profile.HeightCm ? Number(profile.HeightCm) : null,
+  WeightKg: profile.WeightKg ? Number(profile.WeightKg) : null,
+  ActivityLevel: profile.ActivityLevel || null
+});
+
+const BuildHealthSettingsPayload = (targets, showWeightChart, showStepsChart) => ({
+  DailyCalorieTarget: Number(targets.DailyCalorieTarget || 0),
+  ProteinTargetMin: Number(targets.ProteinTargetMin || 0),
+  ProteinTargetMax: Number(targets.ProteinTargetMax || 0),
+  StepTarget: Number(targets.StepTarget || 0),
+  StepKcalFactor: Number(targets.StepKcalFactor || 0),
+  FibreTarget: targets.FibreTarget ? Number(targets.FibreTarget) : null,
+  CarbsTarget: targets.CarbsTarget ? Number(targets.CarbsTarget) : null,
+  FatTarget: targets.FatTarget ? Number(targets.FatTarget) : null,
+  SaturatedFatTarget: targets.SaturatedFatTarget ? Number(targets.SaturatedFatTarget) : null,
+  SugarTarget: targets.SugarTarget ? Number(targets.SugarTarget) : null,
+  SodiumTarget: targets.SodiumTarget ? Number(targets.SodiumTarget) : null,
+  ShowProteinOnToday: targets.ShowProteinOnToday,
+  ShowStepsOnToday: targets.ShowStepsOnToday,
+  ShowFibreOnToday: targets.ShowFibreOnToday,
+  ShowCarbsOnToday: targets.ShowCarbsOnToday,
+  ShowFatOnToday: targets.ShowFatOnToday,
+  ShowSaturatedFatOnToday: targets.ShowSaturatedFatOnToday,
+  ShowSugarOnToday: targets.ShowSugarOnToday,
+  ShowSodiumOnToday: targets.ShowSodiumOnToday,
+  ShowWeightChartOnToday: showWeightChart,
+  ShowStepsChartOnToday: showStepsChart
+});
+
+const FormatRelativeTime = (value) => {
+  if (!value) return "Not checked";
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "Not checked";
+  const diffMs = Date.now() - date.getTime();
+  const diffSeconds = Math.max(0, Math.floor(diffMs / 1000));
+  if (diffSeconds < 45) return "just now";
+  const diffMinutes = Math.floor(diffSeconds / 60);
+  if (diffMinutes < 60) return `${diffMinutes} min${diffMinutes === 1 ? "" : "s"} ago`;
+  const diffHours = Math.floor(diffMinutes / 60);
+  if (diffHours < 24) return `${diffHours} hour${diffHours === 1 ? "" : "s"} ago`;
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays < 30) return `${diffDays} day${diffDays === 1 ? "" : "s"} ago`;
+  const diffMonths = Math.floor(diffDays / 30);
+  if (diffMonths < 12) return `${diffMonths} month${diffMonths === 1 ? "" : "s"} ago`;
+  const diffYears = Math.floor(diffMonths / 12);
+  return `${diffYears} year${diffYears === 1 ? "" : "s"} ago`;
+};
+
+const GetUserInitials = (user) => {
+  const first = (user.FirstName || "").trim();
+  const last = (user.LastName || "").trim();
+  const username = (user.Username || "").trim();
+  const letters = [];
+  if (first) letters.push(first[0]);
+  if (last) letters.push(last[0]);
+  if (letters.length === 0 && username) letters.push(username[0]);
+  if (letters.length === 1 && username.length > 1) letters.push(username[1]);
+  return letters.join("").toUpperCase() || "?";
+};
+
+const GetUserDisplayName = (user) =>
+  [user.FirstName, user.LastName].filter(Boolean).join(" ").trim() || user.Username || "Account";
+
 const FindBmiRangeForValue = (value) => {
   if (value === null || value === undefined) return null;
   return BmiRangeOptions.find((option) => value >= option.min && value <= option.max) || null;
@@ -215,7 +292,6 @@ const Settings = () => {
   const [healthAutoTuneLastRunAt, setHealthAutoTuneLastRunAt] = useState(null);
   const [healthGoal, setHealthGoal] = useState(null);
   const [healthShowWeightChart, setHealthShowWeightChart] = useState(true);
-  const [healthShowWeightProjection, setHealthShowWeightProjection] = useState(true);
   const [healthShowStepsChart, setHealthShowStepsChart] = useState(true);
   const [healthHaeConfigured, setHealthHaeConfigured] = useState(false);
   const [healthHaeLast4, setHealthHaeLast4] = useState("");
@@ -224,6 +300,11 @@ const Settings = () => {
   const [healthHaeKeyStatus, setHealthHaeKeyStatus] = useState("idle");
   const [healthHaeCopied, setHealthHaeCopied] = useState(false);
   const healthHaeCopyTimer = useRef(null);
+  const healthProfileSaveTimer = useRef(null);
+  const healthSettingsSaveTimer = useRef(null);
+  const healthProfileSavedRef = useRef("");
+  const healthSettingsSavedRef = useRef("");
+  const healthLoadedRef = useRef(false);
   const [goalWizardOpen, setGoalWizardOpen] = useState(false);
   const [goalWizardStep, setGoalWizardStep] = useState(0);
   const [goalWizardStatus, setGoalWizardStatus] = useState("idle");
@@ -240,23 +321,34 @@ const Settings = () => {
   const [apiStatus, setApiStatus] = useState("checking");
   const [dbStatus, setDbStatus] = useState("checking");
   const [systemStatus, setSystemStatus] = useState("idle");
-  const [dashboardNotice, setDashboardNotice] = useState("");
   const [googleAuthStatus, setGoogleAuthStatus] = useState("idle");
   const [googleAuthError, setGoogleAuthError] = useState("");
   const [googleStatus, setGoogleStatus] = useState(null);
   const [googleStatusState, setGoogleStatusState] = useState("idle");
   const [googleStatusError, setGoogleStatusError] = useState("");
   const [googleNotice, setGoogleNotice] = useState("");
+  const [accessSearchTerm, setAccessSearchTerm] = useState("");
+  const [accessMenu, setAccessMenu] = useState(null);
+  const [selectedIntegration, setSelectedIntegration] = useState("google");
+  const integrationCopyTimer = useRef(null);
   const [taskSettings, setTaskSettings] = useState(null);
   const [taskSettingsForm, setTaskSettingsForm] = useState({
     OverdueReminderTime: "08:00",
-    OverdueReminderTimeZone: ResolveUserTimeZone()
+    OverdueReminderTimeZone: ResolveUserTimeZone(),
+    OverdueRemindersEnabled: true
   });
   const [taskSettingsStatus, setTaskSettingsStatus] = useState("idle");
   const [taskSettingsError, setTaskSettingsError] = useState("");
-  const [taskSettingsNotice, setTaskSettingsNotice] = useState("");
+  const [taskToast, setTaskToast] = useState("");
+  const [taskRunHistory, setTaskRunHistory] = useState([]);
+  const [taskHistoryStatus, setTaskHistoryStatus] = useState("idle");
+  const [showTaskHistory, setShowTaskHistory] = useState(false);
   const [taskOverdueRunStatus, setTaskOverdueRunStatus] = useState("idle");
   const [taskOverdueRunNotice, setTaskOverdueRunNotice] = useState("");
+  const taskToastTimer = useRef(null);
+  const taskSettingsSaveTimer = useRef(null);
+  const taskSettingsSavedRef = useRef("");
+  const taskSettingsLoadedRef = useRef(false);
   const userTimeZone = useMemo(() => ResolveUserTimeZone(), []);
   const [showAddUser, setShowAddUser] = useState(false);
   const [newUserForm, setNewUserForm] = useState({
@@ -270,20 +362,18 @@ const Settings = () => {
     RequirePasswordChange: false
   });
   const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:8100";
-  const settingsSections = [
-    "appearance",
-    "dashboard",
-    "health",
-    "tasks",
-    "system",
-    "integrations",
-    "access"
-  ];
-  const activeSection = settingsSections.includes(section) ? section : null;
+  const activeSection = SettingsSections.includes(section) ? section : "appearance";
   const isParent = GetRole() === "Parent";
+  const latestTaskRun = taskRunHistory[0] || null;
+  const taskNeedsAttention = Boolean(
+    taskSettingsStatus === "error" ||
+      taskOverdueRunStatus === "error" ||
+      taskHistoryStatus === "error" ||
+      latestTaskRun?.result === "Failed"
+  );
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const loadUsers = async () => {
+  const loadUsers = useCallback(async () => {
     try {
       setStatus("loading");
       setError("");
@@ -310,7 +400,7 @@ const Settings = () => {
       setStatus("error");
       setError(err?.message || "Failed to load users");
     }
-  };
+  }, []);
 
   const loadSystemStatus = useCallback(async () => {
     try {
@@ -338,7 +428,7 @@ const Settings = () => {
 
   useEffect(() => {
     loadUsers();
-  }, []);
+  }, [loadUsers]);
 
   useEffect(() => {
     if (activeSection !== "system") {
@@ -371,8 +461,15 @@ const Settings = () => {
       setTaskSettings(response || null);
       setTaskSettingsForm({
         OverdueReminderTime: response?.OverdueReminderTime || "08:00",
-        OverdueReminderTimeZone: userTimeZone
+        OverdueReminderTimeZone: userTimeZone,
+        OverdueRemindersEnabled: response?.OverdueRemindersEnabled !== false
       });
+      taskSettingsSavedRef.current = JSON.stringify({
+        OverdueReminderTime: response?.OverdueReminderTime || "08:00",
+        OverdueReminderTimeZone: userTimeZone,
+        OverdueRemindersEnabled: response?.OverdueRemindersEnabled !== false
+      });
+      taskSettingsLoadedRef.current = true;
       setTaskSettingsStatus("ready");
     } catch (err) {
       setTaskSettingsStatus("error");
@@ -380,31 +477,73 @@ const Settings = () => {
     }
   }, [userTimeZone]);
 
+  const loadTaskHistory = useCallback(async (limit = 20) => {
+    try {
+      setTaskHistoryStatus("loading");
+      setTaskOverdueRunNotice("");
+      const response = await FetchTaskOverdueHistory(limit);
+      const entries = Array.isArray(response) ? response : [];
+      const mapped = entries.map((entry) => ({
+        id: entry.Id ?? entry.id ?? `${entry.RanAt || entry.ranAt || ""}`,
+        ranAt: entry.RanAt ?? entry.ranAt,
+        result: entry.Result ?? entry.result ?? "Unknown",
+        sent: entry.NotificationsSent ?? entry.sent ?? 0,
+        overdue: entry.OverdueTasks ?? entry.overdue ?? 0,
+        users: entry.UsersProcessed ?? entry.users ?? 0,
+        error: entry.ErrorMessage ?? entry.error ?? ""
+      }));
+      setTaskRunHistory(mapped);
+      setTaskHistoryStatus("ready");
+    } catch (err) {
+      setTaskHistoryStatus("error");
+      setTaskOverdueRunNotice(err?.message || "Failed to load overdue run history.");
+      setTaskRunHistory([]);
+    }
+  }, []);
+
   const onTaskSettingsChange = useCallback((event) => {
-    const { name, value } = event.target;
+    const { name, value, type, checked } = event.target;
+    const nextValue = type === "checkbox" ? checked : value;
     setTaskSettingsForm((current) => ({
       ...current,
-      [name]: value
+      [name]: nextValue
     }));
   }, []);
 
-  const onTaskSettingsSave = useCallback(async () => {
-    try {
-      setTaskSettingsStatus("saving");
-      setTaskSettingsError("");
-      setTaskSettingsNotice("");
-      const payload = {
-        OverdueReminderTime: taskSettingsForm.OverdueReminderTime || null,
-        OverdueReminderTimeZone: taskSettingsForm.OverdueReminderTimeZone || userTimeZone
-      };
-      const response = await UpdateTaskSettings(payload);
-      setTaskSettings(response || null);
-      setTaskSettingsNotice("Task settings saved.");
-      setTaskSettingsStatus("ready");
-    } catch (err) {
-      setTaskSettingsStatus("error");
-      setTaskSettingsError(err?.message || "Failed to save task settings.");
+  useEffect(() => {
+    if (!taskSettingsLoadedRef.current) {
+      return;
     }
+    const serialized = JSON.stringify(taskSettingsForm);
+    if (serialized === taskSettingsSavedRef.current) {
+      return;
+    }
+    if (taskSettingsSaveTimer.current) {
+      clearTimeout(taskSettingsSaveTimer.current);
+    }
+    taskSettingsSaveTimer.current = setTimeout(async () => {
+      try {
+        setTaskSettingsStatus("saving");
+        setTaskSettingsError("");
+        const payload = {
+          OverdueReminderTime: taskSettingsForm.OverdueReminderTime || null,
+          OverdueReminderTimeZone: taskSettingsForm.OverdueReminderTimeZone || userTimeZone,
+          OverdueRemindersEnabled: Boolean(taskSettingsForm.OverdueRemindersEnabled)
+        };
+        const response = await UpdateTaskSettings(payload);
+        setTaskSettings(response || null);
+        taskSettingsSavedRef.current = serialized;
+        setTaskSettingsStatus("ready");
+      } catch (err) {
+        setTaskSettingsStatus("error");
+        setTaskSettingsError(err?.message || "Failed to save task settings.");
+      }
+    }, 700);
+    return () => {
+      if (taskSettingsSaveTimer.current) {
+        clearTimeout(taskSettingsSaveTimer.current);
+      }
+    };
   }, [taskSettingsForm, userTimeZone]);
 
   const onTaskOverdueRun = useCallback(async () => {
@@ -413,20 +552,28 @@ const Settings = () => {
       setTaskOverdueRunNotice("");
       const response = await RunTaskOverdueNotifications(true);
       const sent = response?.NotificationsSent ?? 0;
-      const overdue = response?.OverdueTasks ?? 0;
-      const users = response?.UsersProcessed ?? 0;
-      setTaskOverdueRunNotice(
-        `Sent ${sent} notification${sent === 1 ? "" : "s"} for ${overdue} overdue task${
-          overdue === 1 ? "" : "s"
-        } across ${users} user${users === 1 ? "" : "s"}.`
-      );
+      const message = `Sent ${sent} reminder${sent === 1 ? "" : "s"}.`;
+      setTaskToast(message);
+      if (taskToastTimer.current) {
+        clearTimeout(taskToastTimer.current);
+      }
+      taskToastTimer.current = setTimeout(() => {
+        setTaskToast("");
+      }, 2600);
       setTaskOverdueRunStatus("ready");
-      await loadTaskSettings();
+      setTaskSettings((prev) =>
+        prev ? { ...prev, OverdueLastNotifiedDate: new Date().toISOString() } : prev
+      );
+      await Promise.all([loadTaskSettings(), loadTaskHistory()]);
     } catch (err) {
       setTaskOverdueRunStatus("error");
       setTaskOverdueRunNotice(err?.message || "Failed to run overdue notifications.");
     }
-  }, [loadTaskSettings]);
+  }, [loadTaskHistory, loadTaskSettings]);
+
+  const onRefreshTaskStatus = useCallback(async () => {
+    await Promise.all([loadTaskSettings(), loadTaskHistory()]);
+  }, [loadTaskHistory, loadTaskSettings]);
 
   useEffect(() => {
     if (activeSection !== "integrations") {
@@ -453,7 +600,15 @@ const Settings = () => {
       return;
     }
     loadTaskSettings();
-  }, [activeSection, loadTaskSettings]);
+    loadTaskHistory();
+  }, [activeSection, loadTaskHistory, loadTaskSettings]);
+
+  useEffect(() => {
+    if (!showTaskHistory || activeSection !== "tasks") {
+      return;
+    }
+    loadTaskHistory();
+  }, [activeSection, loadTaskHistory, showTaskHistory]);
 
   const onNewUserChange = (event) => {
     const { name, value, type, checked } = event.target;
@@ -461,14 +616,6 @@ const Settings = () => {
       ...prev,
       [name]: type === "checkbox" ? checked : value
     }));
-  };
-
-  const onResetDashboardLayout = () => {
-    if (!window.confirm("Reset your dashboard layout to the default arrangement?")) {
-      return;
-    }
-    ResetDashboardLayout(GetUserId());
-    setDashboardNotice("Dashboard layout reset. Return to the dashboard to see it.");
   };
 
   const onGoogleAuth = useCallback(async () => {
@@ -538,8 +685,8 @@ const Settings = () => {
         FetchHealthProfile(),
         FetchRecommendationHistory()
       ]);
-      setHealthTargets(BuildHealthTargetsState(settings.Targets));
-      setHealthProfile({
+      const nextTargets = BuildHealthTargetsState(settings.Targets);
+      const nextProfile = {
         ...EmptyHealthProfile,
         FirstName: profile.FirstName || "",
         LastName: profile.LastName || "",
@@ -548,15 +695,18 @@ const Settings = () => {
         HeightCm: profile.HeightCm || "",
         WeightKg: profile.WeightKg || "",
         ActivityLevel: profile.ActivityLevel || ""
-      });
+      };
+      const nextShowWeightChart = settings.ShowWeightChartOnToday !== false;
+      const nextShowStepsChart = settings.ShowStepsChartOnToday !== false;
+      setHealthTargets(nextTargets);
+      setHealthProfile(nextProfile);
       setHealthAutoTuneWeekly(Boolean(settings.AutoTuneTargetsWeekly));
       setHealthAutoTuneLastRunAt(
         settings.LastAutoTuneAt ? new Date(settings.LastAutoTuneAt) : null
       );
       setHealthGoal(settings.Goal || null);
-      setHealthShowWeightChart(settings.ShowWeightChartOnToday !== false);
-      setHealthShowStepsChart(settings.ShowStepsChartOnToday !== false);
-      setHealthShowWeightProjection(settings.ShowWeightProjectionOnToday !== false);
+      setHealthShowWeightChart(nextShowWeightChart);
+      setHealthShowStepsChart(nextShowStepsChart);
       setHealthHaeConfigured(Boolean(settings.HaeApiKeyConfigured));
       setHealthHaeLast4(settings.HaeApiKeyLast4 || "");
       setHealthHaeCreatedAt(settings.HaeApiKeyCreatedAt ? new Date(settings.HaeApiKeyCreatedAt) : null);
@@ -564,6 +714,11 @@ const Settings = () => {
       setHealthHaeKeyStatus("idle");
       setHealthHaeCopied(false);
       setHealthRecommendationHistory(history.Logs || []);
+      healthProfileSavedRef.current = JSON.stringify(BuildHealthProfilePayload(nextProfile));
+      healthSettingsSavedRef.current = JSON.stringify(
+        BuildHealthSettingsPayload(nextTargets, nextShowWeightChart, nextShowStepsChart)
+      );
+      healthLoadedRef.current = true;
       setHealthStatus("ready");
     } catch (err) {
       setHealthStatus("error");
@@ -575,7 +730,7 @@ const Settings = () => {
     loadHealthSettings();
   }, []);
 
-  const onRoleChange = async (userId, role) => {
+  const onRoleChange = useCallback(async (userId, role) => {
     try {
       setStatus("saving");
       setError("");
@@ -593,7 +748,7 @@ const Settings = () => {
       setStatus("error");
       setError(err?.message || "Failed to update role");
     }
-  };
+  }, []);
 
   const onOpenPasswordModal = (user) => {
     setPasswordTarget(user);
@@ -698,64 +853,71 @@ const Settings = () => {
     }
   };
 
-  const saveHealthProfile = async (event) => {
-    event.preventDefault();
-    try {
-      setHealthStatus("saving");
-      setHealthError("");
-      await UpdateHealthProfile({
-        FirstName: healthProfile.FirstName || null,
-        LastName: healthProfile.LastName || null,
-        Email: healthProfile.Email || null,
-        BirthDate: healthProfile.BirthDate || null,
-        HeightCm: healthProfile.HeightCm ? Number(healthProfile.HeightCm) : null,
-        WeightKg: healthProfile.WeightKg ? Number(healthProfile.WeightKg) : null,
-        ActivityLevel: healthProfile.ActivityLevel || null
-      });
-      await loadHealthSettings();
-    } catch (err) {
-      setHealthStatus("error");
-      setHealthError(err?.message || "Failed to update health profile");
+  useEffect(() => {
+    if (!healthLoadedRef.current) {
+      return;
     }
-  };
+    const payload = BuildHealthProfilePayload(healthProfile);
+    const serialized = JSON.stringify(payload);
+    if (serialized === healthProfileSavedRef.current) {
+      return;
+    }
+    if (healthProfileSaveTimer.current) {
+      clearTimeout(healthProfileSaveTimer.current);
+    }
+    healthProfileSaveTimer.current = setTimeout(async () => {
+      try {
+        setHealthStatus("saving");
+        setHealthError("");
+        await UpdateHealthProfile(payload);
+        healthProfileSavedRef.current = serialized;
+        setHealthStatus("ready");
+      } catch (err) {
+        setHealthStatus("error");
+        setHealthError(err?.message || "Failed to update health profile");
+      }
+    }, 700);
+    return () => {
+      if (healthProfileSaveTimer.current) {
+        clearTimeout(healthProfileSaveTimer.current);
+      }
+    };
+  }, [healthProfile]);
 
-  const saveHealthTargets = async (event) => {
-    event.preventDefault();
-    try {
-      setHealthStatus("saving");
-      setHealthError("");
-      await UpdateHealthSettings({
-        DailyCalorieTarget: Number(healthTargets.DailyCalorieTarget || 0),
-        ProteinTargetMin: Number(healthTargets.ProteinTargetMin || 0),
-        ProteinTargetMax: Number(healthTargets.ProteinTargetMax || 0),
-        StepTarget: Number(healthTargets.StepTarget || 0),
-        StepKcalFactor: Number(healthTargets.StepKcalFactor || 0),
-        FibreTarget: healthTargets.FibreTarget ? Number(healthTargets.FibreTarget) : null,
-        CarbsTarget: healthTargets.CarbsTarget ? Number(healthTargets.CarbsTarget) : null,
-        FatTarget: healthTargets.FatTarget ? Number(healthTargets.FatTarget) : null,
-        SaturatedFatTarget: healthTargets.SaturatedFatTarget
-          ? Number(healthTargets.SaturatedFatTarget)
-          : null,
-        SugarTarget: healthTargets.SugarTarget ? Number(healthTargets.SugarTarget) : null,
-        SodiumTarget: healthTargets.SodiumTarget ? Number(healthTargets.SodiumTarget) : null,
-        ShowProteinOnToday: healthTargets.ShowProteinOnToday,
-        ShowStepsOnToday: healthTargets.ShowStepsOnToday,
-        ShowFibreOnToday: healthTargets.ShowFibreOnToday,
-        ShowCarbsOnToday: healthTargets.ShowCarbsOnToday,
-        ShowFatOnToday: healthTargets.ShowFatOnToday,
-        ShowSaturatedFatOnToday: healthTargets.ShowSaturatedFatOnToday,
-        ShowSugarOnToday: healthTargets.ShowSugarOnToday,
-        ShowSodiumOnToday: healthTargets.ShowSodiumOnToday,
-        ShowWeightChartOnToday: healthShowWeightChart,
-        ShowStepsChartOnToday: healthShowStepsChart,
-        ShowWeightProjectionOnToday: healthShowWeightProjection
-      });
-      await loadHealthSettings();
-    } catch (err) {
-      setHealthStatus("error");
-      setHealthError(err?.message || "Failed to update health targets");
+  useEffect(() => {
+    if (!healthLoadedRef.current) {
+      return;
     }
-  };
+    const payload = BuildHealthSettingsPayload(
+      healthTargets,
+      healthShowWeightChart,
+      healthShowStepsChart
+    );
+    const serialized = JSON.stringify(payload);
+    if (serialized === healthSettingsSavedRef.current) {
+      return;
+    }
+    if (healthSettingsSaveTimer.current) {
+      clearTimeout(healthSettingsSaveTimer.current);
+    }
+    healthSettingsSaveTimer.current = setTimeout(async () => {
+      try {
+        setHealthStatus("saving");
+        setHealthError("");
+        await UpdateHealthSettings(payload);
+        healthSettingsSavedRef.current = serialized;
+        setHealthStatus("ready");
+      } catch (err) {
+        setHealthStatus("error");
+        setHealthError(err?.message || "Failed to update health settings");
+      }
+    }, 700);
+    return () => {
+      if (healthSettingsSaveTimer.current) {
+        clearTimeout(healthSettingsSaveTimer.current);
+      }
+    };
+  }, [healthTargets, healthShowWeightChart, healthShowStepsChart]);
 
   const rotateHaeApiKey = async () => {
     try {
@@ -797,6 +959,18 @@ const Settings = () => {
     return () => {
       if (healthHaeCopyTimer.current) {
         clearTimeout(healthHaeCopyTimer.current);
+      }
+      if (healthProfileSaveTimer.current) {
+        clearTimeout(healthProfileSaveTimer.current);
+      }
+      if (healthSettingsSaveTimer.current) {
+        clearTimeout(healthSettingsSaveTimer.current);
+      }
+      if (taskToastTimer.current) {
+        clearTimeout(taskToastTimer.current);
+      }
+      if (taskSettingsSaveTimer.current) {
+        clearTimeout(taskSettingsSaveTimer.current);
       }
     };
   }, []);
@@ -847,6 +1021,24 @@ const Settings = () => {
       setHealthAutoTuneWeekly(Boolean(updated.AutoTuneTargetsWeekly));
       setHealthAutoTuneLastRunAt(
         updated.LastAutoTuneAt ? new Date(updated.LastAutoTuneAt) : null
+      );
+      if (updated.ShowWeightChartOnToday !== undefined) {
+        setHealthShowWeightChart(updated.ShowWeightChartOnToday !== false);
+      }
+      if (updated.ShowStepsChartOnToday !== undefined) {
+        setHealthShowStepsChart(updated.ShowStepsChartOnToday !== false);
+      }
+      const nextTargets = BuildHealthTargetsState(updated.Targets);
+      const nextShowWeight =
+        updated.ShowWeightChartOnToday !== undefined
+          ? updated.ShowWeightChartOnToday !== false
+          : healthShowWeightChart;
+      const nextShowSteps =
+        updated.ShowStepsChartOnToday !== undefined
+          ? updated.ShowStepsChartOnToday !== false
+          : healthShowStepsChart;
+      healthSettingsSavedRef.current = JSON.stringify(
+        BuildHealthSettingsPayload(nextTargets, nextShowWeight, nextShowSteps)
       );
       setHealthAiStatus("ready");
     } catch (err) {
@@ -1021,107 +1213,234 @@ const Settings = () => {
   const googleConnectedAt = googleStatus?.ConnectedAt ? new Date(googleStatus.ConnectedAt) : null;
   const googleValidatedAt = googleStatus?.ValidatedAt ? new Date(googleStatus.ValidatedAt) : null;
   const googleConnectedBy = googleStatus?.ConnectedBy;
-  const googleConnectionLabel = googleConnected
-    ? googleNeedsReauth
-      ? "Re-authentication required"
-      : "Connected"
-    : "Not connected";
   const googleActionLabel = googleConnected ? "Re-authenticate with Google" : "Authenticate with Google";
-  const googleStatusClass = googleConnected && !googleNeedsReauth ? "ok" : "error";
+  const googleStatusTone =
+    googleStatusState === "error"
+      ? "error"
+      : googleNeedsReauth
+        ? "checking"
+        : googleConnected
+          ? "ok"
+          : "";
+  const googleStatusLabel =
+    googleStatusState === "error"
+      ? "Error"
+      : googleNeedsReauth
+        ? "Needs auth"
+        : googleConnected
+          ? "Connected"
+          : "Disabled";
+  const googleServices = [
+    googleStatus?.CalendarId ? "Calendar" : null,
+    googleStatus?.TaskListId ? "Tasks" : null
+  ].filter(Boolean);
+  const googleCheckedLabel = googleValidatedAt
+    ? `Checked ${FormatRelativeTime(googleValidatedAt)}`
+    : "Not checked";
+  const healthCheckedLabel = healthHaeCreatedAt
+    ? `Checked ${FormatRelativeTime(healthHaeCreatedAt)}`
+    : "Not checked";
+  const accessRows = useMemo(
+    () =>
+      users.map((user) => {
+        const displayName = GetUserDisplayName(user);
+        const gravatar = GetGravatarUrl(user.Email || "");
+        return {
+          Id: user.Id,
+          AvatarFallback: GetUserInitials(user),
+          AvatarUrl: gravatar,
+          Name: displayName || "Not set",
+          Email: user.Email || "Not set",
+          Username: user.Username,
+          Role: user.Role || "Kid",
+          Status: user.RequirePasswordChange ? "Reset required" : "Active",
+          LastActive: user.CreatedAt || "",
+          RequirePasswordChange: Boolean(user.RequirePasswordChange),
+          User: user
+        };
+      }),
+    [users]
+  );
+  const accessColumns = useMemo(
+    () => [
+      {
+        key: "Avatar",
+        label: "Avatar",
+        width: 80,
+        sortable: false,
+        filterable: false,
+        render: (row) =>
+          row.AvatarUrl ? (
+            <img
+              src={row.AvatarUrl}
+              alt={row.Name}
+              className="settings-user-avatar-img"
+              loading="lazy"
+            />
+          ) : (
+            <span className="settings-user-avatar">{row.AvatarFallback}</span>
+          )
+      },
+      { key: "Id", label: "Id", width: 70, sortable: true, filterable: true },
+      { key: "Name", label: "Name", width: 180, sortable: true, filterable: true },
+      { key: "Email", label: "Email", width: 220, sortable: true, filterable: true },
+      { key: "Username", label: "Username", width: 160, sortable: true, filterable: true },
+      {
+        key: "Role",
+        label: "Role",
+        width: 140,
+        sortable: true,
+        filterable: true,
+        render: (row) => (
+          <select
+            value={row.Role}
+            onChange={(event) => onRoleChange(row.Id, event.target.value)}
+            disabled={status === "saving"}
+          >
+            {RoleOptions.map((role) => (
+              <option key={role} value={role}>
+                {role}
+              </option>
+            ))}
+          </select>
+        )
+      },
+      { key: "Status", label: "Status", width: 160, sortable: true, filterable: true },
+      {
+        key: "LastActive",
+        label: "Last active/Updated",
+        width: 180,
+        sortable: true,
+        filterable: false,
+        render: (row) => (row.LastActive ? FormatDate(row.LastActive) : "Not set")
+      }
+    ],
+    [status, onRoleChange]
+  );
+
+  const onAccessMenuToggle = (user, event) => {
+    event.preventDefault();
+    const button = event.currentTarget;
+    const rect = button.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const spaceAbove = rect.top;
+    const openAbove = spaceBelow < 200 && spaceAbove > spaceBelow;
+    const right = Math.max(8, window.innerWidth - rect.right);
+    const style = openAbove
+      ? {
+          right: `${right}px`,
+          bottom: `${window.innerHeight - rect.top + 8}px`,
+          top: "auto",
+          left: "auto"
+        }
+      : {
+          right: `${right}px`,
+          top: `${rect.bottom + 8}px`,
+          bottom: "auto",
+          left: "auto"
+        };
+
+    setAccessMenu((prev) =>
+      prev?.userId === user.Id ? null : { userId: user.Id, style, user }
+    );
+  };
+
+  useEffect(() => {
+    if (!accessMenu) {
+      return;
+    }
+    const handleClick = (event) => {
+      if (
+        event.target.closest(".settings-access-menu-dropdown") ||
+        event.target.closest(".settings-access-menu-button")
+      ) {
+        return;
+      }
+      setAccessMenu(null);
+    };
+    const handleKey = (event) => {
+      if (event.key === "Escape") {
+        setAccessMenu(null);
+      }
+    };
+    const handleScroll = () => setAccessMenu(null);
+    document.addEventListener("mousedown", handleClick);
+    document.addEventListener("keydown", handleKey);
+    window.addEventListener("resize", handleScroll);
+    window.addEventListener("scroll", handleScroll, true);
+    return () => {
+      document.removeEventListener("mousedown", handleClick);
+      document.removeEventListener("keydown", handleKey);
+      window.removeEventListener("resize", handleScroll);
+      window.removeEventListener("scroll", handleScroll, true);
+    };
+  }, [accessMenu]);
+
+  useEffect(() => {
+    const timerRef = integrationCopyTimer;
+    return () => {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+      }
+    };
+  }, []);
+
+
+  const accessMenuPortal =
+    accessMenu && typeof document !== "undefined"
+      ? createPortal(
+          <div
+            className="dropdown dropdown-right settings-access-menu-dropdown"
+            role="menu"
+            style={accessMenu.style}
+          >
+            <button
+              type="button"
+              className="dropdown-item"
+              onClick={() => {
+                setAccessMenu(null);
+                onOpenProfileModal(accessMenu.user);
+              }}
+            >
+              Edit profile
+            </button>
+            <button
+              type="button"
+              className="dropdown-item"
+              onClick={() => {
+                setAccessMenu(null);
+                onOpenPasswordModal(accessMenu.user);
+              }}
+            >
+              Reset password
+            </button>
+          </div>,
+          document.body
+        )
+      : null;
 
   return (
     <div className="module-panel">
-      <header className="module-panel-header">
-        <div>
-          <h2>Settings</h2>
-          <p>Manage user access and preferences.</p>
-        </div>
-      </header>
       <div className="settings-layout">
-        <aside className="settings-nav">
-          <p className="settings-nav-title">Account</p>
-          <NavLink
-            to="/settings/appearance"
-            className={({ isActive }) =>
-              `settings-nav-item${isActive ? " is-active" : ""}`
-            }
-          >
-            Appearance
-          </NavLink>
-          <NavLink
-            to="/settings/dashboard"
-            className={({ isActive }) =>
-              `settings-nav-item${isActive ? " is-active" : ""}`
-            }
-          >
-            Dashboard
-          </NavLink>
-          <NavLink
-            to="/settings/health"
-            className={({ isActive }) =>
-              `settings-nav-item${isActive ? " is-active" : ""}`
-            }
-          >
-            Health
-          </NavLink>
-          <p className="settings-nav-title">Workspace</p>
-          <NavLink
-            to="/settings/tasks"
-            className={({ isActive }) =>
-              `settings-nav-item${isActive ? " is-active" : ""}`
-            }
-          >
-            Tasks
-          </NavLink>
-          <NavLink
-            to="/settings/system"
-            className={({ isActive }) =>
-              `settings-nav-item${isActive ? " is-active" : ""}`
-            }
-          >
-            System status
-          </NavLink>
-          <NavLink
-            to="/settings/integrations"
-            className={({ isActive }) =>
-              `settings-nav-item${isActive ? " is-active" : ""}`
-            }
-          >
-            Integrations
-          </NavLink>
-          <NavLink
-            to="/settings/access"
-            className={({ isActive }) =>
-              `settings-nav-item${isActive ? " is-active" : ""}`
-            }
-          >
-            User profiles
-          </NavLink>
-        </aside>
+        <nav className="settings-tabs" aria-label="Settings sections">
+          {SettingsTabs.map((tab) => (
+            <NavLink
+              key={tab.id}
+              to={tab.path}
+              className={`settings-tab${activeSection === tab.id ? " is-active" : ""}`}
+            >
+              {tab.label}
+            </NavLink>
+          ))}
+        </nav>
         <section className="settings-content">
-          {activeSection === null ? (
-            <p className="form-note">Select a section to view settings.</p>
-          ) : null}
           {activeSection === "appearance" ? (
-            <div className="settings-section">
+            <div className="settings-section settings-section--slim">
               <div className="settings-section-header">
                 <h3>Appearance</h3>
                 <p>Control the theme, icons, and number formatting.</p>
               </div>
-              <div className="settings-list">
-                <div className="settings-item">
-                  <div>
-                    <h4>Theme</h4>
-                    <p>Choose light, dark, or match your device.</p>
-                  </div>
-                  <select name="Theme" value={uiSettings.Theme} onChange={onUiChange}>
-                    {ThemeOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+              <div className="settings-list settings-list--slim">
                 <div className="settings-item">
                   <div>
                     <h4>Icon set</h4>
@@ -1140,140 +1459,277 @@ const Settings = () => {
                     <h4>Show decimals</h4>
                     <p>Display cents in currency amounts.</p>
                   </div>
-                  <label className="settings-switch-inline">
+                  <div className="switch-pill">
                     <input
+                      id="show-decimals"
                       type="checkbox"
                       name="ShowDecimals"
                       checked={uiSettings.ShowDecimals}
                       onChange={onUiChange}
+                      aria-label="Show decimals"
                     />
-                    <span className="switch-track" aria-hidden="true">
-                      <span className="switch-thumb" />
-                    </span>
-                  </label>
-                </div>
-              </div>
-            </div>
-          ) : null}
-
-          {activeSection === "dashboard" ? (
-            <div className="settings-section">
-              <div className="settings-section-header">
-                <h3>Dashboard</h3>
-                <p>Reset your widget layout back to the default order.</p>
-              </div>
-              {dashboardNotice ? <p className="form-note">{dashboardNotice}</p> : null}
-              <div className="settings-list">
-                <div className="settings-item">
-                  <div>
-                    <h4>Reset layout</h4>
-                    <p>Restore the default widget arrangement for your account.</p>
+                    <label htmlFor="show-decimals" className="switch-pill-track">
+                      <span className="switch-pill-icon switch-pill-icon--off">
+                        <Icon name="toggleOff" className="icon" />
+                      </span>
+                      <span className="switch-pill-icon switch-pill-icon--on">
+                        <Icon name="toggleOn" className="icon" />
+                      </span>
+                      <span className="switch-pill-text switch-pill-text--off">Off</span>
+                      <span className="switch-pill-text switch-pill-text--on">On</span>
+                    </label>
                   </div>
-                  <button type="button" className="button-secondary" onClick={onResetDashboardLayout}>
-                    Reset layout
-                  </button>
                 </div>
               </div>
             </div>
           ) : null}
 
           {activeSection === "tasks" ? (
-            <div className="settings-section">
+            <div className="settings-section settings-section--full">
               <div className="settings-section-header">
                 <div className="settings-section-header-row">
                   <div>
                     <h3>Tasks</h3>
                     <p>Control overdue reminders and manual runs for Google Tasks.</p>
                   </div>
-                  <button
-                    type="button"
-                    className="button-secondary"
-                    onClick={loadTaskSettings}
-                    disabled={taskSettingsStatus === "loading"}
-                  >
-                    {taskSettingsStatus === "loading" ? "Refreshing..." : "Refresh"}
-                  </button>
                 </div>
               </div>
-              {taskSettingsNotice ? <p className="form-note">{taskSettingsNotice}</p> : null}
               {taskSettingsError ? <p className="form-error">{taskSettingsError}</p> : null}
               {taskOverdueRunNotice ? (
-                <p className={taskOverdueRunStatus === "error" ? "form-error" : "form-note"}>
-                  {taskOverdueRunNotice}
-                </p>
+                <p className="form-error">{taskOverdueRunNotice}</p>
               ) : null}
-              <div className="settings-list">
-                <div className="settings-item">
-                  <div>
-                    <h4>Overdue reminder time</h4>
-                    <p>Time of day to send overdue task notifications (local time: {userTimeZone}).</p>
+              <div className="settings-tasks">
+                <div className="settings-subsection">
+                  <div className="settings-subsection-header">
+                    <h4>Schedule</h4>
+                    <p>Set when overdue reminders should be sent.</p>
                   </div>
-                  <select
-                    name="OverdueReminderTime"
-                    value={taskSettingsForm.OverdueReminderTime}
-                    onChange={onTaskSettingsChange}
-                  >
-                    {TimeOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="settings-item">
-                  <div>
-                    <h4>Last reminder run</h4>
-                    <p>Latest date overdue reminders were sent.</p>
+                  <div className="settings-list settings-list--slim">
+                    <div className="settings-item">
+                      <div>
+                        <h4>Overdue reminder time</h4>
+                        <p>Uses local time ({userTimeZone}).</p>
+                      </div>
+                      <select
+                        name="OverdueReminderTime"
+                        value={taskSettingsForm.OverdueReminderTime}
+                        onChange={onTaskSettingsChange}
+                        disabled={!taskSettingsForm.OverdueRemindersEnabled}
+                      >
+                        {TimeOptions.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
-                  <p>
-                    {taskSettings?.OverdueLastNotifiedDate
-                      ? FormatDate(taskSettings.OverdueLastNotifiedDate)
-                      : "Not run yet"}
+                  <div className="form-switch-row form-switch-row--inline">
+                    <span className="form-switch-label">Enabled</span>
+                    <div className="switch-pill">
+                      <input
+                        id="overdue-reminders-enabled"
+                        type="checkbox"
+                        name="OverdueRemindersEnabled"
+                        checked={taskSettingsForm.OverdueRemindersEnabled}
+                        onChange={onTaskSettingsChange}
+                        aria-label="Overdue reminders enabled"
+                      />
+                      <label
+                        htmlFor="overdue-reminders-enabled"
+                        className="switch-pill-track"
+                      >
+                        <span className="switch-pill-icon switch-pill-icon--off">
+                          <Icon name="toggleOff" className="icon" />
+                        </span>
+                        <span className="switch-pill-icon switch-pill-icon--on">
+                          <Icon name="toggleOn" className="icon" />
+                        </span>
+                        <span className="switch-pill-text switch-pill-text--off">Off</span>
+                        <span className="switch-pill-text switch-pill-text--on">On</span>
+                      </label>
+                    </div>
+                  </div>
+                  <p className="form-note">
+                    Runs automatically based on the schedule above when enabled.
                   </p>
                 </div>
+                <div className="settings-subsection">
+                  <div className="settings-subsection-header">
+                    <h4>Status</h4>
+                    <p>Health and latest results for overdue reminders.</p>
+                  </div>
+                  <div className="settings-task-status-row">
+                    <span className="status-pill">
+                      <span
+                        className={`status-dot ${
+                          taskSettingsForm.OverdueRemindersEnabled ? "status-ok" : "status-checking"
+                        }`}
+                        aria-hidden="true"
+                      />
+                      <span>
+                        {taskSettingsForm.OverdueRemindersEnabled ? "Enabled" : "Paused"}
+                      </span>
+                    </span>
+                    <span className="status-pill">
+                      <span
+                        className={`status-dot ${
+                          taskNeedsAttention ? "status-error" : "status-ok"
+                        }`}
+                        aria-hidden="true"
+                      />
+                      <span>
+                        {taskNeedsAttention ? "Needs attention" : "Healthy"}
+                      </span>
+                    </span>
+                  </div>
+                  <div className="settings-list settings-list--slim">
+                    <div className="settings-item">
+                      <div>
+                        <h4>Last run</h4>
+                        <p>Latest overdue reminder timestamp.</p>
+                      </div>
+                      <div className="settings-item-actions">
+                        <span className="settings-task-last-run">
+                          {latestTaskRun?.ranAt
+                            ? FormatDateTime(latestTaskRun.ranAt)
+                            : taskSettings?.OverdueLastNotifiedDate
+                              ? FormatDate(taskSettings.OverdueLastNotifiedDate)
+                              : "Not run yet"}
+                        </span>
+                        <button
+                          type="button"
+                          className="icon-button"
+                          onClick={onRefreshTaskStatus}
+                          aria-label="Refresh task status"
+                          title="Refresh status"
+                          disabled={
+                            taskSettingsStatus === "loading" || taskHistoryStatus === "loading"
+                          }
+                        >
+                          <Icon name="reset" className="icon" />
+                        </button>
+                      </div>
+                    </div>
+                    <div className="settings-item">
+                      <div>
+                        <h4>Result</h4>
+                        <p>Latest run status.</p>
+                      </div>
+                      <p>{latestTaskRun?.result || "No data"}</p>
+                    </div>
+                    {latestTaskRun?.result === "Failed" ? (
+                      <div className="settings-item">
+                        <div>
+                          <h4>Error</h4>
+                          <p>Most recent failure.</p>
+                        </div>
+                        <div className="settings-item-actions">
+                          <span>{latestTaskRun?.error || "Failed to run overdue reminders."}</span>
+                          <button
+                            type="button"
+                            className="icon-button"
+                            onClick={() =>
+                              navigator.clipboard.writeText(
+                                latestTaskRun?.error || "Failed to run overdue reminders."
+                              )
+                            }
+                            aria-label="Copy error"
+                            title="Copy error"
+                          >
+                            <Icon name="copy" className="icon" />
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="settings-item">
+                        <div>
+                          <h4>Sent</h4>
+                          <p>Reminders sent in the latest run.</p>
+                        </div>
+                        <p>
+                          {latestTaskRun?.sent !== undefined
+                            ? `${latestTaskRun.sent} reminder${latestTaskRun.sent === 1 ? "" : "s"}`
+                            : "No data"}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                  <div className="settings-subsection settings-subsection--tight">
+                    <div className="settings-subsection-header">
+                      <h4>Tools</h4>
+                      <p>Run or review overdue reminders.</p>
+                    </div>
+                    <div className="form-actions">
+                      <button
+                        type="button"
+                        className="primary-button"
+                        onClick={onTaskOverdueRun}
+                        disabled={!isParent || taskOverdueRunStatus === "loading"}
+                      >
+                        {taskOverdueRunStatus === "loading"
+                          ? "Running overdue reminders..."
+                          : "Run now"}
+                      </button>
+                      <button
+                        type="button"
+                        className="button-secondary"
+                        onClick={() => setShowTaskHistory((prev) => !prev)}
+                      >
+                        {showTaskHistory ? "Hide log" : "View log"}
+                      </button>
+                    </div>
+                  </div>
+                  {showTaskHistory ? (
+                    <div className="settings-subsection settings-subsection--tight">
+                    <div className="settings-subsection-header">
+                      <h4>History</h4>
+                      <p>Recent runs stored on the server.</p>
+                    </div>
+                    <div className="settings-history">
+                      {taskRunHistory.length ? (
+                        taskRunHistory.map((entry) => (
+                          <div key={entry.id} className="settings-history-row">
+                            <div>
+                              <span className="settings-history-time">
+                                {FormatDateTime(entry.ranAt)}
+                              </span>
+                              <span className="settings-history-result">{entry.result}</span>
+                            </div>
+                            <span className="settings-history-meta">
+                              {entry.result === "Failed"
+                                ? entry.error || "Failed to run overdue reminders."
+                                : `${entry.sent ?? 0} reminder${entry.sent === 1 ? "" : "s"}`}
+                            </span>
+                          </div>
+                        ))
+                        ) : (
+                          <p className="form-note">No runs recorded yet.</p>
+                        )}
+                      </div>
+                    </div>
+                  ) : null}
+                  {!isParent ? (
+                    <p className="form-note">Only parent accounts can run overdue reminders.</p>
+                  ) : null}
+                </div>
               </div>
-              <div className="form-actions">
-                <button
-                  type="button"
-                  className="primary-button"
-                  onClick={onTaskSettingsSave}
-                  disabled={taskSettingsStatus === "saving"}
-                >
-                  {taskSettingsStatus === "saving" ? "Saving..." : "Save changes"}
-                </button>
-                <button
-                  type="button"
-                  className="button-secondary"
-                  onClick={onTaskOverdueRun}
-                  disabled={!isParent || taskOverdueRunStatus === "loading"}
-                >
-                  {taskOverdueRunStatus === "loading"
-                    ? "Running overdue reminders..."
-                    : "Run overdue notifications now"}
-                </button>
-              </div>
-              {!isParent ? (
-                <p className="form-note">Only parent accounts can run overdue reminders.</p>
+              {taskToast ? (
+                <div className="settings-toast" role="status" aria-live="polite">
+                  <span>{taskToast}</span>
+                </div>
               ) : null}
             </div>
           ) : null}
 
           {activeSection === "system" ? (
-            <div className="settings-section">
+            <div className="settings-section settings-section--slim">
               <div className="settings-section-header">
                 <div className="settings-section-header-row">
                   <div>
                     <h3>System status</h3>
                     <p>Check API and database connectivity.</p>
                   </div>
-                  <button
-                    type="button"
-                    className="button-secondary"
-                    onClick={loadSystemStatus}
-                    disabled={systemStatus === "loading"}
-                  >
-                    Refresh
-                  </button>
                 </div>
               </div>
               <div className="settings-status-grid">
@@ -1286,587 +1742,951 @@ const Settings = () => {
                   <span>Database {dbStatus === "ok" ? "connected" : dbStatus}</span>
                 </div>
               </div>
+              <div className="form-actions">
+                <button
+                  type="button"
+                  className="button-secondary"
+                  onClick={loadSystemStatus}
+                  disabled={systemStatus === "loading"}
+                >
+                  Refresh
+                </button>
+              </div>
             </div>
           ) : null}
 
           {activeSection === "integrations" ? (
-            <div className="settings-section">
+            <div className="settings-section settings-section--full">
               <div className="settings-section-header">
                 <div className="settings-section-header-row">
                   <div>
                     <h3>Integrations</h3>
                     <p>Connect Everday to external services.</p>
                   </div>
-                  <button
-                    type="button"
-                    className="button-secondary"
-                    onClick={() => loadGoogleStatus(true)}
-                    disabled={googleStatusState === "loading"}
-                  >
-                    {googleStatusState === "loading" ? "Checking..." : "Check connection"}
-                  </button>
                 </div>
               </div>
-              <div className="settings-subsection">
-                <div className="settings-subsection-header">
-                  <h4>Google Tasks and Calendar</h4>
-                  <p>Sync tasks and events using the shared family account.</p>
-                </div>
-                {googleNotice ? <p className="form-note">{googleNotice}</p> : null}
-                {googleStatusError ? <p className="form-error">{googleStatusError}</p> : null}
-                {googleAuthError ? <p className="form-error">{googleAuthError}</p> : null}
-                <div className="settings-status-grid">
-                  <div className={`status-pill status-${googleStatusClass}`}>
-                    <span className="status-dot" aria-hidden="true" />
-                    <span>{googleConnectionLabel}</span>
-                  </div>
-                  {googleValidatedAt ? (
-                    <div className="status-pill">
-                      <span className="status-dot" aria-hidden="true" />
-                      <span>Checked {googleValidatedAt.toLocaleString()}</span>
+              <div className="settings-integrations">
+                <div className="integrations-catalog">
+                  <div
+                    className={`integration-card${selectedIntegration === "google" ? " is-active" : ""}`}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setSelectedIntegration("google")}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        setSelectedIntegration("google");
+                      }
+                    }}
+                  >
+                    <div className="integration-card-header">
+                      <div className="integration-card-title">
+                        <span className="integration-card-icon">
+                          <Icon name="agenda" className="icon" />
+                        </span>
+                        <span>Google Calendar/Tasks</span>
+                      </div>
+                      <span className="status-pill integration-status-pill">
+                        <span className={`status-dot ${googleStatusTone ? `status-${googleStatusTone}` : ""}`} />
+                        <span>{googleStatusLabel}</span>
+                      </span>
                     </div>
+                    <div className="integration-card-meta">{googleCheckedLabel}</div>
+                  </div>
+                  <div
+                    className={`integration-card${selectedIntegration === "health" ? " is-active" : ""}`}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setSelectedIntegration("health")}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        setSelectedIntegration("health");
+                      }
+                    }}
+                  >
+                    <div className="integration-card-header">
+                      <div className="integration-card-title">
+                        <span className="integration-card-icon">
+                          <Icon name="health" className="icon" />
+                        </span>
+                        <span>Health Auto Export</span>
+                      </div>
+                      <span className="status-pill integration-status-pill">
+                        <span
+                          className={`status-dot ${healthHaeConfigured ? "status-ok" : ""}`}
+                          aria-hidden="true"
+                        />
+                        <span>{healthHaeConfigured ? "Connected" : "Disabled"}</span>
+                      </span>
+                    </div>
+                    <div className="integration-card-meta">{healthCheckedLabel}</div>
+                  </div>
+                </div>
+                <div className="integrations-details">
+                  {selectedIntegration === "google" ? (
+                    <>
+                      <div className="integration-detail-topbar">
+                        <div className="integration-detail-status">
+                          <span className="status-pill integration-status-pill integration-status-pill--large">
+                            <span className={`status-dot ${googleStatusTone ? `status-${googleStatusTone}` : ""}`} />
+                            <span>{googleStatusLabel}</span>
+                          </span>
+                          <span
+                            className="integration-detail-checked"
+                            title={googleValidatedAt ? googleValidatedAt.toLocaleString() : ""}
+                          >
+                            {googleValidatedAt
+                              ? `Checked ${FormatRelativeTime(googleValidatedAt)}`
+                              : "Not checked"}
+                          </span>
+                        </div>
+                        <div className="integration-detail-actions">
+                          <button
+                            type="button"
+                            className="primary-button"
+                            onClick={onGoogleAuth}
+                            disabled={!isParent || googleAuthStatus === "loading"}
+                          >
+                            {googleAuthStatus === "loading" ? "Opening Google..." : googleActionLabel}
+                          </button>
+                          <button
+                            type="button"
+                            className="button-secondary"
+                            onClick={() => loadGoogleStatus(true)}
+                            disabled={googleStatusState === "loading"}
+                          >
+                            {googleStatusState === "loading" ? "Checking..." : "Check connection"}
+                          </button>
+                        </div>
+                      </div>
+                      {!isParent ? (
+                        <p className="integration-detail-note">
+                          Only a parent account can connect or disconnect this integration.
+                        </p>
+                      ) : null}
+                      {googleNotice ? <p className="form-note">{googleNotice}</p> : null}
+                      {googleStatusError ? <p className="form-error">{googleStatusError}</p> : null}
+                      {googleAuthError ? <p className="form-error">{googleAuthError}</p> : null}
+                      <div className="settings-subsection">
+                        <div className="settings-subsection-header">
+                          <h4>Configuration</h4>
+                          <p>Summary details for the active integration.</p>
+                        </div>
+                        <div className="settings-list settings-list--slim">
+                          <div className="settings-item">
+                            <div>
+                              <h4>Account</h4>
+                              <p>Shared account used to connect.</p>
+                            </div>
+                            <p>
+                              {googleConnectedBy
+                                ? `${googleConnectedBy.FirstName || ""} ${googleConnectedBy.LastName || ""}`.trim() ||
+                                  googleConnectedBy.Username
+                                : "Not connected"}
+                            </p>
+                          </div>
+                          <div className="settings-item">
+                            <div>
+                              <h4>Services</h4>
+                              <p>Enabled Google services.</p>
+                            </div>
+                            <p>{googleServices.length ? googleServices.join(", ") : "Not configured"}</p>
+                          </div>
+                          <div className="settings-item">
+                            <div>
+                              <h4>Last sync/check</h4>
+                              <p>Most recent validation timestamp.</p>
+                            </div>
+                            <p>{googleValidatedAt ? googleValidatedAt.toLocaleString() : "Not checked"}</p>
+                          </div>
+                        </div>
+                      </div>
+                      <details className="settings-subsection settings-subsection--collapsible">
+                        <summary className="settings-subsection-header settings-subsection-summary">
+                          <div>
+                            <h4>Technical details</h4>
+                            <p>Raw identifiers and connection metadata.</p>
+                          </div>
+                        </summary>
+                        <div className="settings-list settings-list--slim settings-list--integrations">
+                          <div className="settings-item">
+                            <div>
+                              <h4>Connected by</h4>
+                              <p>Parent account that completed the connection.</p>
+                            </div>
+                            <p>
+                              {googleConnectedBy
+                                ? `${googleConnectedBy.FirstName || ""} ${googleConnectedBy.LastName || ""}`.trim() ||
+                                  googleConnectedBy.Username
+                                : "Not connected"}
+                            </p>
+                          </div>
+                          <div className="settings-item">
+                            <div>
+                              <h4>Connected at</h4>
+                              <p>Time the integration was last connected.</p>
+                            </div>
+                            <p>{googleConnectedAt ? googleConnectedAt.toLocaleString() : "Not connected"}</p>
+                          </div>
+                          <div className="settings-item">
+                            <div>
+                              <h4>Calendar ID</h4>
+                              <p>Raw Google Calendar identifier.</p>
+                            </div>
+                            <p>{googleStatus?.CalendarId || "Not set"}</p>
+                          </div>
+                          <div className="settings-item">
+                            <div>
+                              <h4>Task list ID</h4>
+                              <p>Raw Google Tasks list identifier.</p>
+                            </div>
+                            <p>{googleStatus?.TaskListId || "Not set"}</p>
+                          </div>
+                        </div>
+                      </details>
+                    </>
+                  ) : null}
+                  {selectedIntegration === "health" ? (
+                    <>
+                      <div className="integration-detail-topbar">
+                        <div className="integration-detail-status">
+                          <span className="status-pill integration-status-pill integration-status-pill--large">
+                            <span
+                              className={`status-dot ${healthHaeConfigured ? "status-ok" : ""}`}
+                              aria-hidden="true"
+                            />
+                            <span>{healthHaeConfigured ? "Connected" : "Disabled"}</span>
+                          </span>
+                          <span
+                            className="integration-detail-checked"
+                            title={healthHaeCreatedAt ? healthHaeCreatedAt.toLocaleString() : ""}
+                          >
+                            {healthHaeCreatedAt
+                              ? `Checked ${FormatRelativeTime(healthHaeCreatedAt)}`
+                              : "Not checked"}
+                          </span>
+                        </div>
+                        <div className="integration-detail-actions">
+                          <button
+                            type="button"
+                            className="primary-button"
+                            onClick={rotateHaeApiKey}
+                            disabled={healthHaeKeyStatus === "loading"}
+                          >
+                            {healthHaeConfigured ? "Rotate key" : "Generate key"}
+                          </button>
+                          <button
+                            type="button"
+                            className="button-secondary"
+                            onClick={loadHealthSettings}
+                            disabled={healthStatus === "loading"}
+                          >
+                            {healthStatus === "loading" ? "Refreshing..." : "Refresh status"}
+                          </button>
+                        </div>
+                      </div>
+                      <p className="integration-detail-note">
+                        Generate an API key to connect Health Auto Export.
+                      </p>
+                      <div className="settings-subsection settings-subsection--actions-bottom">
+                        <div className="settings-subsection-header">
+                          <h4>Configuration</h4>
+                          <p>Current Health Auto Export settings.</p>
+                        </div>
+                        <div className="settings-list settings-list--slim">
+                          <div className="settings-item">
+                            <div>
+                              <h4>Status</h4>
+                              <p>API key availability.</p>
+                            </div>
+                            <p>{healthHaeConfigured ? "Key configured" : "No key configured"}</p>
+                          </div>
+                          <div className="settings-item">
+                            <div>
+                              <h4>Key ending</h4>
+                              <p>Last four characters of the key.</p>
+                            </div>
+                            <p>{healthHaeLast4 ? `•••• ${healthHaeLast4}` : "Not set"}</p>
+                          </div>
+                          <div className="settings-item">
+                            <div>
+                              <h4>Last updated</h4>
+                              <p>Latest key rotation timestamp.</p>
+                            </div>
+                            <p>{healthHaeCreatedAt ? healthHaeCreatedAt.toLocaleString() : "Not set"}</p>
+                          </div>
+                        </div>
+                        {healthHaeKey ? (
+                          <div className="health-key-reveal">
+                            <label>
+                              New API key
+                              <input type="text" readOnly value={healthHaeKey} className="form-input" />
+                            </label>
+                            <div className="health-key-actions">
+                              <button type="button" className="button-secondary" onClick={copyHaeKey}>
+                                Copy key
+                              </button>
+                              {healthHaeCopied ? (
+                                <span className="health-key-status" role="status" aria-live="polite">
+                                  Key copied
+                                </span>
+                              ) : null}
+                            </div>
+                            <p className="form-note">
+                              Copy this key now. It will not be shown again.
+                            </p>
+                            <p className="form-note">
+                              Use header name <strong>X-API-Key</strong> in Health Auto Export.
+                            </p>
+                          </div>
+                        ) : null}
+                      </div>
+                      <details className="settings-subsection settings-subsection--collapsible">
+                        <summary className="settings-subsection-header settings-subsection-summary">
+                          <div>
+                            <h4>Technical details</h4>
+                            <p>Additional integration metadata.</p>
+                          </div>
+                        </summary>
+                        <div className="settings-list settings-list--slim">
+                          <div className="settings-item">
+                            <div>
+                              <h4>Header name</h4>
+                              <p>Expected HTTP header for the API key.</p>
+                            </div>
+                            <p>X-API-Key</p>
+                          </div>
+                          <div className="settings-item">
+                            <div>
+                              <h4>Created at</h4>
+                              <p>When the latest key was generated.</p>
+                            </div>
+                            <p>{healthHaeCreatedAt ? healthHaeCreatedAt.toLocaleString() : "Not set"}</p>
+                          </div>
+                        </div>
+                      </details>
+                    </>
                   ) : null}
                 </div>
-                {googleNeedsReauth ? (
-                  <p className="form-note">
-                    Google needs you to re-authenticate to keep tasks and events synced.
-                  </p>
-                ) : null}
-                <div className="settings-list settings-list--integrations">
-                  <div className="settings-item">
-                    <div>
-                      <h4>Connection</h4>
-                      <p>Launch the Google consent flow to link the shared calendar.</p>
-                    </div>
-                    <button
-                      type="button"
-                      className="primary-button settings-google-auth-button"
-                      onClick={onGoogleAuth}
-                      disabled={!isParent || googleAuthStatus === "loading"}
-                    >
-                      {googleAuthStatus === "loading" ? "Opening Google..." : googleActionLabel}
-                    </button>
-                  </div>
-                  <div className="settings-item">
-                    <div>
-                      <h4>Connected by</h4>
-                      <p>Parent account that completed the connection.</p>
-                    </div>
-                    <p>
-                      {googleConnectedBy
-                        ? `${googleConnectedBy.FirstName || ""} ${googleConnectedBy.LastName || ""}`.trim() ||
-                          googleConnectedBy.Username
-                        : "Not connected"}
-                    </p>
-                  </div>
-                  <div className="settings-item">
-                    <div>
-                      <h4>Connected at</h4>
-                      <p>Time the integration was last connected.</p>
-                    </div>
-                    <p>{googleConnectedAt ? googleConnectedAt.toLocaleString() : "Not connected"}</p>
-                  </div>
-                  <div className="settings-item">
-                    <div>
-                      <h4>Calendar ID</h4>
-                      <p>Google Calendar used for shared events.</p>
-                    </div>
-                    <p>{googleStatus?.CalendarId || "Not set"}</p>
-                  </div>
-                  <div className="settings-item">
-                    <div>
-                      <h4>Task list ID</h4>
-                      <p>Google Tasks list used for Everday tasks.</p>
-                    </div>
-                    <p>{googleStatus?.TaskListId || "Not set"}</p>
-                  </div>
-                </div>
-                {!isParent ? (
-                  <p className="form-note">
-                    Only a parent account can connect or disconnect this integration.
-                  </p>
-                ) : (
-                  <p className="form-note">
-                    This opens Google sign in for the shared account in the current browser.
-                  </p>
-                )}
               </div>
             </div>
           ) : null}
 
           {activeSection === "health" ? (
             <div className="settings-section">
-              <div className="settings-section-header">
-                <h3>Health</h3>
-                <p>Manage your health profile and daily targets.</p>
-              </div>
               {healthError ? <p className="form-error">{healthError}</p> : null}
               {healthStatus === "loading" ? (
                 <p>Loading health settings...</p>
               ) : (
                 <div className="settings-health">
-                  <div className="settings-subsection">
-                    <div className="settings-subsection-header">
-                      <h4>Profile</h4>
-                      <p>Keep your metrics up to date.</p>
-                    </div>
-                    <form className="form-grid" onSubmit={saveHealthProfile}>
-                      <label>
-                        Birth date
-                        <input
-                          type="date"
-                          name="BirthDate"
-                          value={healthProfile.BirthDate}
-                          onChange={onHealthProfileChange}
-                        />
-                      </label>
-                      <label>
-                        Height (cm)
-                        <input
-                          type="number"
-                          name="HeightCm"
-                          value={healthProfile.HeightCm}
-                          onChange={onHealthProfileChange}
-                        />
-                      </label>
-                      <label>
-                        Weight (kg)
-                        <input
-                          type="number"
-                          step="0.1"
-                          name="WeightKg"
-                          value={healthProfile.WeightKg}
-                          onChange={onHealthProfileChange}
-                        />
-                      </label>
-                      <label>
-                        Activity level
-                        <select
-                          name="ActivityLevel"
-                          value={healthProfile.ActivityLevel}
-                          onChange={onHealthProfileChange}
-                        >
-                          <option value="">Select</option>
-                          {ActivityOptions.map((option) => (
-                            <option key={option.value} value={option.value}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <div className="form-actions">
-                        <button type="submit" disabled={healthStatus === "saving"}>
-                          {healthStatus === "saving" ? "Saving..." : "Save profile"}
-                        </button>
-                      </div>
-                    </form>
-                  </div>
-                  <div className="settings-subsection">
-                    <div className="settings-subsection-header">
-                      <h4>Goal</h4>
-                      <p>Set a BMI goal and timeline for AI targets.</p>
-                    </div>
-                    <div className="form-actions">
-                      <button
-                        type="button"
-                        className="primary-button"
-                        onClick={openGoalWizard}
-                        disabled={healthStatus === "loading"}
-                      >
-                        {healthGoal ? "Update goal" : "Set goal"}
-                      </button>
-                    </div>
-                    {healthGoal ? (
-                      <>
-                        <div className="health-summary-grid">
-                          <div>
-                            <p>Goal</p>
-                            <h3>{GetGoalTypeLabel(healthGoal.GoalType)}</h3>
+                  <div className="settings-health-group">
+                    <div className="settings-group-header">Basics</div>
+                    <div className="settings-health-columns">
+                      <div className="settings-health-column">
+                        <div className="settings-subsection settings-subsection--actions-bottom">
+                          <div className="settings-subsection-header">
+                            <h4>Profile</h4>
+                            <p>Keep your metrics up to date.</p>
                           </div>
-                          <div>
-                            <p>BMI range</p>
-                            <h3>
-                              {FormatNumber(healthGoal.BmiMin)} to {FormatNumber(healthGoal.BmiMax)}
-                            </h3>
-                          </div>
-                          <div>
-                            <p>Current BMI</p>
-                            <h3>{FormatNumber(healthGoal.CurrentBmi)}</h3>
-                          </div>
-                          <div>
-                            <p>Target weight</p>
-                            <h3>{FormatNumber(healthGoal.TargetWeightKg)} kg</h3>
-                          </div>
-                          <div>
-                            <p>Target date</p>
-                            <h3>{FormatDate(healthGoal.EndDate)}</h3>
-                          </div>
-                          <div>
-                            <p>Daily calories</p>
-                            <h3>{healthGoal.DailyCalorieTarget}</h3>
-                          </div>
-                        </div>
-                        <p className="health-detail">
-                          Status: {healthGoal.Status}
-                          {healthGoal.CompletedAt
-                            ? ` · Completed ${FormatDate(healthGoal.CompletedAt)}`
-                            : ""}
-                        </p>
-                      </>
-                    ) : (
-                      <p className="form-note">No goal set yet.</p>
-                    )}
-                  </div>
-                  <div className="settings-subsection">
-                    <div className="settings-subsection-header">
-                      <h4>AI targets</h4>
-                      <p>Refresh AI suggestions and auto-tune weekly.</p>
-                    </div>
-                    <div className="form-actions">
-                      <button
-                        type="button"
-                        className="primary-button"
-                        onClick={runHealthRecommendation}
-                        disabled={healthAiStatus === "loading"}
-                      >
-                        {healthRecommendation ? "Refresh suggestions" : "Get suggestions"}
-                      </button>
-                    </div>
-                    <div className="form-switch-row">
-                      <span className="form-switch-label">Auto-tune targets weekly</span>
-                      <input
-                        type="checkbox"
-                        checked={healthAutoTuneWeekly}
-                        onChange={updateHealthAutoTune}
-                      />
-                    </div>
-                    <p className="health-detail">Auto-tune runs once a week when you open the app.</p>
-                    {healthAutoTuneLastRunAt ? (
-                      <p className="health-detail">
-                        Last auto-tune: {healthAutoTuneLastRunAt.toLocaleString()}
-                      </p>
-                    ) : (
-                      <p className="health-detail">No auto-tune run yet.</p>
-                    )}
-                    {healthRecommendation ? (
-                      <div className="health-ai-result">
-                        <h4>Suggested targets</h4>
-                        <p>{healthRecommendation.Explanation}</p>
-                        <div className="health-summary-grid">
-                          <div>
-                            <p>Calories</p>
-                            <h3>{healthRecommendation.DailyCalorieTarget}</h3>
-                          </div>
-                          <div>
-                            <p>Protein min</p>
-                            <h3>{healthRecommendation.ProteinTargetMin}</h3>
-                          </div>
-                          <div>
-                            <p>Protein max</p>
-                            <h3>{healthRecommendation.ProteinTargetMax}</h3>
-                          </div>
-                        </div>
-                        <button
-                          type="button"
-                          className="primary-button health-ai-apply"
-                          onClick={applyHealthRecommendation}
-                        >
-                          Apply suggested targets
-                        </button>
-                      </div>
-                    ) : null}
-                  </div>
-                  <div className="settings-subsection">
-                    <div className="settings-subsection-header">
-                      <h4>Integrations</h4>
-                      <p>Generate an API key for Health Auto Export.</p>
-                    </div>
-                    <div className="health-integrations">
-                      <div className="health-integrations-status">
-                        <p>
-                          Status: {healthHaeConfigured ? "Key configured" : "No key configured"}
-                        </p>
-                        {healthHaeLast4 ? <p>Key ending: •••• {healthHaeLast4}</p> : null}
-                        {healthHaeCreatedAt ? (
-                          <p>Created: {healthHaeCreatedAt.toLocaleString()}</p>
-                        ) : null}
-                      </div>
-                      <div className="form-actions health-integrations-actions">
-                        <button
-                          type="button"
-                          className="primary-button"
-                          onClick={rotateHaeApiKey}
-                          disabled={healthHaeKeyStatus === "loading"}
-                        >
-                          {healthHaeConfigured ? "Rotate key" : "Generate key"}
-                        </button>
-                      </div>
-                      {healthHaeKey ? (
-                        <div className="health-key-reveal">
-                          <label>
-                            New API key
-                            <input type="text" readOnly value={healthHaeKey} className="form-input" />
-                          </label>
-                          <div className="health-key-actions">
-                            <button type="button" className="button-secondary" onClick={copyHaeKey}>
-                              Copy key
-                            </button>
-                            {healthHaeCopied ? (
-                              <span className="health-key-status" role="status" aria-live="polite">
-                                Key copied
-                              </span>
-                            ) : null}
-                          </div>
-                          <p className="form-note">
-                            Copy this key now. It will not be shown again.
-                          </p>
-                          <p className="form-note">
-                            Use header name <strong>X-API-Key</strong> in Health Auto Export.
-                          </p>
-                        </div>
-                      ) : null}
-                    </div>
-                  </div>
-                  <div className="settings-subsection">
-                    <div className="settings-subsection-header">
-                      <h4>Targets</h4>
-                      <p>Set calorie, protein, and step goals for today.</p>
-                    </div>
-                    <form className="form-grid" onSubmit={saveHealthTargets}>
-                      <label>
-                        Daily calories
-                        <input
-                          name="DailyCalorieTarget"
-                          type="number"
-                          value={healthTargets.DailyCalorieTarget}
-                          onChange={onHealthTargetsChange}
-                        />
-                      </label>
-                      <label>
-                        Protein min (g)
-                        <input
-                          name="ProteinTargetMin"
-                          type="number"
-                          step="0.1"
-                          value={healthTargets.ProteinTargetMin}
-                          onChange={onHealthTargetsChange}
-                        />
-                      </label>
-                      <label>
-                        Protein max (g)
-                        <input
-                          name="ProteinTargetMax"
-                          type="number"
-                          step="0.1"
-                          value={healthTargets.ProteinTargetMax}
-                          onChange={onHealthTargetsChange}
-                        />
-                      </label>
-                      <label>
-                        Step target
-                        <input
-                          name="StepTarget"
-                          type="number"
-                          value={healthTargets.StepTarget}
-                          onChange={onHealthTargetsChange}
-                        />
-                      </label>
-                      <label>
-                        Step kcal factor
-                        <input
-                          name="StepKcalFactor"
-                          type="number"
-                          step="0.01"
-                          value={healthTargets.StepKcalFactor}
-                          onChange={onHealthTargetsChange}
-                        />
-                      </label>
-                      <label>
-                        Fibre target
-                        <input
-                          name="FibreTarget"
-                          type="number"
-                          step="0.1"
-                          value={healthTargets.FibreTarget}
-                          onChange={onHealthTargetsChange}
-                        />
-                      </label>
-                      <label>
-                        Carbs target
-                        <input
-                          name="CarbsTarget"
-                          type="number"
-                          step="0.1"
-                          value={healthTargets.CarbsTarget}
-                          onChange={onHealthTargetsChange}
-                        />
-                      </label>
-                      <label>
-                        Fat target
-                        <input
-                          name="FatTarget"
-                          type="number"
-                          step="0.1"
-                          value={healthTargets.FatTarget}
-                          onChange={onHealthTargetsChange}
-                        />
-                      </label>
-                      <label>
-                        Sat fat target
-                        <input
-                          name="SaturatedFatTarget"
-                          type="number"
-                          step="0.1"
-                          value={healthTargets.SaturatedFatTarget}
-                          onChange={onHealthTargetsChange}
-                        />
-                      </label>
-                      <label>
-                        Sugar target
-                        <input
-                          name="SugarTarget"
-                          type="number"
-                          step="0.1"
-                          value={healthTargets.SugarTarget}
-                          onChange={onHealthTargetsChange}
-                        />
-                      </label>
-                      <label>
-                        Sodium target
-                        <input
-                          name="SodiumTarget"
-                          type="number"
-                          step="0.1"
-                          value={healthTargets.SodiumTarget}
-                          onChange={onHealthTargetsChange}
-                        />
-                      </label>
-                      <div className="form-switch-row">
-                        <span className="form-switch-label">Show protein on Today</span>
-                        <input
-                          type="checkbox"
-                          name="ShowProteinOnToday"
-                          checked={healthTargets.ShowProteinOnToday}
-                          onChange={onHealthTargetsChange}
-                        />
-                      </div>
-                      <div className="form-switch-row">
-                        <span className="form-switch-label">Show steps on Today</span>
-                        <input
-                          type="checkbox"
-                          name="ShowStepsOnToday"
-                          checked={healthTargets.ShowStepsOnToday}
-                          onChange={onHealthTargetsChange}
-                        />
-                      </div>
-                      <div className="form-switch-row">
-                        <span className="form-switch-label">Show fibre on Today</span>
-                        <input
-                          type="checkbox"
-                          name="ShowFibreOnToday"
-                          checked={healthTargets.ShowFibreOnToday}
-                          onChange={onHealthTargetsChange}
-                        />
-                      </div>
-                      <div className="form-switch-row">
-                        <span className="form-switch-label">Show carbs on Today</span>
-                        <input
-                          type="checkbox"
-                          name="ShowCarbsOnToday"
-                          checked={healthTargets.ShowCarbsOnToday}
-                          onChange={onHealthTargetsChange}
-                        />
-                      </div>
-                      <div className="form-switch-row">
-                        <span className="form-switch-label">Show fat on Today</span>
-                        <input
-                          type="checkbox"
-                          name="ShowFatOnToday"
-                          checked={healthTargets.ShowFatOnToday}
-                          onChange={onHealthTargetsChange}
-                        />
-                      </div>
-                      <div className="form-switch-row">
-                        <span className="form-switch-label">Show saturated fat on Today</span>
-                        <input
-                          type="checkbox"
-                          name="ShowSaturatedFatOnToday"
-                          checked={healthTargets.ShowSaturatedFatOnToday}
-                          onChange={onHealthTargetsChange}
-                        />
-                      </div>
-                      <div className="form-switch-row">
-                        <span className="form-switch-label">Show sugar on Today</span>
-                        <input
-                          type="checkbox"
-                          name="ShowSugarOnToday"
-                          checked={healthTargets.ShowSugarOnToday}
-                          onChange={onHealthTargetsChange}
-                        />
-                      </div>
-                      <div className="form-switch-row">
-                        <span className="form-switch-label">Show sodium on Today</span>
-                        <input
-                          type="checkbox"
-                          name="ShowSodiumOnToday"
-                          checked={healthTargets.ShowSodiumOnToday}
-                          onChange={onHealthTargetsChange}
-                        />
-                      </div>
-                      <div className="form-switch-row">
-                        <span className="form-switch-label">Show weight chart on Today</span>
-                        <input
-                          type="checkbox"
-                          checked={healthShowWeightChart}
-                          onChange={(event) => setHealthShowWeightChart(event.target.checked)}
-                        />
-                      </div>
-                      <div className="form-switch-row">
-                        <span className="form-switch-label">Show steps chart on Today</span>
-                        <input
-                          type="checkbox"
-                          checked={healthShowStepsChart}
-                          onChange={(event) => setHealthShowStepsChart(event.target.checked)}
-                        />
-                      </div>
-                      <div className="form-switch-row">
-                        <span className="form-switch-label">Show weight projections on Today</span>
-                        <input
-                          type="checkbox"
-                          checked={healthShowWeightProjection}
-                          onChange={(event) => setHealthShowWeightProjection(event.target.checked)}
-                        />
-                      </div>
-                      <div className="form-actions">
-                        <button type="submit" disabled={healthStatus === "saving"}>
-                          {healthStatus === "saving" ? "Saving..." : "Save targets"}
-                        </button>
-                      </div>
-                    </form>
-                  </div>
-                  <div className="settings-subsection">
-                    <div className="settings-subsection-header">
-                      <h4>Recommendation history</h4>
-                      <p>Previous AI calculations for reference.</p>
-                    </div>
-                    <div className="health-history-list">
-                      {healthRecommendationHistory.length ? (
-                        healthRecommendationHistory.map((log) => (
-                          <div key={log.RecommendationLogId} className="health-history-card">
-                            <div className="health-history-card-header">
-                              <span>
-                                {new Date(log.CreatedAt).toLocaleDateString()}
-                              </span>
-                              <span className="health-history-card-kcal">
-                                {log.DailyCalorieTarget} kcal
-                              </span>
+                          <div className="form-stack">
+                            <div className="form-grid form-grid--kv">
+                              <label>
+                                <span>Birth date</span>
+                                <input
+                                  type="date"
+                                  name="BirthDate"
+                                  value={healthProfile.BirthDate}
+                                  onChange={onHealthProfileChange}
+                                />
+                              </label>
+                              <label>
+                                <span>Height (cm)</span>
+                                <input
+                                  type="number"
+                                  name="HeightCm"
+                                  value={healthProfile.HeightCm}
+                                  onChange={onHealthProfileChange}
+                                />
+                              </label>
+                              <label>
+                                <span>Weight (kg)</span>
+                                <input
+                                  type="number"
+                                  step="0.1"
+                                  name="WeightKg"
+                                  value={healthProfile.WeightKg}
+                                  onChange={onHealthProfileChange}
+                                />
+                              </label>
+                              <label>
+                                <span>Activity level</span>
+                          <select
+                            name="ActivityLevel"
+                            value={healthProfile.ActivityLevel}
+                            onChange={onHealthProfileChange}
+                          >
+                            <option value="">Select</option>
+                            {ActivityOptions.map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                              </label>
                             </div>
-                            <div className="health-history-card-subtitle">{log.Explanation}</div>
                           </div>
-                        ))
-                      ) : (
-                        <p className="health-history-card-empty">No recommendations yet.</p>
-                      )}
+                        </div>
+                      </div>
+                      <div className="settings-health-column">
+                        <div className="settings-subsection settings-subsection--actions-bottom">
+                          <div className="settings-subsection-header">
+                            <h4>Goal</h4>
+                            <p>Set BMI target, target weight and date, plus daily calories.</p>
+                          </div>
+                          {healthGoal ? (
+                            <>
+                              <div className="health-summary-grid">
+                                <div>
+                                  <p>Goal</p>
+                                  <h3>{GetGoalTypeLabel(healthGoal.GoalType)}</h3>
+                                </div>
+                                <div>
+                                  <p>BMI range</p>
+                                  <h3>
+                                    {FormatNumber(healthGoal.BmiMin)} to{" "}
+                                    {FormatNumber(healthGoal.BmiMax)}
+                                  </h3>
+                                </div>
+                                <div>
+                                  <p>Current BMI</p>
+                                  <h3>{FormatNumber(healthGoal.CurrentBmi)}</h3>
+                                </div>
+                                <div>
+                                  <p>Target weight</p>
+                                  <h3>{FormatNumber(healthGoal.TargetWeightKg)} kg</h3>
+                                </div>
+                                <div>
+                                  <p>Target date</p>
+                                  <h3>{FormatDate(healthGoal.EndDate)}</h3>
+                                </div>
+                                <div>
+                                  <p>Daily calories</p>
+                                  <h3>{healthGoal.DailyCalorieTarget}</h3>
+                                </div>
+                              </div>
+                            </>
+                          ) : (
+                            <p className="form-note">No goal set yet.</p>
+                          )}
+                          <div className="form-actions">
+                            <button
+                              type="button"
+                              className="primary-button"
+                              onClick={openGoalWizard}
+                              disabled={healthStatus === "loading"}
+                            >
+                              {healthGoal ? "Update goal" : "Set goal"}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="settings-health-group">
+                    <div className="settings-group-header">Targets</div>
+                    <div className="settings-health-columns">
+                      <div className="settings-health-column">
+                        <div className="settings-subsection settings-subsection--actions-bottom">
+                          <div className="settings-subsection-header">
+                            <h4>Targets</h4>
+                            <p>Set calorie, protein, and step goals for today.</p>
+                          </div>
+                          <div className="form-stack">
+                            <div className="form-grid form-grid--kv">
+                              <label>
+                                <span>Daily calories</span>
+                                <input
+                                  name="DailyCalorieTarget"
+                                  type="number"
+                                  value={healthTargets.DailyCalorieTarget}
+                                  onChange={onHealthTargetsChange}
+                                />
+                              </label>
+                              <label>
+                                <span>Protein min (g)</span>
+                                <input
+                                  name="ProteinTargetMin"
+                                  type="number"
+                                  step="0.1"
+                                  value={healthTargets.ProteinTargetMin}
+                                  onChange={onHealthTargetsChange}
+                                />
+                              </label>
+                              <label>
+                                <span>Protein max (g)</span>
+                                <input
+                                  name="ProteinTargetMax"
+                                  type="number"
+                                  step="0.1"
+                                  value={healthTargets.ProteinTargetMax}
+                                  onChange={onHealthTargetsChange}
+                                />
+                              </label>
+                              <label>
+                                <span>Step target</span>
+                                <input
+                                  name="StepTarget"
+                                  type="number"
+                                  value={healthTargets.StepTarget}
+                                  onChange={onHealthTargetsChange}
+                                />
+                              </label>
+                              <label>
+                                <span>Step kcal factor</span>
+                                <input
+                                  name="StepKcalFactor"
+                                  type="number"
+                                  step="0.01"
+                                  value={healthTargets.StepKcalFactor}
+                                  onChange={onHealthTargetsChange}
+                                />
+                              </label>
+                              <label>
+                                <span>Fibre target</span>
+                                <input
+                                  name="FibreTarget"
+                                  type="number"
+                                  step="0.1"
+                                  value={healthTargets.FibreTarget}
+                                  onChange={onHealthTargetsChange}
+                                />
+                              </label>
+                              <label>
+                                <span>Carbs target</span>
+                                <input
+                                  name="CarbsTarget"
+                                  type="number"
+                                  step="0.1"
+                                  value={healthTargets.CarbsTarget}
+                                  onChange={onHealthTargetsChange}
+                                />
+                              </label>
+                              <label>
+                                <span>Fat target</span>
+                                <input
+                                  name="FatTarget"
+                                  type="number"
+                                  step="0.1"
+                                  value={healthTargets.FatTarget}
+                                  onChange={onHealthTargetsChange}
+                                />
+                              </label>
+                              <label>
+                                <span>Sat fat target</span>
+                                <input
+                                  name="SaturatedFatTarget"
+                                  type="number"
+                                  step="0.1"
+                                  value={healthTargets.SaturatedFatTarget}
+                                  onChange={onHealthTargetsChange}
+                                />
+                              </label>
+                              <label>
+                                <span>Sugar target</span>
+                                <input
+                                  name="SugarTarget"
+                                  type="number"
+                                  step="0.1"
+                                  value={healthTargets.SugarTarget}
+                                  onChange={onHealthTargetsChange}
+                                />
+                              </label>
+                              <label>
+                                <span>Sodium target</span>
+                                <input
+                                  name="SodiumTarget"
+                                  type="number"
+                                  step="0.1"
+                                  value={healthTargets.SodiumTarget}
+                                  onChange={onHealthTargetsChange}
+                                />
+                              </label>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="settings-health-column">
+                        <div className="settings-subsection settings-subsection--actions-bottom">
+                          <div className="settings-subsection-header">
+                            <h4>Visibility</h4>
+                            <p>Choose which targets show on Today.</p>
+                          </div>
+                          <div className="form-stack">
+                            <div className="form-switch-list">
+                              <div className="settings-subgroup">
+                                <div className="settings-subgroup-title">Core</div>
+                                <div className="form-switch-row form-switch-row--inline">
+                                  <span className="form-switch-label">Show protein on Today</span>
+                                  <div className="switch-pill">
+                                    <input
+                                      id="show-protein"
+                                      type="checkbox"
+                                      aria-label="Show protein on Today"
+                                      name="ShowProteinOnToday"
+                                      checked={healthTargets.ShowProteinOnToday}
+                                      onChange={onHealthTargetsChange}
+                                    />
+                                    <label htmlFor="show-protein" className="switch-pill-track">
+                                      <span className="switch-pill-icon switch-pill-icon--off">
+                                        <Icon name="toggleOff" className="icon" />
+                                      </span>
+                                      <span className="switch-pill-icon switch-pill-icon--on">
+                                        <Icon name="toggleOn" className="icon" />
+                                      </span>
+                                      <span className="switch-pill-text switch-pill-text--off">Off</span>
+                                      <span className="switch-pill-text switch-pill-text--on">On</span>
+                                    </label>
+                                  </div>
+                                </div>
+                                <div className="form-switch-row form-switch-row--inline">
+                                  <span className="form-switch-label">Show steps on Today</span>
+                                  <div className="switch-pill">
+                                    <input
+                                      id="show-steps"
+                                      type="checkbox"
+                                      aria-label="Show steps on Today"
+                                      name="ShowStepsOnToday"
+                                      checked={healthTargets.ShowStepsOnToday}
+                                      onChange={onHealthTargetsChange}
+                                    />
+                                    <label htmlFor="show-steps" className="switch-pill-track">
+                                      <span className="switch-pill-icon switch-pill-icon--off">
+                                        <Icon name="toggleOff" className="icon" />
+                                      </span>
+                                      <span className="switch-pill-icon switch-pill-icon--on">
+                                        <Icon name="toggleOn" className="icon" />
+                                      </span>
+                                      <span className="switch-pill-text switch-pill-text--off">Off</span>
+                                      <span className="switch-pill-text switch-pill-text--on">On</span>
+                                    </label>
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="settings-subgroup">
+                                <div className="settings-subgroup-title">Optional</div>
+                                <div className="form-switch-row form-switch-row--inline">
+                                  <span className="form-switch-label">Show fibre on Today</span>
+                                  <div className="switch-pill">
+                                    <input
+                                      id="show-fibre"
+                                      type="checkbox"
+                                      aria-label="Show fibre on Today"
+                                      name="ShowFibreOnToday"
+                                      checked={healthTargets.ShowFibreOnToday}
+                                      onChange={onHealthTargetsChange}
+                                    />
+                                    <label htmlFor="show-fibre" className="switch-pill-track">
+                                      <span className="switch-pill-icon switch-pill-icon--off">
+                                        <Icon name="toggleOff" className="icon" />
+                                      </span>
+                                      <span className="switch-pill-icon switch-pill-icon--on">
+                                        <Icon name="toggleOn" className="icon" />
+                                      </span>
+                                      <span className="switch-pill-text switch-pill-text--off">Off</span>
+                                      <span className="switch-pill-text switch-pill-text--on">On</span>
+                                    </label>
+                                  </div>
+                                </div>
+                                <div className="form-switch-row form-switch-row--inline">
+                                  <span className="form-switch-label">Show carbs on Today</span>
+                                  <div className="switch-pill">
+                                    <input
+                                      id="show-carbs"
+                                      type="checkbox"
+                                      aria-label="Show carbs on Today"
+                                      name="ShowCarbsOnToday"
+                                      checked={healthTargets.ShowCarbsOnToday}
+                                      onChange={onHealthTargetsChange}
+                                    />
+                                    <label htmlFor="show-carbs" className="switch-pill-track">
+                                      <span className="switch-pill-icon switch-pill-icon--off">
+                                        <Icon name="toggleOff" className="icon" />
+                                      </span>
+                                      <span className="switch-pill-icon switch-pill-icon--on">
+                                        <Icon name="toggleOn" className="icon" />
+                                      </span>
+                                      <span className="switch-pill-text switch-pill-text--off">Off</span>
+                                      <span className="switch-pill-text switch-pill-text--on">On</span>
+                                    </label>
+                                  </div>
+                                </div>
+                                <div className="form-switch-row form-switch-row--inline">
+                                  <span className="form-switch-label">Show fat on Today</span>
+                                  <div className="switch-pill">
+                                    <input
+                                      id="show-fat"
+                                      type="checkbox"
+                                      aria-label="Show fat on Today"
+                                      name="ShowFatOnToday"
+                                      checked={healthTargets.ShowFatOnToday}
+                                      onChange={onHealthTargetsChange}
+                                    />
+                                    <label htmlFor="show-fat" className="switch-pill-track">
+                                      <span className="switch-pill-icon switch-pill-icon--off">
+                                        <Icon name="toggleOff" className="icon" />
+                                      </span>
+                                      <span className="switch-pill-icon switch-pill-icon--on">
+                                        <Icon name="toggleOn" className="icon" />
+                                      </span>
+                                      <span className="switch-pill-text switch-pill-text--off">Off</span>
+                                      <span className="switch-pill-text switch-pill-text--on">On</span>
+                                    </label>
+                                  </div>
+                                </div>
+                                <div className="form-switch-row form-switch-row--inline">
+                                  <span className="form-switch-label">Show sugar on Today</span>
+                                  <div className="switch-pill">
+                                    <input
+                                      id="show-sugar"
+                                      type="checkbox"
+                                      aria-label="Show sugar on Today"
+                                      name="ShowSugarOnToday"
+                                      checked={healthTargets.ShowSugarOnToday}
+                                      onChange={onHealthTargetsChange}
+                                    />
+                                    <label htmlFor="show-sugar" className="switch-pill-track">
+                                      <span className="switch-pill-icon switch-pill-icon--off">
+                                        <Icon name="toggleOff" className="icon" />
+                                      </span>
+                                      <span className="switch-pill-icon switch-pill-icon--on">
+                                        <Icon name="toggleOn" className="icon" />
+                                      </span>
+                                      <span className="switch-pill-text switch-pill-text--off">Off</span>
+                                      <span className="switch-pill-text switch-pill-text--on">On</span>
+                                    </label>
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="settings-subgroup">
+                                <div className="settings-subgroup-title">Advanced</div>
+                                <div className="form-switch-row form-switch-row--inline">
+                                  <span className="form-switch-label">Show sodium on Today</span>
+                                  <div className="switch-pill">
+                                    <input
+                                      id="show-sodium"
+                                      type="checkbox"
+                                      aria-label="Show sodium on Today"
+                                      name="ShowSodiumOnToday"
+                                      checked={healthTargets.ShowSodiumOnToday}
+                                      onChange={onHealthTargetsChange}
+                                    />
+                                    <label htmlFor="show-sodium" className="switch-pill-track">
+                                      <span className="switch-pill-icon switch-pill-icon--off">
+                                        <Icon name="toggleOff" className="icon" />
+                                      </span>
+                                      <span className="switch-pill-icon switch-pill-icon--on">
+                                        <Icon name="toggleOn" className="icon" />
+                                      </span>
+                                      <span className="switch-pill-text switch-pill-text--off">Off</span>
+                                      <span className="switch-pill-text switch-pill-text--on">On</span>
+                                    </label>
+                                  </div>
+                                </div>
+                                <div className="form-switch-row form-switch-row--inline">
+                                  <span className="form-switch-label">Show saturated fat on Today</span>
+                                  <div className="switch-pill">
+                                    <input
+                                      id="show-sat-fat"
+                                      type="checkbox"
+                                      aria-label="Show saturated fat on Today"
+                                      name="ShowSaturatedFatOnToday"
+                                      checked={healthTargets.ShowSaturatedFatOnToday}
+                                      onChange={onHealthTargetsChange}
+                                    />
+                                    <label htmlFor="show-sat-fat" className="switch-pill-track">
+                                      <span className="switch-pill-icon switch-pill-icon--off">
+                                        <Icon name="toggleOff" className="icon" />
+                                      </span>
+                                      <span className="switch-pill-icon switch-pill-icon--on">
+                                        <Icon name="toggleOn" className="icon" />
+                                      </span>
+                                      <span className="switch-pill-text switch-pill-text--off">Off</span>
+                                      <span className="switch-pill-text switch-pill-text--on">On</span>
+                                    </label>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="settings-divider" />
+                        <div className="settings-subsection settings-subsection--actions-bottom">
+                          <div className="settings-subsection-header">
+                            <h4>Charts</h4>
+                            <p>Control which charts appear on Today.</p>
+                          </div>
+                          <div className="form-stack">
+                            <div className="form-switch-list">
+                              <div className="form-switch-row form-switch-row--inline">
+                                <span className="form-switch-label">Show weight chart on Today</span>
+                                <div className="switch-pill">
+                                  <input
+                                    id="show-weight-chart"
+                                    type="checkbox"
+                                    aria-label="Show weight chart on Today"
+                                    checked={healthShowWeightChart}
+                                    onChange={(event) => setHealthShowWeightChart(event.target.checked)}
+                                  />
+                                  <label htmlFor="show-weight-chart" className="switch-pill-track">
+                                    <span className="switch-pill-icon switch-pill-icon--off">
+                                      <Icon name="toggleOff" className="icon" />
+                                    </span>
+                                    <span className="switch-pill-icon switch-pill-icon--on">
+                                      <Icon name="toggleOn" className="icon" />
+                                    </span>
+                                    <span className="switch-pill-text switch-pill-text--off">Off</span>
+                                    <span className="switch-pill-text switch-pill-text--on">On</span>
+                                  </label>
+                                </div>
+                              </div>
+                              <div className="form-switch-row form-switch-row--inline">
+                                <span className="form-switch-label">Show steps chart on Today</span>
+                                <div className="switch-pill">
+                                  <input
+                                    id="show-steps-chart"
+                                    type="checkbox"
+                                    aria-label="Show steps chart on Today"
+                                    checked={healthShowStepsChart}
+                                    onChange={(event) => setHealthShowStepsChart(event.target.checked)}
+                                  />
+                                  <label htmlFor="show-steps-chart" className="switch-pill-track">
+                                    <span className="switch-pill-icon switch-pill-icon--off">
+                                      <Icon name="toggleOff" className="icon" />
+                                    </span>
+                                    <span className="switch-pill-icon switch-pill-icon--on">
+                                      <Icon name="toggleOn" className="icon" />
+                                    </span>
+                                    <span className="switch-pill-text switch-pill-text--off">Off</span>
+                                    <span className="switch-pill-text switch-pill-text--on">On</span>
+                                  </label>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="settings-health-group">
+                    <div className="settings-group-header">AI</div>
+                    <div className="settings-health-columns">
+                      <div className="settings-health-column">
+                        <div className="settings-subsection settings-subsection--actions-bottom">
+                          <div className="settings-subsection-header">
+                            <h4>AI targets</h4>
+                            <p>Refresh AI suggestions and auto-tune weekly.</p>
+                          </div>
+                          <div className="form-switch-row form-switch-row--inline">
+                            <span className="form-switch-label">Auto-tune targets weekly</span>
+                            <div className="switch-pill">
+                              <input
+                                id="health-auto-tune"
+                                type="checkbox"
+                                aria-label="Auto-tune targets weekly"
+                                checked={healthAutoTuneWeekly}
+                                onChange={updateHealthAutoTune}
+                              />
+                              <label htmlFor="health-auto-tune" className="switch-pill-track">
+                                <span className="switch-pill-icon switch-pill-icon--off">
+                                  <Icon name="toggleOff" className="icon" />
+                                </span>
+                                <span className="switch-pill-icon switch-pill-icon--on">
+                                  <Icon name="toggleOn" className="icon" />
+                                </span>
+                                <span className="switch-pill-text switch-pill-text--off">Off</span>
+                                <span className="switch-pill-text switch-pill-text--on">On</span>
+                              </label>
+                            </div>
+                          </div>
+                          <p className="health-detail">
+                            Auto-tune runs once a week when you open the app.
+                          </p>
+                          {healthAutoTuneLastRunAt ? (
+                            <p className="health-detail">
+                              Last auto-tune: {healthAutoTuneLastRunAt.toLocaleString()}
+                            </p>
+                          ) : (
+                            <p className="health-detail">No auto-tune run yet.</p>
+                          )}
+                          {healthRecommendation ? (
+                            <div className="health-ai-result">
+                              <h4>Suggested targets</h4>
+                              <p>{healthRecommendation.Explanation}</p>
+                              <div className="health-summary-grid">
+                                <div>
+                                  <p>Calories</p>
+                                  <h3>{healthRecommendation.DailyCalorieTarget}</h3>
+                                </div>
+                                <div>
+                                  <p>Protein min</p>
+                                  <h3>{healthRecommendation.ProteinTargetMin}</h3>
+                                </div>
+                                <div>
+                                  <p>Protein max</p>
+                                  <h3>{healthRecommendation.ProteinTargetMax}</h3>
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                className="primary-button health-ai-apply"
+                                onClick={applyHealthRecommendation}
+                              >
+                                Apply suggested targets
+                              </button>
+                            </div>
+                          ) : null}
+                          <div className="form-actions">
+                            <button
+                              type="button"
+                              className="primary-button"
+                              onClick={runHealthRecommendation}
+                              disabled={healthAiStatus === "loading"}
+                            >
+                              {healthRecommendation ? "Refresh suggestions" : "Get suggestions"}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="settings-health-column">
+                        <details className="settings-subsection settings-subsection--collapsible">
+                          <summary className="settings-subsection-header settings-subsection-summary">
+                            <div>
+                              <h4>Recommendation history</h4>
+                              <p>Previous AI calculations for reference.</p>
+                            </div>
+                          </summary>
+                          <div className="health-history-list">
+                            {healthRecommendationHistory.length ? (
+                              healthRecommendationHistory.map((log) => (
+                                <div key={log.RecommendationLogId} className="health-history-card">
+                                  <div className="health-history-card-header">
+                                    <span>{new Date(log.CreatedAt).toLocaleDateString()}</span>
+                                    <span className="health-history-card-kcal">
+                                      {log.DailyCalorieTarget} kcal
+                                    </span>
+                                  </div>
+                                  <div className="health-history-card-subtitle">
+                                    {log.Explanation}
+                                  </div>
+                                </div>
+                              ))
+                            ) : (
+                              <p className="health-history-card-empty">No recommendations yet.</p>
+                            )}
+                          </div>
+                        </details>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1875,7 +2695,7 @@ const Settings = () => {
           ) : null}
 
           {activeSection === "access" ? (
-            <div className="settings-section">
+            <div className="settings-section settings-section--full">
               <div className="settings-section-header">
                 <div className="settings-section-header-row">
                   <div>
@@ -1968,16 +2788,33 @@ const Settings = () => {
                             ))}
                           </select>
                         </label>
-                        <div className="form-switch-row">
+                        <div className="form-switch-row form-switch-row--inline">
                           <span className="form-switch-label">
                             Require password change on first login
                           </span>
-                          <input
-                            type="checkbox"
-                            name="RequirePasswordChange"
-                            checked={newUserForm.RequirePasswordChange}
-                            onChange={onNewUserChange}
-                          />
+                          <div className="switch-pill">
+                            <input
+                              id="require-password-change"
+                              type="checkbox"
+                              name="RequirePasswordChange"
+                              checked={newUserForm.RequirePasswordChange}
+                              onChange={onNewUserChange}
+                              aria-label="Require password change on first login"
+                            />
+                            <label
+                              htmlFor="require-password-change"
+                              className="switch-pill-track"
+                            >
+                              <span className="switch-pill-icon switch-pill-icon--off">
+                                <Icon name="toggleOff" className="icon" />
+                              </span>
+                              <span className="switch-pill-icon switch-pill-icon--on">
+                                <Icon name="toggleOn" className="icon" />
+                              </span>
+                              <span className="switch-pill-text switch-pill-text--off">Off</span>
+                              <span className="switch-pill-text switch-pill-text--on">On</span>
+                            </label>
+                          </div>
                         </div>
                         <div className="form-actions">
                           <button type="submit" disabled={status === "saving"}>
@@ -1994,67 +2831,107 @@ const Settings = () => {
                       </form>
                     </div>
                   ) : null}
-                  <div className="settings-subsection">
-                    <div className="settings-subsection-header">
+                  <div className="settings-access-table">
+                    <div className="settings-access-table-header">
                       <h4>Users</h4>
                       <p>Review roles, profiles, and password resets.</p>
                     </div>
-                    <div className="settings-users">
-                      {users.map((user) => {
-                        const displayName = [user.FirstName, user.LastName].filter(Boolean).join(" ");
-                        return (
-                          <div key={user.Id} className="settings-user-card">
-                            <div className="settings-user-header">
-                              <div>
-                                <h4>{user.Username}</h4>
-                                <p className="settings-user-subtitle">
-                                  Id {user.Id}
-                                  {displayName ? ` · ${displayName}` : ""}
-                                </p>
-                              </div>
-                              <div className="settings-user-actions">
+                    <div className="settings-access-table-shell">
+                      <DataTable
+                        tableKey="settings-users"
+                        columns={accessColumns}
+                        rows={accessRows}
+                        searchTerm={accessSearchTerm}
+                        onSearchTermChange={setAccessSearchTerm}
+                        renderActions={(row) => {
+                          const isOpen = accessMenu?.userId === row.Id;
+                          return (
+                            <div className="settings-access-actions">
+                              {row.RequirePasswordChange ? (
+                                <span className="badge">Reset required</span>
+                              ) : null}
+                              <div className="settings-access-menu">
                                 <button
                                   type="button"
-                                  className="button-secondary"
-                                  onClick={() => onOpenProfileModal(user)}
+                                  className="icon-button settings-access-menu-button"
+                                  aria-label="User actions"
+                                  aria-haspopup="menu"
+                                  aria-expanded={isOpen}
+                                  onClick={(event) => onAccessMenuToggle(row.User, event)}
                                 >
-                                  Edit profile
+                                  <Icon name="more" className="icon" />
                                 </button>
-                                <button
-                                  type="button"
-                                  onClick={() => onOpenPasswordModal(user)}
-                                >
-                                  Reset password
-                                </button>
-                                {user.RequirePasswordChange ? (
-                                  <span className="badge">Reset required</span>
-                                ) : null}
                               </div>
                             </div>
-                            <div className="settings-user-meta">
-                              <span>{user.Email || "No email"}</span>
-                              <span>{user.DiscordHandle || "No Discord"}</span>
-                              <span>Alexa service user Id {user.Id}</span>
+                          );
+                        }}
+                      />
+                    </div>
+                  </div>
+                  <div className="settings-access-cards">
+                    <div className="settings-subsection">
+                      <div className="settings-subsection-header">
+                        <h4>Users</h4>
+                        <p>Review roles, profiles, and password resets.</p>
+                      </div>
+                      <div className="settings-users">
+                        {users.map((user) => {
+                          const displayName = [user.FirstName, user.LastName].filter(Boolean).join(" ");
+                          return (
+                            <div key={user.Id} className="settings-user-card">
+                              <div className="settings-user-header">
+                                <div>
+                                  <h4>{user.Username}</h4>
+                                  <p className="settings-user-subtitle">
+                                    Id {user.Id}
+                                    {displayName ? ` · ${displayName}` : ""}
+                                  </p>
+                                </div>
+                                <div className="settings-user-actions">
+                                  <button
+                                    type="button"
+                                    className="button-secondary"
+                                    onClick={() => onOpenProfileModal(user)}
+                                  >
+                                    Edit profile
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="button-secondary"
+                                    onClick={() => onOpenPasswordModal(user)}
+                                  >
+                                    Reset password
+                                  </button>
+                                  {user.RequirePasswordChange ? (
+                                    <span className="badge">Reset required</span>
+                                  ) : null}
+                                </div>
+                              </div>
+                              <div className="settings-user-meta">
+                                <span>{user.Email || "Not set"}</span>
+                                <span>{user.DiscordHandle || "Not set"}</span>
+                                <span>Alexa service user Id {user.Id}</span>
+                              </div>
+                              <div className="settings-role-grid">
+                                <label>
+                                  <span>Role</span>
+                                  <select
+                                    value={user.Role || "Kid"}
+                                    onChange={(event) => onRoleChange(user.Id, event.target.value)}
+                                    disabled={status === "saving"}
+                                  >
+                                    {RoleOptions.map((role) => (
+                                      <option key={role} value={role}>
+                                        {role}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </label>
+                              </div>
                             </div>
-                            <div className="settings-role-grid">
-                              <label>
-                                <span>Role</span>
-                                <select
-                                  value={user.Role || "Kid"}
-                                  onChange={(event) => onRoleChange(user.Id, event.target.value)}
-                                  disabled={status === "saving"}
-                                >
-                                  {RoleOptions.map((role) => (
-                                    <option key={role} value={role}>
-                                      {role}
-                                    </option>
-                                  ))}
-                                </select>
-                              </label>
-                            </div>
-                          </div>
-                        );
-                      })}
+                          );
+                        })}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -2064,6 +2941,7 @@ const Settings = () => {
 
         </section>
       </div>
+      {accessMenuPortal}
       {goalWizardOpen ? (
         <div className="modal-backdrop">
           <div className="modal">

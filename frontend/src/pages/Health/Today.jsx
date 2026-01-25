@@ -21,7 +21,8 @@ import {
   FetchStepsHistory,
   FetchWeeklySummary,
   FetchWeightHistory,
-  UpdateDailySteps
+  UpdateDailySteps,
+  UpdateHealthSettings
 } from "../../lib/healthApi.js";
 
 const FormatDate = (value) => {
@@ -488,6 +489,18 @@ const Today = () => {
   useEffect(() => {
     localStorage.setItem("health.stepsRange", stepsRangeKey);
   }, [stepsRangeKey]);
+
+  const toggleWeightProjection = useCallback(async () => {
+    const next = !showWeightProjection;
+    setShowWeightProjection(next);
+    setWeightHistoryError("");
+    try {
+      await UpdateHealthSettings({ ShowWeightProjectionOnToday: next });
+    } catch (err) {
+      setShowWeightProjection(!next);
+      setWeightHistoryError(err?.message || "Failed to update weight projection setting.");
+    }
+  }, [showWeightProjection]);
 
   useEffect(() => {
     if (!stepsModalOpen && !weightModalOpen) {
@@ -1220,17 +1233,29 @@ const Today = () => {
                 </button>
               ))}
             </div>
-            <button
-              type="button"
-              className={`health-goal-toggle${showGoalTarget ? " is-active" : ""}`}
-              onClick={() => setWeightGoalEnabled((prev) => !prev)}
-              aria-pressed={showGoalTarget}
-              aria-label="Toggle goal projection"
-              disabled={!goalEndDate}
-            >
-              Goal
-              <span className="health-goal-dot" aria-hidden="true" />
-            </button>
+            <div className="health-chart-toggles">
+              <button
+                type="button"
+                className={`health-goal-toggle${showWeightProjection ? " is-active" : ""}`}
+                onClick={toggleWeightProjection}
+                aria-pressed={showWeightProjection}
+                aria-label="Toggle weight projections"
+              >
+                Projections
+                <span className="health-goal-dot" aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                className={`health-goal-toggle${showGoalTarget ? " is-active" : ""}`}
+                onClick={() => setWeightGoalEnabled((prev) => !prev)}
+                aria-pressed={showGoalTarget}
+                aria-label="Toggle goal projection"
+                disabled={!goalEndDate}
+              >
+                Goal
+                <span className="health-goal-dot" aria-hidden="true" />
+              </button>
+            </div>
           </div>
         </section>
       ) : null}

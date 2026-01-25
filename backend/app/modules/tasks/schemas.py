@@ -155,11 +155,24 @@ class TaskSettingsOut(BaseModel):
     OverdueReminderTime: str | None = None
     OverdueReminderTimeZone: str | None = None
     OverdueLastNotifiedDate: date | None = None
+    OverdueRemindersEnabled: bool = True
 
 
 class TaskSettingsUpdate(BaseModel):
     OverdueReminderTime: str | None = None
     OverdueReminderTimeZone: str | None = None
+    OverdueRemindersEnabled: bool | None = None
+
+
+class TaskOverdueRunOut(BaseModel):
+    Id: int
+    RanAt: datetime
+    Result: str
+    NotificationsSent: int = 0
+    OverdueTasks: int = 0
+    UsersProcessed: int = 0
+    ErrorMessage: str | None = None
+    TriggeredByUserId: int | None = None
 
 
 class TaskListCreate(BaseModel):

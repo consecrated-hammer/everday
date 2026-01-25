@@ -126,5 +126,21 @@ class TaskSettings(Base):
     OverdueReminderTime = Column(String(5))
     OverdueReminderTimeZone = Column(String(64))
     OverdueLastNotifiedDate = Column(Date)
+    OverdueRemindersEnabled = Column(Boolean, default=True, nullable=False)
     CreatedAt = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
     UpdatedAt = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+
+
+class TaskOverdueNotificationRun(Base):
+    __tablename__ = "overdue_notification_runs"
+    __table_args__ = {"schema": "tasks"}
+
+    Id = Column(Integer, primary_key=True, index=True)
+    RanAt = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    Result = Column(String(20), nullable=False)
+    NotificationsSent = Column(Integer, default=0, nullable=False)
+    OverdueTasks = Column(Integer, default=0, nullable=False)
+    UsersProcessed = Column(Integer, default=0, nullable=False)
+    ErrorMessage = Column(String(500))
+    TriggeredByUserId = Column(Integer)
+    CreatedAt = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)

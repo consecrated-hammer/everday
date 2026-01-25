@@ -45,6 +45,9 @@ Neutral colours handle:
 - Use available width for data-dense views (tables), but keep form-heavy pages constrained to improve readability.
 - Keep gutters consistent and avoid “roomy” spacing. Prefer fewer, clearer sections.
 - App shell provides consistent navigation and predictable content padding.
+- Constrained settings layout (use across similar pages):
+  - For settings or preferences sections with simple option rows, constrain the card to a mobile-width max (about 520px) on desktop.
+  - Controls should sit close to their labels; avoid wide empty gaps in the option column.
 
 ## Navigation (Left Rail)
 - Left rail is the primary navigation; collapse/expand toggle sits at the bottom.
@@ -74,6 +77,8 @@ Neutral colours handle:
 - Sortable columns, filterable category columns, resizable widths.
 - Icon-only row actions, clearer on hover.
 - Use a compact “+ Add <item>” action near the table header/toolbar.
+- Default table density should be compact (tight row height, small header type, minimal padding) to maximize information on screen.
+- Table row kebab menus must render via a portal/fixed overlay so they never resize the table container.
 
 ### Manage Columns
 - Dropdown with checkboxes.

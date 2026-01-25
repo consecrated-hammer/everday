@@ -95,11 +95,25 @@ A task is “done” when:
 - DEV = `scripts/dev.sh` with `docker-compose.traefik.dev.yml` using `.env.dev`
 - PROD = main stack compose at `/mnt/docker/config/dockerconfigs/docker-compose.yml`
 
+### Verification (dev container only)
+- Use `./scripts/dev.sh` for all local testing and verification.
+- Do not use `npm run dev`; all checks run inside the dev container.
+- Flags:
+  - `--lint-only` runs lint and exits (no build/deploy).
+  - `--build-only` runs build/deploy without lint.
+- Documentation-only changes do not require lint checks.
+
 ### Shared SQL (hosted in main stack)
 - Single SQL Server container: `batserver-sql`
 - Databases: `EVERDAY-DEV` and `EVERDAY-PROD`
 - Bootstrap schema/login:
   - `scripts/sql/bootstrap-everday.sh <dev|prod>`
+- Quick DB peek (read-only helper script):
+  - `python scripts/sqlpeek.py`
+  - Non-interactive examples:
+    - `python scripts/sqlpeek.py --list-schemas`
+    - `python scripts/sqlpeek.py --list-objects --schema dbo`
+    - `python scripts/sqlpeek.py --schema dbo --object Users --action data --top 25`
 
 ### Prod deployment steps (only when asked)
 - Update `/mnt/docker/config/dockerconfigs/.env` for prod variables.
@@ -129,6 +143,7 @@ A task is “done” when:
 - Overlays:
   - Dropdowns/popovers/menus must render via a portal.
   - Do not use z-index hacks to “fix” stacking/clipping.
+  - Table row kebab menus must be portal/fixed so they do not resize table containers.
 - AppShell layout contract:
   - Sidebar and top bar must be owned by a single AppShell layout.
   - Pages must not re-implement global layout behaviour.

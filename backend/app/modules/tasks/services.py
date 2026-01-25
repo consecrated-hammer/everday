@@ -15,7 +15,15 @@ from app.modules.auth.deps import NowUtc, UserContext
 from app.modules.auth.models import User
 from app.modules.notifications.services import CreateNotificationsForUsers
 from app.modules.auth.models import User
-from app.modules.tasks.models import Task, TaskAssignee, TaskList, TaskSettings, TaskTag, TaskTagLink
+from app.modules.tasks.models import (
+    Task,
+    TaskAssignee,
+    TaskList,
+    TaskOverdueNotificationRun,
+    TaskSettings,
+    TaskTag,
+    TaskTagLink,
+)
 from app.modules.tasks.utils.rbac import CanAccessTask, CanReassignTask, IsAdmin
 from app.services.schedules import AddMonths, AddYears
 
@@ -1046,7 +1054,45 @@ def ResolveTaskSettingsOutput(record: TaskSettings | None) -> dict:
         )
         or DEFAULT_OVERDUE_REMINDER_TIMEZONE,
         "OverdueLastNotifiedDate": record.OverdueLastNotifiedDate if record else None,
+        "OverdueRemindersEnabled": (
+            record.OverdueRemindersEnabled if record and record.OverdueRemindersEnabled is not None else True
+        ),
     }
+
+
+def RecordOverdueNotificationRun(
+    db: Session,
+    *,
+    triggered_by_user_id: int | None,
+    result: str,
+    notifications_sent: int = 0,
+    overdue_tasks: int = 0,
+    users_processed: int = 0,
+    error_message: str | None = None,
+    ran_at: datetime | None = None,
+) -> TaskOverdueNotificationRun:
+    record = TaskOverdueNotificationRun(
+        RanAt=ran_at or NowUtc(),
+        Result=result,
+        NotificationsSent=notifications_sent,
+        OverdueTasks=overdue_tasks,
+        UsersProcessed=users_processed,
+        ErrorMessage=error_message,
+        TriggeredByUserId=triggered_by_user_id,
+    )
+    db.add(record)
+    db.commit()
+    db.refresh(record)
+    return record
+
+
+def ListOverdueNotificationRuns(db: Session, limit: int = 20) -> list[TaskOverdueNotificationRun]:
+    return (
+        db.query(TaskOverdueNotificationRun)
+        .order_by(TaskOverdueNotificationRun.RanAt.desc())
+        .limit(limit)
+        .all()
+    )
 
 
 def UpdateTaskSettings(db: Session, user_id: int, payload: dict) -> TaskSettings:
@@ -1060,6 +1106,8 @@ def UpdateTaskSettings(db: Session, user_id: int, payload: dict) -> TaskSettings
         record.OverdueReminderTimeZone = _NormalizeReminderTimeZone(
             payload.get("OverdueReminderTimeZone")
         )
+    if "OverdueRemindersEnabled" in payload and payload.get("OverdueRemindersEnabled") is not None:
+        record.OverdueRemindersEnabled = bool(payload.get("OverdueRemindersEnabled"))
     record.UpdatedAt = now
     db.add(record)
     db.commit()
