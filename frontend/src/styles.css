@@ -6921,10 +6921,25 @@ th {
   gap: 4px;
 }
 
+.health-foods.is-form-open .health-foods-browse {
+  opacity: 0.2;
+  filter: blur(6px);
+  pointer-events: none;
+  user-select: none;
+  transition: opacity 0.2s ease, filter 0.2s ease;
+}
+
 .health-foods-toolbar-row {
   display: flex;
   align-items: center;
   gap: 10px;
+  flex-wrap: wrap;
+}
+
+.health-foods-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .health-sort-control,
@@ -8303,7 +8318,7 @@ th {
   }
 
   .module-shell--health .module-content {
-    padding-bottom: 120px;
+    padding-bottom: 72px;
   }
 
   .health-foods-mobile-header {
@@ -8317,6 +8332,10 @@ th {
     z-index: 12;
     background: transparent;
     padding: 2px 0 4px;
+  }
+
+  .health-foods-actions {
+    display: none;
   }
 
   .health-foods {
@@ -8337,15 +8356,12 @@ th {
 
   .health-bottom-nav {
     display: flex;
-    position: fixed;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: var(--surface-strong);
-    border-top: 1px solid var(--border);
-    padding: 8px 12px 12px;
-    gap: 4px;
-    z-index: 20;
+    background: var(--surface-muted);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 6px;
+    gap: 6px;
+    margin-bottom: 12px;
   }
 
   .health-actions {
@@ -8377,7 +8393,7 @@ th {
 
   .health-fab {
     display: flex;
-    bottom: 34px;
+    bottom: 18px;
   }
 
   .health-trends-toggle {
@@ -8711,6 +8727,11 @@ body.kids-theme {
 }
 
 .kids-chore-row:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.kids-chore-row[aria-disabled="true"] {
   opacity: 0.6;
   cursor: not-allowed;
 }
@@ -9286,6 +9307,168 @@ body.kids-theme {
   cursor: pointer;
   width: 100%;
   text-align: left;
+}
+
+.kids-task-row {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) 96px;
+  align-items: center;
+  gap: 12px;
+}
+
+.kids-task-row .kids-chore-row-main {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.kids-task-row .kids-chore-label {
+  font-weight: 600;
+}
+
+.kids-chore-icon {
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.kids-chore-icon.is-empty {
+  opacity: 0;
+}
+
+.kids-chore-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 10px;
+  min-height: 30px;
+  border-radius: 999px;
+  border: 1px solid var(--kids-border);
+  background: var(--kids-surface);
+  color: var(--kids-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  justify-self: end;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.kids-chore-pill:hover {
+  border-color: rgba(30, 39, 38, 0.25);
+  background: var(--kids-surface-alt);
+}
+
+.kids-chore-pill:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.kids-chore-pill-icon {
+  width: 14px;
+  height: 14px;
+  stroke: var(--kids-muted);
+  fill: transparent;
+}
+
+.kids-chore-pill-icon circle {
+  stroke-width: 1.5px;
+}
+
+.kids-chore-pill-icon path {
+  stroke-width: 1.8px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+  opacity: 0;
+}
+
+.kids-chore-pill.is-on {
+  background: var(--kids-accent);
+  border-color: rgba(241, 138, 77, 0.8);
+  color: #fff;
+  box-shadow: 0 8px 16px rgba(241, 138, 77, 0.25);
+}
+
+.kids-chore-pill.is-on .kids-chore-pill-icon {
+  stroke: #fff;
+}
+
+.kids-chore-pill.is-on .kids-chore-pill-icon path {
+  opacity: 1;
+}
+
+.kids-chores-section.is-daily {
+  position: relative;
+}
+
+.kids-daily-celebrate {
+  position: absolute;
+  inset: -12px;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  z-index: 1;
+  animation: kids-celebrate 2.4s ease-in-out both;
+}
+
+.kids-daily-celebrate-emoji {
+  font-size: clamp(2.6rem, 5vw, 4.8rem);
+  display: inline-block;
+  animation: kids-confetti 2.4s ease-in-out both;
+  text-shadow: 0 12px 28px rgba(241, 138, 77, 0.25);
+}
+
+@keyframes kids-celebrate {
+  0% {
+    opacity: 0;
+    transform: scale(0.65);
+  }
+  25% {
+    opacity: 1;
+    transform: scale(1.05);
+  }
+  70% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+}
+
+@keyframes kids-confetti {
+  0% {
+    transform: scale(0.7) rotate(-8deg);
+  }
+  35% {
+    transform: scale(1.1) rotate(6deg);
+  }
+  70% {
+    transform: scale(1) rotate(0deg);
+  }
+  100% {
+    transform: scale(0.96) rotate(0deg);
+  }
+}
+
+@media (max-width: 900px), (hover: none) and (pointer: coarse) {
+  .kids-daily-celebrate {
+    inset: 0;
+  }
+
+  .kids-daily-celebrate-emoji {
+    font-size: clamp(2rem, 9vw, 3.6rem);
+  }
 }
 
 .kids-chore-row.is-selected {
