@@ -59,12 +59,77 @@ const ParseDateValue = (value) => {
   return new Date(year, month - 1, day);
 };
 
+const TaskRow = ({ chore, entry, onToggle, isBusy, labelSuffix = "" }) => {
+  const emoji = GetChoreEmoji(chore);
+  const labelText = `${chore.Label}${labelSuffix}`;
+  const isComplete = entry?.Status === "Approved";
+  const isPending = entry?.Status === "Pending";
+  const isRejected = entry?.Status === "Rejected";
+  const isActive = isComplete || isPending;
+  const handleToggle = () => {
+    if (isBusy) {
+      return;
+    }
+    onToggle(chore);
+  };
+
+  const onRowKeyDown = (event) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      handleToggle();
+    }
+  };
+
+  return (
+    <div
+      className="kids-chore-row kids-task-row"
+      onClick={handleToggle}
+      onKeyDown={onRowKeyDown}
+      role="button"
+      tabIndex={0}
+      aria-pressed={isActive}
+      aria-disabled={isBusy}
+    >
+      <span className={`kids-chore-icon${emoji ? "" : " is-empty"}`} aria-hidden="true">
+        {emoji || ""}
+      </span>
+      <div className="kids-chore-row-main">
+        <span className="kids-chore-label">{labelText}</span>
+        {isPending ? (
+          <span className="kids-pill kids-pill--muted">Pending approval</span>
+        ) : isRejected ? (
+          <span className="kids-pill kids-pill--muted">Rejected</span>
+        ) : null}
+      </div>
+      <button
+        type="button"
+        className={`kids-chore-pill${isActive ? " is-on" : ""}`}
+        aria-pressed={isActive}
+        aria-label={isActive ? "Done" : "To do"}
+        onClick={(event) => {
+          event.stopPropagation();
+          handleToggle();
+        }}
+        disabled={isBusy}
+      >
+        <svg viewBox="0 0 16 16" className="kids-chore-pill-icon" aria-hidden="true">
+          <circle cx="8" cy="8" r="6.5" />
+          <path d="M4.6 8.3l2.3 2.3 4.5-4.7" />
+        </svg>
+        <span className="kids-chore-pill-text">{isActive ? "Done" : "To do"}</span>
+      </button>
+    </div>
+  );
+};
+
 const KidsHome = () => {
   const [overview, setOverview] = useState(null);
   const [status, setStatus] = useState("idle");
   const [error, setError] = useState("");
   const [ledgerEntries, setLedgerEntries] = useState([]);
   const [busyChoreId, setBusyChoreId] = useState(null);
+  const [showDailyCelebrate, setShowDailyCelebrate] = useState(false);
+  const [celebrateEmojis, setCelebrateEmojis] = useState("👏🎉🥳");
 
   const loadOverview = useCallback(async () => {
     setStatus("loading");
@@ -118,6 +183,77 @@ const KidsHome = () => {
     () => chores.filter((chore) => chore.Type === "Habit"),
     [chores]
   );
+
+  const celebrationPool = useMemo(
+    () => [
+      "🎊",
+      "🎉",
+      "🥳",
+      "✨",
+      "🌟",
+      "💥",
+      "🪅",
+      "🎈",
+      "🧨",
+      "🙌",
+      "🤩",
+      "😄",
+      "🎁", 
+      "🏆", 
+      "🥇", 
+      "👏", 
+      "🤗", 
+      "😎",
+      "💫", 
+      "⭐️", 
+      "🔥", 
+      "🌈",
+      "🦄", 
+      "🐉", 
+      "🐻", 
+      "🍭", 
+      "🍬", 
+      "🍕",
+      "💫", 
+      "⭐️", 
+      "🔥", 
+      "🌈", 
+      "🏆", 
+      "👏", 
+      "🎁", 
+      "🥇"
+    ],
+    []
+  );
+
+  const dailyDoneCount = useMemo(
+    () =>
+      dailyJobs.reduce((count, chore) => {
+        const entry = entryByChoreId.get(chore.Id);
+        return entry?.Status === "Approved" || entry?.Status === "Pending" ? count + 1 : count;
+      }, 0),
+    [dailyJobs, entryByChoreId]
+  );
+  const dailyAllDone = dailyJobs.length > 0 && dailyDoneCount === dailyJobs.length;
+
+  useEffect(() => {
+    if (!dailyAllDone) {
+      setShowDailyCelebrate(false);
+      return;
+    }
+
+    const next = [...celebrationPool]
+      .sort(() => Math.random() - 0.5)
+      .slice(0, 3)
+      .join("");
+    setCelebrateEmojis(next);
+    setShowDailyCelebrate(true);
+    const timer = setTimeout(() => {
+      setShowDailyCelebrate(false);
+    }, 2400);
+
+    return () => clearTimeout(timer);
+  }, [dailyAllDone, celebrationPool]);
   const bonusTasks = useMemo(
     () => chores.filter((chore) => chore.Type === "Bonus"),
     [chores]
@@ -352,9 +488,7 @@ const KidsHome = () => {
           <div className="kids-chores-section-header">
             <div className="kids-chores-section-title">
               <h4>{GetKidsHeaderEmoji("DailyJobs")} Daily jobs</h4>
-              <span className="kids-chores-status">
-                {dayProtected ? "Done for today!" : "In progress..."}
-              </span>
+              {!dayProtected ? <span className="kids-chores-status">To do</span> : null}
             </div>
           </div>
           <div className="kids-chores-section-body">
@@ -362,48 +496,31 @@ const KidsHome = () => {
               <p className="kids-muted">No daily jobs set yet.</p>
             ) : (
               dailyJobs.map((chore) => {
-                const emoji = GetChoreEmoji(chore);
-                const choreLabel = emoji ? `${emoji} ${chore.Label}` : chore.Label;
                 const entry = entryByChoreId.get(chore.Id);
-                const isComplete = entry?.Status === "Approved";
-                const isPending = entry?.Status === "Pending";
-                const isRejected = entry?.Status === "Rejected";
-                const isActive = isComplete || isPending;
                 return (
-                  <button
+                  <TaskRow
                     key={chore.Id}
-                    type="button"
-                    className="kids-chore-row"
-                    onClick={() => onToggleChore(chore)}
-                    aria-pressed={isActive}
-                    disabled={busyChoreId === chore.Id}
-                  >
-                    <div className="kids-chore-row-main">
-                      <span className="kids-chore-label">{choreLabel}</span>
-                      {isPending ? (
-                        <span className="kids-pill kids-pill--muted">Pending approval</span>
-                      ) : isRejected ? (
-                        <span className="kids-pill kids-pill--muted">Rejected</span>
-                      ) : null}
-                    </div>
-                    <span className="kids-chore-check" aria-hidden="true">
-                      {isActive ? "✅" : "⬜️"}
-                    </span>
-                    <span className={`kids-chore-toggle${isActive ? " is-on" : ""}`} />
-                  </button>
+                    chore={chore}
+                    entry={entry}
+                    onToggle={onToggleChore}
+                    isBusy={busyChoreId === chore.Id}
+                  />
                 );
               })
             )}
           </div>
+          {showDailyCelebrate ? (
+            <div className="kids-daily-celebrate" aria-hidden="true">
+              <span className="kids-daily-celebrate-emoji">{celebrateEmojis}</span>
+            </div>
+          ) : null}
         </div>
         <div className="kids-chores-divider" />
         <div className="kids-chores-section is-habits">
           <div className="kids-chores-section-header">
             <div className="kids-chores-section-title">
               <h4>{GetKidsHeaderEmoji("Habits")} Habits</h4>
-              <span className="kids-chores-status">
-                {habitsDone ? "Done for today!" : "In progress..."}
-              </span>
+              {!habitsDone ? <span className="kids-chores-status">To do</span> : null}
             </div>
           </div>
           <div className="kids-chores-section-body">
@@ -411,35 +528,15 @@ const KidsHome = () => {
               <p className="kids-muted">No habits set yet.</p>
             ) : (
               habits.map((chore) => {
-                const emoji = GetChoreEmoji(chore);
-                const choreLabel = emoji ? `${emoji} ${chore.Label}` : chore.Label;
                 const entry = entryByChoreId.get(chore.Id);
-                const isComplete = entry?.Status === "Approved";
-                const isPending = entry?.Status === "Pending";
-                const isRejected = entry?.Status === "Rejected";
-                const isActive = isComplete || isPending;
                 return (
-                  <button
+                  <TaskRow
                     key={chore.Id}
-                    type="button"
-                    className="kids-chore-row"
-                    onClick={() => onToggleChore(chore)}
-                    aria-pressed={isActive}
-                    disabled={busyChoreId === chore.Id}
-                  >
-                    <div className="kids-chore-row-main">
-                      <span className="kids-chore-label">{choreLabel}</span>
-                      {isPending ? (
-                        <span className="kids-pill kids-pill--muted">Pending approval</span>
-                      ) : isRejected ? (
-                        <span className="kids-pill kids-pill--muted">Rejected</span>
-                      ) : null}
-                    </div>
-                    <span className="kids-chore-check" aria-hidden="true">
-                      {isActive ? "✅" : "⬜️"}
-                    </span>
-                    <span className={`kids-chore-toggle${isActive ? " is-on" : ""}`} />
-                  </button>
+                    chore={chore}
+                    entry={entry}
+                    onToggle={onToggleChore}
+                    isBusy={busyChoreId === chore.Id}
+                  />
                 );
               })
             )}
@@ -457,36 +554,17 @@ const KidsHome = () => {
               <p className="kids-muted">No bonus tasks set yet.</p>
             ) : (
               bonusTasks.map((chore) => {
-                const emoji = GetChoreEmoji(chore);
-                const choreLabel = emoji ? `${emoji} ${chore.Label}` : chore.Label;
                 const entry = entryByChoreId.get(chore.Id);
-                const isComplete = entry?.Status === "Approved";
-                const isPending = entry?.Status === "Pending";
-                const isRejected = entry?.Status === "Rejected";
-                const isActive = isComplete || isPending;
                 const amountLabel = chore.Amount ? ` (${FormatCurrency(chore.Amount)})` : "";
                 return (
-                  <button
+                  <TaskRow
                     key={chore.Id}
-                    type="button"
-                    className="kids-chore-row"
-                    onClick={() => onToggleChore(chore)}
-                    aria-pressed={isActive}
-                    disabled={busyChoreId === chore.Id}
-                  >
-                    <div className="kids-chore-row-main">
-                      <span className="kids-chore-label">{`${choreLabel}${amountLabel}`}</span>
-                      {isPending ? (
-                        <span className="kids-pill kids-pill--muted">Pending approval</span>
-                      ) : isRejected ? (
-                        <span className="kids-pill kids-pill--muted">Rejected</span>
-                      ) : null}
-                    </div>
-                    <span className="kids-chore-check" aria-hidden="true">
-                      {isActive ? "✅" : "⬜️"}
-                    </span>
-                    <span className={`kids-chore-toggle${isActive ? " is-on" : ""}`} />
-                  </button>
+                    chore={chore}
+                    entry={entry}
+                    onToggle={onToggleChore}
+                    isBusy={busyChoreId === chore.Id}
+                    labelSuffix={amountLabel}
+                  />
                 );
               })
             )}

@@ -18,6 +18,9 @@ const DataTable = ({
   tableKey,
   onEdit,
   onDelete,
+  renderActions,
+  showActions = true,
+  actionsLabel = "Actions",
   headerAddon,
   searchTerm,
   onSearchTermChange,
@@ -106,11 +109,11 @@ const DataTable = ({
       if (!resizing.current) {
         return;
       }
-      const { key, startX, startWidth } = resizing.current;
+      const { key, startX, startWidth, minWidth } = resizing.current;
       const delta = event.clientX - startX;
       setColumnWidths((prev) => ({
         ...prev,
-        [key]: Math.max(100, startWidth + delta)
+        [key]: Math.max(minWidth ?? 5, startWidth + delta)
       }));
     };
     const onMouseUp = () => {
@@ -250,6 +253,9 @@ const DataTable = ({
     return sort.direction === "asc" ? "↑" : "↓";
   };
 
+  const hasActions = Boolean(showActions);
+  const actionColumnCount = hasActions ? 1 : 0;
+
   return (
     <div className="table-shell" ref={tableRef}>
       <div className="table-toolbar">
@@ -322,7 +328,7 @@ const DataTable = ({
           <thead>
             {headerAddon ? (
               <tr className="table-header-addon">
-                <th colSpan={visibleDefs.length + 1}>
+                <th colSpan={visibleDefs.length + actionColumnCount}>
                   <div className="table-header-addon-content">{headerAddon}</div>
                 </th>
               </tr>
@@ -363,13 +369,14 @@ const DataTable = ({
                   <span
                     className="col-resizer"
                     onMouseDown={(event) => {
-                      resizing.current = {
-                        key: column.key,
-                        startX: event.clientX,
-                        startWidth: columnWidths[column.key]
-                      };
-                    }}
-                  />
+                    resizing.current = {
+                      key: column.key,
+                      startX: event.clientX,
+                      startWidth: columnWidths[column.key],
+                      minWidth: column.minWidth ?? 5
+                    };
+                  }}
+                />
                   {filterOpenFor === column.key ? (
                     <div className="dropdown">
                       {GetUniqueValues(rows, column.key).map((value) => (
@@ -386,7 +393,7 @@ const DataTable = ({
                   ) : null}
                 </th>
               ))}
-              <th className="actions-col">Actions</th>
+              {hasActions ? <th className="actions-col">{actionsLabel}</th> : null}
             </tr>
           </thead>
           <tbody>
@@ -400,21 +407,41 @@ const DataTable = ({
                     {renderCell(column, row)}
                   </td>
                 ))}
-                <td className="actions-col">
-                  <div className="table-actions">
-                    <button type="button" className="icon-button" onClick={() => onEdit(row)} aria-label="Edit">
-                      <Icon name="edit" className="icon" />
-                    </button>
-                    <button type="button" className="icon-button is-danger" onClick={() => onDelete(row)} aria-label="Delete">
-                      <Icon name="trash" className="icon" />
-                    </button>
-                  </div>
-                </td>
+                {hasActions ? (
+                  <td className="actions-col">
+                    {renderActions ? (
+                      renderActions(row)
+                    ) : (
+                      <div className="table-actions">
+                        {onEdit ? (
+                          <button
+                            type="button"
+                            className="icon-button"
+                            onClick={() => onEdit(row)}
+                            aria-label="Edit"
+                          >
+                            <Icon name="edit" className="icon" />
+                          </button>
+                        ) : null}
+                        {onDelete ? (
+                          <button
+                            type="button"
+                            className="icon-button is-danger"
+                            onClick={() => onDelete(row)}
+                            aria-label="Delete"
+                          >
+                            <Icon name="trash" className="icon" />
+                          </button>
+                        ) : null}
+                      </div>
+                    )}
+                  </td>
+                ) : null}
               </tr>
             ))}
             {sortedFilteredRows.length === 0 ? (
               <tr>
-                <td colSpan={visibleDefs.length + 1} className="empty-cell">
+                <td colSpan={visibleDefs.length + actionColumnCount} className="empty-cell">
                   No results.
                 </td>
               </tr>

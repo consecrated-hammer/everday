@@ -17,6 +17,7 @@ from app.modules.integrations.google.models import (
 from app.modules.notifications.services import CreateNotificationsForUsers
 from app.modules.tasks.services import (
     EnsureTaskSettings,
+    RecordOverdueNotificationRun,
     ResolveOverdueReminderTime,
     ResolveOverdueReminderTimeZone,
 )
@@ -191,6 +192,8 @@ def _build_update_payload(payload: GoogleTaskUpdate) -> dict:
 def _should_run_overdue(settings, now: datetime, force: bool) -> bool:
     if force:
         return True
+    if hasattr(settings, "OverdueRemindersEnabled") and not settings.OverdueRemindersEnabled:
+        return False
     tz = ResolveOverdueReminderTimeZone(settings.OverdueReminderTimeZone)
     local_now = now.astimezone(tz)
     local_today = local_now.date()
@@ -632,65 +635,97 @@ def RunGoogleTaskOverdueNotifications(
 ) -> GoogleTaskOverdueRunResponse:
     access_token = _resolve_access_token(db)
     now = NowUtc()
-    users = db.query(User).all()
+    try:
+        users = db.query(User).all()
 
-    eligible_users: list[User] = []
-    user_list_targets: list[tuple[int, str]] = []
-    for user_record in users:
-        settings = EnsureTaskSettings(db, user_record.Id, now)
-        if not _should_run_overdue(settings, now, force):
-            continue
-        tz = ResolveOverdueReminderTimeZone(settings.OverdueReminderTimeZone)
-        settings.OverdueLastNotifiedDate = now.astimezone(tz).date()
-        settings.UpdatedAt = now
-        db.add(settings)
-        eligible_users.append(user_record)
-        list_id = os.getenv(f"GOOGLE_LIST_ID_USER{user_record.Id}", "").strip()
-        if list_id:
-            user_list_targets.append((user_record.Id, list_id))
+        eligible_users: list[User] = []
+        user_list_targets: list[tuple[int, str]] = []
+        for user_record in users:
+            settings = EnsureTaskSettings(db, user_record.Id, now)
+            if not _should_run_overdue(settings, now, force):
+                continue
+            tz = ResolveOverdueReminderTimeZone(settings.OverdueReminderTimeZone)
+            settings.OverdueLastNotifiedDate = now.astimezone(tz).date()
+            settings.UpdatedAt = now
+            db.add(settings)
+            eligible_users.append(user_record)
+            list_id = os.getenv(f"GOOGLE_LIST_ID_USER{user_record.Id}", "").strip()
+            if list_id:
+                user_list_targets.append((user_record.Id, list_id))
 
-    notifications_sent = 0
-    overdue_tasks = 0
+        notifications_sent = 0
+        overdue_tasks = 0
 
-    for user_id, list_id in user_list_targets:
-        try:
-            items = FetchGoogleTasks(access_token, list_id)
-        except ValueError as exc:
-            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
-        sent, overdue = _send_overdue_notifications(
+        for user_id, list_id in user_list_targets:
+            try:
+                items = FetchGoogleTasks(access_token, list_id)
+            except ValueError as exc:
+                raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
+            sent, overdue = _send_overdue_notifications(
+                db,
+                items=items,
+                list_id=list_id,
+                target_user_ids=[user_id],
+                created_by_user_id=user.Id,
+                now=now,
+            )
+            notifications_sent += sent
+            overdue_tasks += overdue
+
+        if eligible_users:
+            shared_list_id = _resolve_shared_list_id()
+            try:
+                shared_items = FetchGoogleTasks(access_token, shared_list_id)
+            except ValueError as exc:
+                raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
+            sent, overdue = _send_overdue_notifications(
+                db,
+                items=shared_items,
+                list_id=shared_list_id,
+                target_user_ids=[entry.Id for entry in eligible_users],
+                created_by_user_id=user.Id,
+                now=now,
+            )
+            notifications_sent += sent
+            overdue_tasks += overdue
+
+        RecordOverdueNotificationRun(
             db,
-            items=items,
-            list_id=list_id,
-            target_user_ids=[user_id],
-            created_by_user_id=user.Id,
-            now=now,
+            triggered_by_user_id=user.Id,
+            result="Success",
+            notifications_sent=notifications_sent,
+            overdue_tasks=overdue_tasks,
+            users_processed=len(eligible_users),
+            ran_at=now,
         )
-        notifications_sent += sent
-        overdue_tasks += overdue
-
-    if eligible_users:
-        shared_list_id = _resolve_shared_list_id()
-        try:
-            shared_items = FetchGoogleTasks(access_token, shared_list_id)
-        except ValueError as exc:
-            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
-        sent, overdue = _send_overdue_notifications(
+        return GoogleTaskOverdueRunResponse(
+            UsersProcessed=len(eligible_users),
+            NotificationsSent=notifications_sent,
+            OverdueTasks=overdue_tasks,
+        )
+    except HTTPException as exc:
+        db.rollback()
+        RecordOverdueNotificationRun(
             db,
-            items=shared_items,
-            list_id=shared_list_id,
-            target_user_ids=[entry.Id for entry in eligible_users],
-            created_by_user_id=user.Id,
-            now=now,
+            triggered_by_user_id=user.Id,
+            result="Failed",
+            error_message=str(exc.detail),
+            ran_at=now,
         )
-        notifications_sent += sent
-        overdue_tasks += overdue
-
-    db.commit()
-    return GoogleTaskOverdueRunResponse(
-        UsersProcessed=len(eligible_users),
-        NotificationsSent=notifications_sent,
-        OverdueTasks=overdue_tasks,
-    )
+        raise
+    except Exception as exc:
+        db.rollback()
+        RecordOverdueNotificationRun(
+            db,
+            triggered_by_user_id=user.Id,
+            result="Failed",
+            error_message=str(exc),
+            ran_at=now,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to run overdue notifications.",
+        ) from exc
 
 
 @router.get("/oauth/callback")

@@ -40,3 +40,6 @@ export const RunTaskOverdueNotifications = async (force = false) => {
     method: "POST"
   });
 };
+
+export const FetchTaskOverdueHistory = async (limit = 20) =>
+  RequestJson(`/tasks/overdue/history?limit=${limit}`);

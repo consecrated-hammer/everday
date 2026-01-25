@@ -1,6 +1,6 @@
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.orm import Session
 
@@ -16,6 +16,7 @@ from app.modules.tasks.schemas import (
     TaskListOut,
     TaskListUpdate,
     TaskNotificationRunResponse,
+    TaskOverdueRunOut,
     TaskOut,
     TaskSettingsOut,
     TaskSettingsUpdate,
@@ -49,6 +50,7 @@ from app.modules.tasks.services import (
     GetTaskSettings,
     ResolveTaskSettingsOutput,
     UpdateTaskSettings,
+    ListOverdueNotificationRuns,
 )
 
 router = APIRouter(prefix="/api/tasks", tags=["tasks"])
@@ -352,5 +354,30 @@ def RunNotifications(
         )
     except (ValueError, TaskAccessError) as exc:
         _handle_task_error(exc)
+    except ProgrammingError as exc:
+        _handle_db_error(exc)
+
+
+@router.get("/overdue/history", response_model=list[TaskOverdueRunOut])
+def ListOverdueHistory(
+    limit: int = Query(default=20, ge=1, le=100),
+    db: Session = Depends(GetDb),
+    user: UserContext = Depends(RequireAuthenticated),
+) -> list[TaskOverdueRunOut]:
+    try:
+        records = ListOverdueNotificationRuns(db, limit)
+        return [
+            TaskOverdueRunOut(
+                Id=entry.Id,
+                RanAt=entry.RanAt,
+                Result=entry.Result,
+                NotificationsSent=entry.NotificationsSent,
+                OverdueTasks=entry.OverdueTasks,
+                UsersProcessed=entry.UsersProcessed,
+                ErrorMessage=entry.ErrorMessage,
+                TriggeredByUserId=entry.TriggeredByUserId,
+            )
+            for entry in records
+        ]
     except ProgrammingError as exc:
         _handle_db_error(exc)

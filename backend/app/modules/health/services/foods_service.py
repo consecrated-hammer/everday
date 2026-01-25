@@ -70,6 +70,11 @@ def _EnsureUniqueName(db: Session, name: str, FoodId: str | None = None) -> None
     if template_query.first() is not None:
         raise ValueError("Name already exists.")
 
+def _RoundCalories(value: float | None) -> int | None:
+    if value is None:
+        return None
+    return int(round(value))
+
 
 def _BuildFood(row: FoodModel, created_by_name: str | None = None) -> Food:
     return Food(
@@ -161,7 +166,7 @@ def UpsertFood(db: Session, UserId: int, Input: CreateFoodInput, IsAdmin: bool =
         ServingDescription=ServingDescription,
         ServingQuantity=Input.ServingQuantity,
         ServingUnit=Input.ServingUnit,
-        CaloriesPerServing=Input.CaloriesPerServing,
+        CaloriesPerServing=_RoundCalories(Input.CaloriesPerServing),
         ProteinPerServing=Input.ProteinPerServing,
         FibrePerServing=Input.FibrePerServing,
         CarbsPerServing=Input.CarbsPerServing,
@@ -206,7 +211,7 @@ def UpdateFood(db: Session, UserId: int, FoodId: str, Input: UpdateFoodInput, Is
         existing.ServingDescription = f"{new_quantity} {new_unit}".strip()
 
     if Input.CaloriesPerServing is not None:
-        existing.CaloriesPerServing = Input.CaloriesPerServing
+        existing.CaloriesPerServing = _RoundCalories(Input.CaloriesPerServing)
     if Input.ProteinPerServing is not None:
         existing.ProteinPerServing = Input.ProteinPerServing
     if Input.FibrePerServing is not None:

@@ -1612,275 +1612,316 @@ const Foods = () => {
     </ul>
   );
 
+  const isFormOpen = showFoodForm || showMealForm;
+
   return (
-    <div className="health-foods">
-      {!showFoodForm && !showMealForm ? (
-        <div className="health-foods-toolbar">
-          <input
-            className="health-search"
-            type="search"
-            placeholder="Search foods"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-          />
-          <div className="health-foods-toolbar-row">
-            <div className="health-sort-control" ref={sortMenuRef}>
-              <button
-                type="button"
-                className="health-sort-button"
-                onClick={() => setSortMenuOpen((prev) => !prev)}
-                aria-expanded={sortMenuOpen}
-              >
-                Sort: {sortBy === "name" ? "Name" : sortBy === "calories" ? "Calories" : sortBy === "protein" ? "Protein" : "Date"}
-                <Icon name="chevronDown" className="icon" />
-              </button>
-              {sortMenuOpen ? (
-                <div className="dropdown dropdown-right health-toolbar-dropdown">
-                  {[
-                    { key: "name", label: "Name" },
-                    { key: "calories", label: "Calories" },
-                    { key: "protein", label: "Protein" },
-                    { key: "date", label: "Date" }
-                  ].map((option) => (
+    <div className={`health-foods${isFormOpen ? " is-form-open" : ""}`}>
+      <div className="health-foods-browse">
+        {!showFoodForm && !showMealForm ? (
+          <div className="health-foods-toolbar">
+            <input
+              className="health-search"
+              type="search"
+              placeholder="Search foods"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+            />
+            <div className="health-foods-toolbar-row">
+              <div className="health-sort-control" ref={sortMenuRef}>
+                <button
+                  type="button"
+                  className="health-sort-button"
+                  onClick={() => setSortMenuOpen((prev) => !prev)}
+                  aria-expanded={sortMenuOpen}
+                >
+                  Sort:{" "}
+                  {sortBy === "name"
+                    ? "Name"
+                    : sortBy === "calories"
+                      ? "Calories"
+                      : sortBy === "protein"
+                        ? "Protein"
+                        : "Date"}
+                  <Icon name="chevronDown" className="icon" />
+                </button>
+                {sortMenuOpen ? (
+                  <div className="dropdown dropdown-right health-toolbar-dropdown">
+                    {[
+                      { key: "name", label: "Name" },
+                      { key: "calories", label: "Calories" },
+                      { key: "protein", label: "Protein" },
+                      { key: "date", label: "Date" }
+                    ].map((option) => (
+                      <button
+                        key={option.key}
+                        type="button"
+                        className="dropdown-item"
+                        onClick={() => {
+                          setSortBy(option.key);
+                          setSortMenuOpen(false);
+                        }}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
                     <button
-                      key={option.key}
                       type="button"
                       className="dropdown-item"
                       onClick={() => {
-                        setSortBy(option.key);
+                        setSortDirection("asc");
                         setSortMenuOpen(false);
                       }}
                     >
-                      {option.label}
+                      Ascending
                     </button>
-                  ))}
-                  <button
-                    type="button"
-                    className="dropdown-item"
-                    onClick={() => {
-                      setSortDirection("asc");
-                      setSortMenuOpen(false);
-                    }}
-                  >
-                    Ascending
-                  </button>
-                  <button
-                    type="button"
-                    className="dropdown-item"
-                    onClick={() => {
-                      setSortDirection("desc");
-                      setSortMenuOpen(false);
-                    }}
-                  >
-                    Descending
-                  </button>
-                </div>
-              ) : null}
-            </div>
-            <div className="health-filter-control" ref={filterMenuRef}>
-              <button
-                type="button"
-                className={`button-secondary health-filter-button${
-                  mobileFilter !== "all" ? " is-active" : ""
-                }`}
-                onClick={() => setFilterMenuOpen((prev) => !prev)}
-                aria-expanded={filterMenuOpen}
-              >
-                <Icon name="filter" className="icon" />
-                Filter
-              </button>
-              {filterMenuOpen ? (
-                <div className="dropdown dropdown-right health-toolbar-dropdown">
-                  {[
-                    { key: "all", label: "All" },
-                    { key: "foods", label: "Foods" },
-                    { key: "meals", label: "Meals" },
-                    { key: "favourites", label: "Favourites" },
-                    { key: "seed", label: "Seed" },
-                    { key: "ai", label: "AI" }
-                  ].map((option) => (
                     <button
-                      key={option.key}
                       type="button"
                       className="dropdown-item"
                       onClick={() => {
-                        applyMobileFilter(option.key);
-                        setFilterMenuOpen(false);
+                        setSortDirection("desc");
+                        setSortMenuOpen(false);
                       }}
                     >
-                      {option.label}
+                      Descending
                     </button>
-                  ))}
-                </div>
+                  </div>
                 ) : null}
+              </div>
+              <div className="health-filter-control" ref={filterMenuRef}>
+                <button
+                  type="button"
+                  className={`button-secondary health-filter-button${
+                    mobileFilter !== "all" ? " is-active" : ""
+                  }`}
+                  onClick={() => setFilterMenuOpen((prev) => !prev)}
+                  aria-expanded={filterMenuOpen}
+                >
+                  <Icon name="filter" className="icon" />
+                  Filter
+                </button>
+                {filterMenuOpen ? (
+                  <div className="dropdown dropdown-right health-toolbar-dropdown">
+                    {[
+                      { key: "all", label: "All" },
+                      { key: "foods", label: "Foods" },
+                      { key: "meals", label: "Meals" },
+                      { key: "favourites", label: "Favourites" },
+                      { key: "seed", label: "Seed" },
+                      { key: "ai", label: "AI" }
+                    ].map((option) => (
+                      <button
+                        key={option.key}
+                        type="button"
+                        className="dropdown-item"
+                        onClick={() => {
+                          applyMobileFilter(option.key);
+                          setFilterMenuOpen(false);
+                        }}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+              <button type="button" className="button-secondary" onClick={startAddMeal}>
+                Create meal
+              </button>
+              <button type="button" className="primary-button" onClick={startAddFood}>
+                Add food
+              </button>
             </div>
-            <button type="button" className="primary-button" onClick={startAddFood}>
-              Add food
+          </div>
+        ) : null}
+
+        <div className="health-foods-tabs">
+          <div className="module-nav" aria-label="Foods and meals">
+            <button
+              type="button"
+              className={`module-link${activeTab === "all" ? " is-active" : ""}`}
+              onClick={() => handleTabChange("all")}
+            >
+              All
+            </button>
+            <button
+              type="button"
+              className={`module-link${activeTab === "foods" ? " is-active" : ""}`}
+              onClick={() => handleTabChange("foods")}
+            >
+              Foods
+            </button>
+            <button
+              type="button"
+              className={`module-link${activeTab === "meals" ? " is-active" : ""}`}
+              onClick={() => handleTabChange("meals")}
+            >
+              Meals
+            </button>
+            <button
+              type="button"
+              className={`module-link${activeTab === "favourites" ? " is-active" : ""}`}
+              onClick={() => handleTabChange("favourites")}
+            >
+              Favourites
             </button>
           </div>
         </div>
-      ) : null}
 
-      <div className="health-foods-tabs">
-        <div className="module-nav" aria-label="Foods and meals">
-          <button
-            type="button"
-            className={`module-link${activeTab === "all" ? " is-active" : ""}`}
-            onClick={() => handleTabChange("all")}
-          >
-            All
-          </button>
-          <button
-            type="button"
-            className={`module-link${activeTab === "foods" ? " is-active" : ""}`}
-            onClick={() => handleTabChange("foods")}
-          >
-            Foods
-          </button>
-          <button
-            type="button"
-            className={`module-link${activeTab === "meals" ? " is-active" : ""}`}
-            onClick={() => handleTabChange("meals")}
-          >
-            Meals
-          </button>
-          <button
-            type="button"
-            className={`module-link${activeTab === "favourites" ? " is-active" : ""}`}
-            onClick={() => handleTabChange("favourites")}
-          >
-            Favourites
-          </button>
-        </div>
-      </div>
+        {error ? <p className="form-error">{error}</p> : null}
 
-      {error ? <p className="form-error">{error}</p> : null}
+        {showCombinedList ? (
+          <section className="module-panel">
+            <header className="module-panel-header food-library-header">
+              <div>
+                <h3>Foods and meals</h3>
+                <p>{combinedItems.length} items</p>
+              </div>
+              <div className="module-panel-actions">
+                <input
+                  className="health-search"
+                  type="search"
+                  placeholder="Search foods or meals"
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                />
+                <select value={sortBy} onChange={(event) => setSortBy(event.target.value)}>
+                  <option value="name">Sort by name</option>
+                  <option value="calories">Sort by calories</option>
+                  <option value="protein">Sort by protein</option>
+                  <option value="date">Sort by date</option>
+                </select>
+                <button
+                  type="button"
+                  className="icon-button is-secondary"
+                  onClick={() => setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"))}
+                  aria-label="Toggle sort direction"
+                >
+                  <Icon name={sortDirection === "asc" ? "sortUp" : "sortDown"} className="icon" />
+                </button>
+                <button
+                  type="button"
+                  className="button-secondary"
+                  onClick={() => setOnlyFavourites((prev) => !prev)}
+                >
+                  {onlyFavourites ? "Favourites only" : "All foods"}
+                </button>
+                <div className="health-foods-actions">
+                  <button type="button" className="button-secondary" onClick={startAddMeal}>
+                    Create meal
+                  </button>
+                  <button type="button" className="primary-button" onClick={startAddFood}>
+                    Add food
+                  </button>
+                </div>
+              </div>
+            </header>
+            {status === "loading" ? (
+              <p className="health-empty">Loading foods...</p>
+            ) : null}
+            {status !== "loading" && combinedItems.length === 0 ? (
+              <p className="health-empty">No foods or meals yet.</p>
+            ) : null}
+            {combinedItems.length ? renderSummaryList(combinedItems) : null}
+          </section>
+        ) : null}
 
-      {showCombinedList ? (
-        <section className="module-panel">
-          <header className="module-panel-header food-library-header">
-            <div>
-              <h3>Foods and meals</h3>
-              <p>{combinedItems.length} items</p>
-            </div>
-            <div className="module-panel-actions">
-              <input
-                className="health-search"
-                type="search"
-                placeholder="Search foods or meals"
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-              />
-              <select value={sortBy} onChange={(event) => setSortBy(event.target.value)}>
-                <option value="name">Sort by name</option>
-                <option value="calories">Sort by calories</option>
-                <option value="protein">Sort by protein</option>
-                <option value="date">Sort by date</option>
-              </select>
-              <button
-                type="button"
-                className="icon-button is-secondary"
-                onClick={() => setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"))}
-                aria-label="Toggle sort direction"
-              >
-                <Icon name={sortDirection === "asc" ? "sortUp" : "sortDown"} className="icon" />
-              </button>
-              <button
-                type="button"
-                className="button-secondary"
-                onClick={() => setOnlyFavourites((prev) => !prev)}
-              >
-                {onlyFavourites ? "Favourites only" : "All foods"}
-              </button>
-            </div>
-          </header>
-          {status === "loading" ? (
-            <p className="health-empty">Loading foods...</p>
-          ) : null}
-          {status !== "loading" && combinedItems.length === 0 ? (
-            <p className="health-empty">No foods or meals yet.</p>
-          ) : null}
-          {combinedItems.length ? renderSummaryList(combinedItems) : null}
-        </section>
-      ) : null}
+        {showFavouritesList ? (
+          <section className="module-panel">
+            <header className="module-panel-header food-library-header">
+              <div>
+                <h3>Favourites</h3>
+                <p>{favouriteItems.length} items</p>
+              </div>
+              <div className="module-panel-actions">
+                <input
+                  className="health-search"
+                  type="search"
+                  placeholder="Search favourites"
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                />
+                <select value={sortBy} onChange={(event) => setSortBy(event.target.value)}>
+                  <option value="name">Sort by name</option>
+                  <option value="calories">Sort by calories</option>
+                  <option value="protein">Sort by protein</option>
+                  <option value="date">Sort by date</option>
+                </select>
+                <button
+                  type="button"
+                  className="icon-button is-secondary"
+                  onClick={() =>
+                    setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"))
+                  }
+                  aria-label="Toggle sort direction"
+                >
+                  <Icon name={sortDirection === "asc" ? "sortUp" : "sortDown"} className="icon" />
+                </button>
+                <div className="health-foods-actions">
+                  <button type="button" className="button-secondary" onClick={startAddMeal}>
+                    Create meal
+                  </button>
+                  <button type="button" className="primary-button" onClick={startAddFood}>
+                    Add food
+                  </button>
+                </div>
+              </div>
+            </header>
+            {status === "loading" ? <p className="health-empty">Loading favourites...</p> : null}
+            {status !== "loading" && favouriteItems.length === 0 ? (
+              <p className="health-empty">No favourites yet.</p>
+            ) : null}
+            {favouriteItems.length ? renderSummaryList(favouriteItems) : null}
+          </section>
+        ) : null}
 
-      {showFavouritesList ? (
-        <section className="module-panel">
-          <header className="module-panel-header food-library-header">
-            <div>
-              <h3>Favourites</h3>
-              <p>{favouriteItems.length} items</p>
-            </div>
-            <div className="module-panel-actions">
-              <input
-                className="health-search"
-                type="search"
-                placeholder="Search favourites"
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-              />
-              <select value={sortBy} onChange={(event) => setSortBy(event.target.value)}>
-                <option value="name">Sort by name</option>
-                <option value="calories">Sort by calories</option>
-                <option value="protein">Sort by protein</option>
-                <option value="date">Sort by date</option>
-              </select>
-              <button
-                type="button"
-                className="icon-button is-secondary"
-                onClick={() =>
-                  setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"))
-                }
-                aria-label="Toggle sort direction"
-              >
-                <Icon name={sortDirection === "asc" ? "sortUp" : "sortDown"} className="icon" />
-              </button>
-            </div>
-          </header>
-          {status === "loading" ? <p className="health-empty">Loading favourites...</p> : null}
-          {status !== "loading" && favouriteItems.length === 0 ? (
-            <p className="health-empty">No favourites yet.</p>
-          ) : null}
-          {favouriteItems.length ? renderSummaryList(favouriteItems) : null}
-        </section>
-      ) : null}
-
-      {showFoodsList ? (
-        <section className="module-panel">
-          <header className="module-panel-header food-library-header">
-            <div>
-              <h3>Food library</h3>
-              <p>{sortedFoods.length} items</p>
-            </div>
-            <div className="module-panel-actions">
-              <input
-                className="health-search"
-                type="search"
-                placeholder="Search foods"
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-              />
-              <select value={sortBy} onChange={(event) => setSortBy(event.target.value)}>
-                <option value="name">Sort by name</option>
-                <option value="calories">Sort by calories</option>
-                <option value="protein">Sort by protein</option>
-                <option value="date">Sort by date</option>
-              </select>
-              <button
-                type="button"
-                className="icon-button is-secondary"
-                onClick={() =>
-                  setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"))
-                }
-                aria-label="Toggle sort direction"
-              >
-                <Icon name={sortDirection === "asc" ? "sortUp" : "sortDown"} className="icon" />
-              </button>
-              <button type="button" className="button-secondary" onClick={() => setOnlyFavourites((prev) => !prev)}>
-                {onlyFavourites ? "Favourites only" : "All foods"}
-              </button>
-            </div>
-          </header>
+        {showFoodsList ? (
+          <section className="module-panel">
+            <header className="module-panel-header food-library-header">
+              <div>
+                <h3>Food library</h3>
+                <p>{sortedFoods.length} items</p>
+              </div>
+              <div className="module-panel-actions">
+                <input
+                  className="health-search"
+                  type="search"
+                  placeholder="Search foods"
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                />
+                <select value={sortBy} onChange={(event) => setSortBy(event.target.value)}>
+                  <option value="name">Sort by name</option>
+                  <option value="calories">Sort by calories</option>
+                  <option value="protein">Sort by protein</option>
+                  <option value="date">Sort by date</option>
+                </select>
+                <button
+                  type="button"
+                  className="icon-button is-secondary"
+                  onClick={() =>
+                    setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"))
+                  }
+                  aria-label="Toggle sort direction"
+                >
+                  <Icon name={sortDirection === "asc" ? "sortUp" : "sortDown"} className="icon" />
+                </button>
+                <button
+                  type="button"
+                  className="button-secondary"
+                  onClick={() => setOnlyFavourites((prev) => !prev)}
+                >
+                  {onlyFavourites ? "Favourites only" : "All foods"}
+                </button>
+                <div className="health-foods-actions">
+                  <button type="button" className="button-secondary" onClick={startAddMeal}>
+                    Create meal
+                  </button>
+                  <button type="button" className="primary-button" onClick={startAddFood}>
+                    Add food
+                  </button>
+                </div>
+              </div>
+            </header>
 
           {status === "loading" ? (
             <p className="health-empty">Loading foods...</p>
@@ -1988,8 +2029,9 @@ const Foods = () => {
               })}
             </ul>
           ) : null}
-        </section>
-      ) : null}
+          </section>
+        ) : null}
+      </div>
 
       {activeTab === "foods" && showFoodForm ? (
         <section className="module-panel" ref={foodFormRef}>
@@ -2231,14 +2273,24 @@ const Foods = () => {
         </div>
       ) : null}
 
-      {showMealsList ? (
-        <section className="module-panel">
-          <header className="module-panel-header">
-            <div>
-              <h3>Saved meals</h3>
-              <p>{filteredTemplates.length} meals</p>
-            </div>
-          </header>
+        {showMealsList ? (
+          <section className="module-panel">
+            <header className="module-panel-header">
+              <div>
+                <h3>Saved meals</h3>
+                <p>{filteredTemplates.length} meals</p>
+              </div>
+              <div className="module-panel-actions">
+                <div className="health-foods-actions">
+                  <button type="button" className="button-secondary" onClick={startAddMeal}>
+                    Create meal
+                  </button>
+                  <button type="button" className="primary-button" onClick={startAddFood}>
+                    Add food
+                  </button>
+                </div>
+              </div>
+            </header>
           {filteredTemplates.length === 0 ? <p className="health-empty">No meals yet.</p> : null}
           <ul className="health-food-summary-list health-template-summary-list">
             {filteredTemplates.map((template) => {
@@ -2346,8 +2398,8 @@ const Foods = () => {
               );
             })}
           </ul>
-        </section>
-      ) : null}
+          </section>
+        ) : null}
 
       {activeTab === "meals" && showMealForm ? (
         <section className="module-panel">

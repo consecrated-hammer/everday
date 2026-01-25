@@ -178,6 +178,11 @@ const IconMap = {
     material: "material-symbols:restart-alt",
     lucide: "lucide:rotate-ccw"
   },
+  copy: {
+    phosphor: "ph:copy",
+    material: "material-symbols:content-copy",
+    lucide: "lucide:copy"
+  },
   check: {
     phosphor: "ph:check",
     material: "material-symbols:check",
@@ -257,6 +262,31 @@ const IconMap = {
     phosphor: "ph:bell",
     material: "material-symbols:notifications",
     lucide: "lucide:bell"
+  },
+  themeLight: {
+    phosphor: "ph:sun",
+    material: "material-symbols:sunny",
+    lucide: "lucide:sun"
+  },
+  themeDark: {
+    phosphor: "ph:moon-stars",
+    material: "material-symbols:dark-mode",
+    lucide: "lucide:moon"
+  },
+  themeAuto: {
+    phosphor: "ph:circle-half",
+    material: "material-symbols:contrast",
+    lucide: "lucide:sun-moon"
+  },
+  toggleOff: {
+    phosphor: "ph:eye-slash",
+    material: "material-symbols:visibility-off",
+    lucide: "lucide:eye-off"
+  },
+  toggleOn: {
+    phosphor: "ph:check",
+    material: "material-symbols:check",
+    lucide: "lucide:check"
   }
 };
 
