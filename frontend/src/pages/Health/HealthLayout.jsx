@@ -75,19 +75,6 @@ const HealthLayout = () => {
         ))}
       </nav>
       <section className="module-content">
-        <nav className="health-bottom-nav" aria-label="Health navigation">
-          {bottomNavItems.map((item) => (
-            <NavLink
-              key={item.path}
-              className={({ isActive }) =>
-                `health-bottom-link${isActive ? " is-active" : ""}`
-              }
-              to={item.path}
-            >
-              {item.label}
-            </NavLink>
-          ))}
-        </nav>
         <Outlet />
       </section>
       <div className="health-page-info" data-open={infoOpen}>
