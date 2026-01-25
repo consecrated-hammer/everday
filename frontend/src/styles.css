@@ -8431,8 +8431,13 @@ th {
     align-items: flex-start;
   }
 
+  .settings-section .switch-pill {
+    justify-self: end;
+    margin-left: auto;
+  }
+
   .settings-switch-inline {
-    justify-content: flex-start;
+    justify-content: flex-end;
   }
 
   .settings-user-header {
