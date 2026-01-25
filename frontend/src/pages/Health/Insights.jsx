@@ -52,6 +52,7 @@ const Insights = () => {
   const today = useMemo(() => FormatDate(new Date()), []);
 
   const loadSuggestions = useCallback(async ({ force = false } = {}) => {
+    // Check localStorage cache first for quick load
     const cached = LoadSuggestionsCache(today);
     if (cached?.Timestamp) {
       setLastSuggestedAt(new Date(cached.Timestamp));
@@ -67,21 +68,27 @@ const Insights = () => {
 
     try {
       setSuggestionsStatus("loading");
+      // Fetch from API - backend now stores and returns suggestions
       const ai = await FetchAiSuggestions(today);
       const nextSuggestions = ai.Suggestions || [];
       setSuggestions(nextSuggestions);
       const now = Date.now();
       setLastSuggestedAt(new Date(now));
+      // Update localStorage cache for faster subsequent loads
       SaveSuggestionsCache(today, {
         Timestamp: now,
         Suggestions: nextSuggestions
       });
       setSuggestionsStatus("ready");
     } catch {
-      if (!cached) {
+      // Fall back to cached if available
+      if (cached) {
+        setSuggestions(cached.Suggestions || []);
+        setSuggestionsStatus("ready");
+      } else {
         setSuggestions([]);
+        setSuggestionsStatus("error");
       }
-      setSuggestionsStatus("error");
     }
   }, [today]);
 
@@ -131,7 +138,7 @@ const Insights = () => {
         )}
       </section>
 
-      <section className="module-panel">
+      <section className="module-panel" id="ai-suggestions">
         <header className="module-panel-header">
           <div>
             <h3>AI suggestions</h3>

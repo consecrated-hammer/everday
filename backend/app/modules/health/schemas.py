@@ -341,6 +341,13 @@ class SuggestionsResponse(BaseModel):
     ModelUsed: str | None = None
 
 
+class DailyAiSuggestionsRunResponse(BaseModel):
+    EligibleUsers: int
+    SuggestionsGenerated: int
+    NotificationsSent: int
+    Errors: int
+
+
 class DailyLogWithEntries(BaseModel):
     DailyLog: DailyLog
     Entries: list[MealEntryWithFood]

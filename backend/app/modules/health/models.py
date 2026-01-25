@@ -244,3 +244,33 @@ class MetricEntry(Base):
     OccurredAt = Column(DateTime(timezone=True), nullable=False)
     Source = Column(String(20), nullable=False)
     CreatedAt = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+
+
+class AiSuggestionRun(Base):
+    __tablename__ = "ai_suggestion_runs"
+    __table_args__ = (
+        UniqueConstraint("UserId", "RunDate", name="uq_health_ai_suggestion_runs_user_date"),
+        {"schema": "health"},
+    )
+
+    Id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    UserId = Column(Integer, nullable=False, index=True)
+    RunDate = Column(Date, nullable=False)
+    SuggestionsGenerated = Column(Integer, nullable=False, default=0)
+    ModelUsed = Column(String(80))
+    NotificationSent = Column(Boolean, nullable=False, default=False)
+    ErrorMessage = Column(Text)
+    CreatedAt = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+
+
+class AiSuggestion(Base):
+    __tablename__ = "ai_suggestions"
+    __table_args__ = {"schema": "health"}
+
+    Id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    UserId = Column(Integer, nullable=False, index=True)
+    RunId = Column(Integer, nullable=False, index=True)
+    SuggestionType = Column(String(40), nullable=False, default="AiSuggestion")
+    Title = Column(String(200), nullable=False)
+    Detail = Column(Text, nullable=False)
+    CreatedAt = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
