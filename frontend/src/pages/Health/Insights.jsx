@@ -135,7 +135,10 @@ const Insights = () => {
         <header className="module-panel-header">
           <div>
             <h3>AI suggestions</h3>
-            <p>Guidance tuned to today's log.</p>
+            <p>
+              Suggestions use today’s log first and fall back to your last 7 days when the day is
+              sparse.
+            </p>
             {lastSuggestedAt ? (
               <p className="health-detail">Last suggested at {FormatSuggestedTime(lastSuggestedAt)}.</p>
             ) : (

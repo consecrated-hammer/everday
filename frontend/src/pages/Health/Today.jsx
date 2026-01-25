@@ -15,6 +15,7 @@ import {
 } from "recharts";
 
 import Icon from "../../components/Icon.jsx";
+import { GetUserId } from "../../lib/authStorage.js";
 import {
   FetchDailyLog,
   FetchHealthSettings,
@@ -24,6 +25,7 @@ import {
   UpdateDailySteps,
   UpdateHealthSettings
 } from "../../lib/healthApi.js";
+import { LoadHealthTodayLayout, SaveHealthTodayLayout } from "../../lib/healthTodayLayout.js";
 
 const FormatDate = (value) => {
   const year = value.getFullYear();
@@ -237,6 +239,111 @@ const BuildWeeklySeries = (startDate, summary, targets) => {
   return series;
 };
 
+const SizeOptions = {
+  compact: { ColumnSpan: 6, Label: "Compact" },
+  wide: { ColumnSpan: 12, Label: "Wide" }
+};
+
+const BuildTodayWidgetCatalog = (showStepsChart, showWeightChart) => {
+  const widgets = [
+    {
+      Id: "summary",
+      Title: "Today",
+      DefaultSize: "compact",
+      Sizes: ["compact", "wide"]
+    },
+    {
+      Id: "calories",
+      Title: "Calorie trends",
+      DefaultSize: "compact",
+      Sizes: ["compact", "wide"]
+    }
+  ];
+
+  if (showStepsChart) {
+    widgets.push({
+      Id: "steps",
+      Title: "Steps trend",
+      DefaultSize: "compact",
+      Sizes: ["compact", "wide"]
+    });
+  }
+
+  if (showWeightChart) {
+    widgets.push({
+      Id: "weight",
+      Title: "Weight trend",
+      DefaultSize: "compact",
+      Sizes: ["compact", "wide"]
+    });
+  }
+
+  return widgets;
+};
+
+const BuildDefaultLayout = (widgets) =>
+  widgets.map((widget) => ({
+    Id: widget.Id,
+    Size: widget.DefaultSize || "compact"
+  }));
+
+const MergeTodayLayout = (storedLayout, defaultLayout, widgetMap) => {
+  const next = [];
+  const defaultMap = new Map(defaultLayout.map((item) => [item.Id, item]));
+
+  if (Array.isArray(storedLayout)) {
+    storedLayout.forEach((item) => {
+      const base = defaultMap.get(item.Id);
+      if (!base) {
+        return;
+      }
+      const widget = widgetMap.get(item.Id);
+      const sizes = widget?.Sizes || [];
+      const size = sizes.includes(item.Size) ? item.Size : base.Size;
+      next.push({ ...base, Size: size });
+      defaultMap.delete(item.Id);
+    });
+  }
+
+  defaultMap.forEach((item) => next.push(item));
+  return next;
+};
+
+const SwapLayoutItems = (layout, sourceId, targetId) => {
+  const sourceIndex = layout.findIndex((item) => item.Id === sourceId);
+  const targetIndex = layout.findIndex((item) => item.Id === targetId);
+  if (sourceIndex === -1 || targetIndex === -1 || sourceIndex === targetIndex) {
+    return layout;
+  }
+  const next = [...layout];
+  const temp = next[sourceIndex];
+  next[sourceIndex] = next[targetIndex];
+  next[targetIndex] = temp;
+  return next;
+};
+
+const MoveLayoutItem = (layout, widgetId, direction) => {
+  const index = layout.findIndex((item) => item.Id === widgetId);
+  const target = index + direction;
+  if (index < 0 || target < 0 || target >= layout.length) {
+    return layout;
+  }
+  const next = [...layout];
+  const temp = next[index];
+  next[index] = next[target];
+  next[target] = temp;
+  return next;
+};
+
+const NextSize = (currentSize, sizes) => {
+  if (!sizes || sizes.length <= 1) {
+    return currentSize;
+  }
+  const index = sizes.indexOf(currentSize);
+  const nextIndex = index === -1 ? 0 : (index + 1) % sizes.length;
+  return sizes[nextIndex];
+};
+
 const CalorieTrendsTooltip = ({ active, payload, label, targets }) => {
   if (!active || !payload?.length) {
     return null;
@@ -346,6 +453,7 @@ const BuildStepsSeries = (startDate, endDate, history, target) => {
 const Today = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const userId = GetUserId();
   const today = useMemo(() => FormatDate(new Date()), []);
   const todayLabel = useMemo(() => {
     const parsed = ParseLocalDate(today);
@@ -404,6 +512,10 @@ const Today = () => {
   const [stepsModalOpen, setStepsModalOpen] = useState(false);
   const [weightModalOpen, setWeightModalOpen] = useState(false);
   const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
+  const [layout, setLayout] = useState([]);
+  const [layoutReady, setLayoutReady] = useState(false);
+  const [draggingId, setDraggingId] = useState(null);
+  const [dropTargetId, setDropTargetId] = useState(null);
   const stepsBackdropDown = useRef(false);
   const weightBackdropDown = useRef(false);
   const actionsMenuRef = useRef(null);
@@ -413,6 +525,11 @@ const Today = () => {
     if (stored === "false") return false;
     return true;
   });
+  const widgets = useMemo(
+    () => BuildTodayWidgetCatalog(showStepsChart, showWeightChart),
+    [showStepsChart, showWeightChart]
+  );
+  const widgetMap = useMemo(() => new Map(widgets.map((widget) => [widget.Id, widget])), [widgets]);
 
   const loadData = useCallback(async () => {
     try {
@@ -441,6 +558,31 @@ const Today = () => {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    if (layoutReady) {
+      return;
+    }
+    const storedLayout = LoadHealthTodayLayout(userId);
+    const defaultLayout = BuildDefaultLayout(widgets);
+    setLayout(MergeTodayLayout(storedLayout, defaultLayout, widgetMap));
+    setLayoutReady(true);
+  }, [layoutReady, userId, widgetMap, widgets]);
+
+  useEffect(() => {
+    if (!layoutReady) {
+      return;
+    }
+    const defaultLayout = BuildDefaultLayout(widgets);
+    setLayout((prev) => MergeTodayLayout(prev, defaultLayout, widgetMap));
+  }, [layoutReady, widgetMap, widgets]);
+
+  useEffect(() => {
+    if (!layoutReady) {
+      return;
+    }
+    SaveHealthTodayLayout(userId, layout);
+  }, [layout, layoutReady, userId]);
 
   useEffect(() => {
     if (weightGoalReady) {
@@ -489,6 +631,51 @@ const Today = () => {
   useEffect(() => {
     localStorage.setItem("health.stepsRange", stepsRangeKey);
   }, [stepsRangeKey]);
+
+  const onDragStart = (widgetId) => (event) => {
+    event.dataTransfer.setData("text/plain", widgetId);
+    event.dataTransfer.effectAllowed = "move";
+    setDraggingId(widgetId);
+  };
+
+  const onDragOver = (widgetId) => (event) => {
+    event.preventDefault();
+    if (widgetId !== draggingId) {
+      setDropTargetId(widgetId);
+    }
+  };
+
+  const onDrop = (widgetId) => (event) => {
+    event.preventDefault();
+    const sourceId = draggingId || event.dataTransfer.getData("text/plain");
+    if (!sourceId || sourceId === widgetId) {
+      return;
+    }
+    setLayout((prev) => SwapLayoutItems(prev, sourceId, widgetId));
+    setDraggingId(null);
+    setDropTargetId(null);
+  };
+
+  const onDragEnd = () => {
+    setDraggingId(null);
+    setDropTargetId(null);
+  };
+
+  const onResize = (widgetId) => {
+    setLayout((prev) =>
+      prev.map((item) => {
+        if (item.Id !== widgetId) {
+          return item;
+        }
+        const sizes = widgetMap.get(widgetId)?.Sizes || [];
+        return { ...item, Size: NextSize(item.Size, sizes) };
+      })
+    );
+  };
+
+  const onMove = (widgetId, direction) => {
+    setLayout((prev) => MoveLayoutItem(prev, widgetId, direction));
+  };
 
   const toggleWeightProjection = useCallback(async () => {
     const next = !showWeightProjection;
@@ -914,10 +1101,10 @@ const Today = () => {
     navigate("/health/log");
   };
 
-  return (
-    <div className="health-grid">
-      <section className="module-panel">
-        <header className="module-panel-header">
+  const renderWidgetBody = (widgetId) => {
+    if (widgetId === "summary") {
+      return (
+        <>
           <div className="health-today-header">
             <h2>{todayLabel}</h2>
             <div className="health-actions">
@@ -964,119 +1151,119 @@ const Today = () => {
               </button>
             </div>
           </div>
-        </header>
-        {status === "error" ? <p className="form-error">{error}</p> : null}
-        <div className="health-progress-list">
-          {barOrder.filter((key) => ShouldShowBar(targets, key)).map((key) => {
-            const value = GetBarValue(totals, log, key);
-            const target = GetBarTarget(targets, log, key);
-            const { percent, over } = ProgressClamp(value, target);
-            const deltaValue = target > 0 ? target - value : 0;
-            const deltaLabel =
-              target > 0
-                ? `${FormatMetricValue(Math.abs(deltaValue), key)} ${deltaValue >= 0 ? "under" : "over"}`
-                : "";
-            const metaParts = [
-              target > 0 ? `${Math.round((value / target) * 100)}% of target` : "",
-              target > 0 ? deltaLabel : ""
-            ].filter(Boolean);
-            return (
-              <button
-                key={key}
-                type="button"
-                className="health-progress health-progress--action"
-                onClick={() => handleProgressAction(key)}
-              >
-                <div className="health-progress-header">
-                  <div>
-                    <p className="health-progress-label">{NutrientLabels[key]}</p>
-                    <p className="health-progress-value">
-                      {FormatNumber(value)}
-                      {target ? ` / ${FormatNumber(target)}` : ""}
-                      {metaParts.length ? (
-                        <span className="health-progress-meta-inline">
-                          {metaParts.join(" • ")}
-                        </span>
-                      ) : null}
-                    </p>
-                  </div>
-                  {over > 0 ? <span className="health-over">+{FormatNumber(over)}</span> : null}
-                </div>
-                <div className="health-progress-bar">
-                  <div className="health-progress-fill" style={{ width: `${percent}%` }} />
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      </section>
-
-      <section className="module-panel">
-        <header className="module-panel-header">
-          <div>
-            <h3>Calorie trends</h3>
-            <p>Last 7 days with your daily target as a guide.</p>
-          </div>
-          <button
-            type="button"
-            className="health-trends-toggle"
-            onClick={() => setTrendsOpen((prev) => !prev)}
-            aria-expanded={trendsOpen}
-          >
-            Trends
-            <span className={`health-trends-caret${trendsOpen ? " is-open" : ""}`}>▸</span>
-          </button>
-        </header>
-      {trendsOpen ? (
-        <div className="health-chart">
-          <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={weeklySeries} margin={{ top: 10, right: 24, left: 8, bottom: 0 }}>
-                <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" />
-                <XAxis dataKey="Label" tick={{ fill: "var(--text-muted)", fontSize: 12 }} />
-                <YAxis tick={{ fill: "var(--text-muted)", fontSize: 12 }} allowDecimals={false} />
-                <Tooltip
-                  content={(props) => <CalorieTrendsTooltip {...props} targets={targets} />}
-                  contentStyle={{
-                    background: "var(--surface-strong)",
-                    border: "1px solid var(--border)",
-                    borderRadius: "12px",
-                    boxShadow: "0 12px 24px rgba(20, 16, 12, 0.18)"
-                  }}
-                  labelStyle={{ color: "var(--text)" }}
-                />
-                <Legend />
-                <Bar
-                  dataKey="Calories"
-                  name="Calories"
-                  radius={[10, 10, 0, 0]}
-                  onClick={handleBarClick}
+          {status === "error" ? <p className="form-error">{error}</p> : null}
+          <div className="health-progress-list">
+            {barOrder.filter((key) => ShouldShowBar(targets, key)).map((key) => {
+              const value = GetBarValue(totals, log, key);
+              const target = GetBarTarget(targets, log, key);
+              const { percent, over } = ProgressClamp(value, target);
+              const deltaValue = target > 0 ? target - value : 0;
+              const deltaLabel =
+                target > 0
+                  ? `${FormatMetricValue(Math.abs(deltaValue), key)} ${
+                      deltaValue >= 0 ? "under" : "over"
+                    }`
+                  : "";
+              const metaParts = [
+                target > 0 ? `${Math.round((value / target) * 100)}% of target` : "",
+                target > 0 ? deltaLabel : ""
+              ].filter(Boolean);
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  className="health-progress health-progress--action"
+                  onClick={() => handleProgressAction(key)}
                 >
-                  {weeklySeries.map((entry) => (
-                    <Cell key={entry.Date} fill={entry.Fill} />
-                  ))}
-                </Bar>
-                <Line
-                  type="monotone"
-                  dataKey="Target"
-                  name="Target"
-                  stroke="var(--text-soft)"
-                  strokeDasharray="4 4"
-                  dot={false}
-                />
-              </ComposedChart>
-          </ResponsiveContainer>
-        </div>
-      ) : null}
-    </section>
+                  <div className="health-progress-header">
+                    <div>
+                      <p className="health-progress-label">{NutrientLabels[key]}</p>
+                      <p className="health-progress-value">
+                        {FormatNumber(value)}
+                        {target ? ` / ${FormatNumber(target)}` : ""}
+                        {metaParts.length ? (
+                          <span className="health-progress-meta-inline">
+                            {metaParts.join(" • ")}
+                          </span>
+                        ) : null}
+                      </p>
+                    </div>
+                    {over > 0 ? <span className="health-over">+{FormatNumber(over)}</span> : null}
+                  </div>
+                  <div className="health-progress-bar">
+                    <div className="health-progress-fill" style={{ width: `${percent}%` }} />
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </>
+      );
+    }
 
-      {showStepsChart ? (
-        <section className="module-panel">
-          <header className="module-panel-header">
-            <div>
-              <h3>Steps trend</h3>
-              <p>Steps per day with your target line.</p>
+    if (widgetId === "calories") {
+      return (
+        <>
+          <div className="health-widget-subtitle">
+            <p>Last 7 days with your daily target as a guide.</p>
+            <button
+              type="button"
+              className="health-trends-toggle"
+              onClick={() => setTrendsOpen((prev) => !prev)}
+              aria-expanded={trendsOpen}
+            >
+              Trends
+              <span className={`health-trends-caret${trendsOpen ? " is-open" : ""}`}>▸</span>
+            </button>
+          </div>
+          {trendsOpen ? (
+            <div className="health-chart">
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart data={weeklySeries} margin={{ top: 10, right: 24, left: 8, bottom: 0 }}>
+                  <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" />
+                  <XAxis dataKey="Label" tick={{ fill: "var(--text-muted)", fontSize: 12 }} />
+                  <YAxis tick={{ fill: "var(--text-muted)", fontSize: 12 }} allowDecimals={false} />
+                  <Tooltip
+                    content={(props) => <CalorieTrendsTooltip {...props} targets={targets} />}
+                    contentStyle={{
+                      background: "var(--surface-strong)",
+                      border: "1px solid var(--border)",
+                      borderRadius: "12px",
+                      boxShadow: "0 12px 24px rgba(20, 16, 12, 0.18)"
+                    }}
+                    labelStyle={{ color: "var(--text)" }}
+                  />
+                  <Legend />
+                  <Bar
+                    dataKey="Calories"
+                    name="Calories"
+                    radius={[10, 10, 0, 0]}
+                    onClick={handleBarClick}
+                  >
+                    {weeklySeries.map((entry) => (
+                      <Cell key={entry.Date} fill={entry.Fill} />
+                    ))}
+                  </Bar>
+                  <Line
+                    type="monotone"
+                    dataKey="Target"
+                    name="Target"
+                    stroke="var(--text-soft)"
+                    strokeDasharray="4 4"
+                    dot={false}
+                  />
+                </ComposedChart>
+              </ResponsiveContainer>
             </div>
-          </header>
+          ) : null}
+        </>
+      );
+    }
+
+    if (widgetId === "steps") {
+      return (
+        <>
+          <p className="health-widget-subtitle">Steps per day with your target line.</p>
           {stepsHistoryError ? <p className="form-error">{stepsHistoryError}</p> : null}
           {stepsHistoryStatus === "loading" ? (
             <p>Loading steps history...</p>
@@ -1121,7 +1308,9 @@ const Today = () => {
                 <button
                   key={option.key}
                   type="button"
-                  className={`button-secondary-pill${stepsRangeKey === option.key ? " is-active" : ""}`}
+                  className={`button-secondary-pill${
+                    stepsRangeKey === option.key ? " is-active" : ""
+                  }`}
                   onClick={() => setStepsRangeKey(option.key)}
                 >
                   {option.label}
@@ -1129,17 +1318,16 @@ const Today = () => {
               ))}
             </div>
           </div>
-        </section>
-      ) : null}
+        </>
+      );
+    }
 
-      {showWeightChart ? (
-        <section className="module-panel">
-          <header className="module-panel-header">
-            <div>
-              <h3>Weight trend</h3>
-              <p>Logged weights with goal and trend projections.</p>
-            </div>
-          </header>
+    if (widgetId === "weight") {
+      return (
+        <>
+          <p className="health-widget-subtitle">
+            Logged weights with goal and trend projections.
+          </p>
           {weightHistoryError ? <p className="form-error">{weightHistoryError}</p> : null}
           {weightHistoryStatus === "loading" ? (
             <p>Loading weight history...</p>
@@ -1203,13 +1391,7 @@ const Today = () => {
                       strokeWidth={2}
                       isFront
                       label={({ x, y }) => (
-                        <text
-                          x={x}
-                          y={y}
-                          dy={-12}
-                          textAnchor="middle"
-                          fontSize="14"
-                        >
+                        <text x={x} y={y} dy={-12} textAnchor="middle" fontSize="14">
                           🎯
                         </text>
                       )}
@@ -1226,7 +1408,9 @@ const Today = () => {
                 <button
                   key={option.key}
                   type="button"
-                  className={`button-secondary-pill${weightRangeKey === option.key ? " is-active" : ""}`}
+                  className={`button-secondary-pill${
+                    weightRangeKey === option.key ? " is-active" : ""
+                  }`}
                   onClick={() => setWeightRangeKey(option.key)}
                 >
                   {option.label}
@@ -1257,8 +1441,98 @@ const Today = () => {
               </button>
             </div>
           </div>
-        </section>
-      ) : null}
+        </>
+      );
+    }
+
+    return null;
+  };
+
+  if (!layoutReady) {
+    return (
+      <div className="health-dashboard">
+        <p className="form-note">Loading health dashboard...</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="health-dashboard">
+      <section className="dashboard-grid health-dashboard-grid" aria-label="Health today modules">
+        {layout.map((item, index) => {
+          const widget = widgetMap.get(item.Id);
+          if (!widget) {
+            return null;
+          }
+          const size = SizeOptions[item.Size] || SizeOptions.compact;
+          const isDragging = draggingId === item.Id;
+          const isDropTarget = dropTargetId === item.Id;
+          const nextSize = NextSize(item.Size, widget.Sizes || []);
+          const resizeLabel = nextSize === "wide" ? "Expand" : "Compact";
+          return (
+            <article
+              key={item.Id}
+              className={`dashboard-widget health-dashboard-widget${
+                isDragging ? " is-dragging" : ""
+              }${isDropTarget ? " is-drop-target" : ""}`}
+              style={{ "--widget-span": size.ColumnSpan }}
+              data-size={item.Size}
+              aria-label={widget.Title}
+              onDragOver={onDragOver(item.Id)}
+              onDrop={onDrop(item.Id)}
+            >
+              <header className="widget-header">
+                <div className="widget-header-primary">
+                  <span className="widget-title">{widget.Title}</span>
+                </div>
+                <div className="widget-actions">
+                  {widget.Sizes?.length > 1 ? (
+                    <button
+                      type="button"
+                      className="widget-action-button"
+                      onClick={() => onResize(item.Id)}
+                    >
+                      {resizeLabel}
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    className="widget-icon-button widget-drag-handle"
+                    draggable
+                    onDragStart={onDragStart(item.Id)}
+                    onDragEnd={onDragEnd}
+                    aria-label={`Move ${widget.Title}`}
+                    aria-grabbed={isDragging}
+                  >
+                    <Icon name="drag" className="icon" />
+                  </button>
+                  <div className="widget-reorder health-widget-reorder">
+                    <button
+                      type="button"
+                      className="widget-icon-button"
+                      onClick={() => onMove(item.Id, -1)}
+                      aria-label={`Move ${widget.Title} up`}
+                      disabled={index === 0}
+                    >
+                      <Icon name="sortUp" className="icon" />
+                    </button>
+                    <button
+                      type="button"
+                      className="widget-icon-button"
+                      onClick={() => onMove(item.Id, 1)}
+                      aria-label={`Move ${widget.Title} down`}
+                      disabled={index === layout.length - 1}
+                    >
+                      <Icon name="sortDown" className="icon" />
+                    </button>
+                  </div>
+                </div>
+              </header>
+              <div className="widget-body">{renderWidgetBody(item.Id)}</div>
+            </article>
+          );
+        })}
+      </section>
       {stepsModalOpen ? (
         <div
           className="modal-backdrop"
