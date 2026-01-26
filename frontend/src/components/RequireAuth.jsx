@@ -63,7 +63,7 @@ const RequireAuth = ({ children }) => {
     };
   }, [authVersion]);
 
-  if (isChecking) {
+  if (isChecking && !isAuthed) {
     return null;
   }
 
