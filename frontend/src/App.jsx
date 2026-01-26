@@ -28,6 +28,8 @@ import LifeAdminLayout from "./pages/LifeAdmin/LifeAdminLayout.jsx";
 import LifeAdminRecords from "./pages/LifeAdmin/Records.jsx";
 import LifeAdminBuilder from "./pages/LifeAdmin/Builder.jsx";
 import Tasks from "./pages/Tasks/Tasks.jsx";
+import NotesLayout from "./pages/Notes/NotesLayout.jsx";
+import Notes from "./pages/Notes/Notes.jsx";
 
 const HealthHistoryRedirect = () => {
   const { date } = useParams();
@@ -68,6 +70,12 @@ const App = () => (
         </Route>
         <Route path="/shopping" element={<Shopping />} />
         <Route path="/tasks" element={<Tasks />} />
+        <Route path="/notes" element={<NotesLayout />}>
+          <Route index element={<Navigate to="/notes/personal" replace />} />
+          <Route path="personal" element={<Notes />} />
+          <Route path="family" element={<Notes />} />
+          <Route path="shared" element={<Notes />} />
+        </Route>
         <Route path="/notifications" element={<Notifications />} />
         <Route path="/life-admin" element={<LifeAdminLayout />}>
           <Route index element={<Navigate to="/life-admin/records" replace />} />

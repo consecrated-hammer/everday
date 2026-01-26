@@ -20,6 +20,7 @@ const navSections = [
       { label: "Shopping", path: "/shopping", icon: "shopping", tone: "sky" },
       { label: "Life admin", path: "/life-admin/records", icon: "agenda", tone: "sky" },
       { label: "Tasks", path: "/tasks", icon: "tasks", tone: "mint" },
+      { label: "Notes", path: "/notes", icon: "note", tone: "mint" },
       { label: "Budget", path: "/budget/allocations", icon: "budget", tone: "mint" }
     ]
   }
@@ -96,6 +97,7 @@ const AppShell = () => {
     if (path.startsWith("/life-admin")) return "Life admin";
     if (path.startsWith("/health")) return "Health";
     if (path.startsWith("/kids-admin")) return "Kids";
+    if (path.startsWith("/notes")) return "Notes";
     if (path.startsWith("/notifications")) return "Notifications";
     if (path.startsWith("/settings")) return "Settings";
     return "";

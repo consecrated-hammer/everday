@@ -73,6 +73,41 @@ const IconMap = {
     material: "material-symbols:task-alt",
     lucide: "lucide:check-square-2"
   },
+  note: {
+    phosphor: "ph:note",
+    material: "material-symbols:note",
+    lucide: "lucide:sticky-note"
+  },
+  add: {
+    phosphor: "ph:plus",
+    material: "material-symbols:add",
+    lucide: "lucide:plus"
+  },
+  delete: {
+    phosphor: "ph:trash",
+    material: "material-symbols:delete",
+    lucide: "lucide:trash-2"
+  },
+  archive: {
+    phosphor: "ph:archive",
+    material: "material-symbols:archive",
+    lucide: "lucide:archive"
+  },
+  unarchive: {
+    phosphor: "ph:archive-box",
+    material: "material-symbols:unarchive",
+    lucide: "lucide:archive-restore"
+  },
+  push_pin: {
+    phosphor: "ph:push-pin",
+    material: "material-symbols:push-pin-outline",
+    lucide: "lucide:pin-off"
+  },
+  push_pin_filled: {
+    phosphor: "ph:push-pin-fill",
+    material: "material-symbols:push-pin",
+    lucide: "lucide:pin"
+  },
   inbox: {
     phosphor: "ph:inbox",
     material: "material-symbols:inbox",
@@ -92,6 +127,11 @@ const IconMap = {
     phosphor: "ph:funnel-simple",
     material: "material-symbols:filter-list",
     lucide: "lucide:filter"
+  },
+  sliders: {
+    phosphor: "ph:sliders-horizontal",
+    material: "material-symbols:tune",
+    lucide: "lucide:sliders-horizontal"
   },
   columns: {
     phosphor: "ph:columns",

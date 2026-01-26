@@ -28,6 +28,7 @@ from app.modules.life_admin.router import router as life_admin_router
 from app.modules.notifications.router import router as notifications_router
 from app.modules.tasks.router import router as tasks_router
 from app.modules.integrations.google.router import router as google_router
+from app.modules.notes.routes.notes import router as notes_router
 
 setup_logging()
 warnings.filterwarnings(
@@ -176,6 +177,7 @@ app.include_router(life_admin_router)
 app.include_router(notifications_router)
 app.include_router(tasks_router)
 app.include_router(google_router)
+app.include_router(notes_router)
 
 class SpaStaticFiles(StaticFiles):
     async def get_response(self, path: str, scope):

@@ -21,6 +21,7 @@ const GetMobileTitle = (pathname) => {
   if (pathname.startsWith("/tasks")) return "Tasks";
   if (pathname.startsWith("/life-admin")) return "Life admin";
   if (pathname.startsWith("/kids-admin")) return "Kids";
+  if (pathname.startsWith("/notes")) return "Notes";
   if (pathname.startsWith("/settings")) return "Settings";
   return "Home";
 };

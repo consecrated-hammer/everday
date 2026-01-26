@@ -36,6 +36,12 @@ export const NavItems = [
     MatchPrefixes: ["/tasks"]
   },
   {
+    Label: "Notes",
+    Path: "/notes",
+    Icon: "note",
+    MatchPrefixes: ["/notes"]
+  },
+  {
     Label: "Budget",
     Path: "/budget/allocations",
     Icon: "budget",
