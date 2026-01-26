@@ -85,6 +85,8 @@ const BuildFallbackText = (items = []) => {
     .join("\n");
 };
 
+const BuildDraftStorageKey = (scope, userId) => `notes:draft:${scope}:${userId || "unknown"}`;
+
 const ParseContentToBlocks = (content, fallbackText = "") => {
   if (!content) {
     return [{ type: "paragraph", content: fallbackText }];
@@ -206,6 +208,7 @@ export default function Notes() {
   const filtersButtonRef = useRef(null);
   const shareButtonRef = useRef(null);
   const searchInputRef = useRef(null);
+  const draftAppliedRef = useRef(false);
   const [form, setForm] = useState({
     Title: "",
     Content: "",
@@ -213,6 +216,14 @@ export default function Notes() {
     IsPinned: false,
     Items: []
   });
+  const draftStorageKey = useMemo(
+    () => BuildDraftStorageKey(actualScope, GetUserId()),
+    [actualScope]
+  );
+
+  useEffect(() => {
+    draftAppliedRef.current = false;
+  }, [draftStorageKey]);
 
   const loadNotes = useCallback(async () => {
     try {
@@ -235,6 +246,41 @@ export default function Notes() {
   useEffect(() => {
     loadNotes();
   }, [loadNotes]);
+
+  useEffect(() => {
+    if (modalOpen || draftAppliedRef.current) {
+      return;
+    }
+    const stored = sessionStorage.getItem(draftStorageKey);
+    if (!stored) {
+      return;
+    }
+    try {
+      const parsed = JSON.parse(stored);
+      if (!parsed || typeof parsed !== "object") {
+        return;
+      }
+      const nextForm = parsed.form;
+      if (!nextForm || typeof nextForm !== "object") {
+        return;
+      }
+      setEditingNote(null);
+      setForm({
+        Title: nextForm.Title || "",
+        Content: nextForm.Content || "",
+        Labels: Array.isArray(nextForm.Labels) ? nextForm.Labels : [],
+        IsPinned: Boolean(nextForm.IsPinned),
+        Items: Array.isArray(nextForm.Items) ? nextForm.Items : []
+      });
+      setShareUserIds(Array.isArray(parsed.shareUserIds) ? parsed.shareUserIds : []);
+      setTagInput("");
+      setEditorSession((value) => value + 1);
+      setModalOpen(true);
+      draftAppliedRef.current = true;
+    } catch (error) {
+      console.warn("Failed to restore note draft:", error);
+    }
+  }, [draftStorageKey, modalOpen]);
 
   useEffect(() => {
     if (typeof window === "undefined" || !window.matchMedia) {
@@ -428,6 +474,23 @@ export default function Notes() {
       shareUserIds.length > 0
     );
   }, [editingNote, form, shareUserIds]);
+
+  useEffect(() => {
+    if (!modalOpen || !isDirty || editingNote) {
+      sessionStorage.removeItem(draftStorageKey);
+      return;
+    }
+    const payload = {
+      form,
+      shareUserIds,
+      savedAt: new Date().toISOString()
+    };
+    try {
+      sessionStorage.setItem(draftStorageKey, JSON.stringify(payload));
+    } catch (error) {
+      console.warn("Failed to store note draft:", error);
+    }
+  }, [modalOpen, isDirty, editingNote, form, shareUserIds, draftStorageKey]);
 
   const allTags = useMemo(() => {
     const tags = new Set();
