@@ -321,6 +321,7 @@ const Settings = () => {
   const [apiStatus, setApiStatus] = useState("checking");
   const [dbStatus, setDbStatus] = useState("checking");
   const [systemStatus, setSystemStatus] = useState("idle");
+  const [systemLastChecked, setSystemLastChecked] = useState(null);
   const [googleAuthStatus, setGoogleAuthStatus] = useState("idle");
   const [googleAuthError, setGoogleAuthError] = useState("");
   const [googleStatus, setGoogleStatus] = useState(null);
@@ -423,8 +424,17 @@ const Settings = () => {
       setDbStatus("error");
     } finally {
       setSystemStatus("ready");
+      setSystemLastChecked(new Date());
     }
   }, [apiBaseUrl]);
+
+  const onCopyBuildInfo = useCallback(async (text) => {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch (err) {
+      console.error("Copy failed:", err);
+    }
+  }, []);
 
   useEffect(() => {
     loadUsers();
@@ -1723,34 +1733,142 @@ const Settings = () => {
           ) : null}
 
           {activeSection === "system" ? (
-            <div className="settings-section settings-section--slim">
-              <div className="settings-section-header">
-                <div className="settings-section-header-row">
-                  <div>
-                    <h3>System status</h3>
-                    <p>Check API and database connectivity.</p>
+            <div className="settings-system-layout">
+              <div className="settings-system-card">
+                <div className="settings-section-header">
+                  <div className="settings-section-header-row">
+                    <div>
+                      <h3>System status</h3>
+                      <p>API and database connectivity</p>
+                    </div>
+                    <button
+                      type="button"
+                      className="button-secondary"
+                      onClick={loadSystemStatus}
+                      disabled={systemStatus === "loading"}
+                    >
+                      Refresh
+                    </button>
                   </div>
                 </div>
-              </div>
-              <div className="settings-status-grid">
-                <div className={`status-pill status-${apiStatus}`}>
-                  <span className="status-dot" aria-hidden="true" />
-                  <span>API {apiStatus === "ok" ? "ready" : apiStatus}</span>
+                <div className="system-status-badges">
+                  <div className={`system-status-badge system-status-${apiStatus}`}>
+                    <Icon name={apiStatus === "ok" ? "check_circle" : "cancel"} className="icon" />
+                    <span>API {apiStatus === "ok" ? "ready" : apiStatus === "checking" ? "checking" : "offline"}</span>
+                  </div>
+                  <div className={`system-status-badge system-status-${dbStatus}`}>
+                    <Icon name={dbStatus === "ok" ? "check_circle" : "cancel"} className="icon" />
+                    <span>Database {dbStatus === "ok" ? "connected" : dbStatus === "checking" ? "checking" : "offline"}</span>
+                  </div>
                 </div>
-                <div className={`status-pill status-${dbStatus}`}>
-                  <span className="status-dot" aria-hidden="true" />
-                  <span>Database {dbStatus === "ok" ? "connected" : dbStatus}</span>
-                </div>
+                {systemLastChecked ? (
+                  <div className="system-last-checked">
+                    Last checked: {systemLastChecked.toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit" })}
+                  </div>
+                ) : null}
               </div>
-              <div className="form-actions">
-                <button
-                  type="button"
-                  className="button-secondary"
-                  onClick={loadSystemStatus}
-                  disabled={systemStatus === "loading"}
-                >
-                  Refresh
-                </button>
+
+              <div className="settings-system-card">
+                <div className="settings-section-header">
+                  <div className="settings-section-header-row">
+                    <div>
+                      <h3>Build information</h3>
+                      <p>Version and build details</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="system-build-table">
+                  <div className="system-build-row">
+                    <span className="system-build-label">Commit</span>
+                    <span className="system-build-value">
+                      {(() => {
+                        const commitSha = import.meta.env.VITE_COMMIT_SHA || "";
+                        const shortCommit = commitSha ? commitSha.substring(0, 7) : "";
+                        return shortCommit || "local";
+                      })()}
+                    </span>
+                    <button
+                      type="button"
+                      className="icon-button system-copy-button"
+                      onClick={() => {
+                        const commitSha = import.meta.env.VITE_COMMIT_SHA || "";
+                        const shortCommit = commitSha ? commitSha.substring(0, 7) : "local";
+                        onCopyBuildInfo(shortCommit);
+                      }}
+                      title="Copy commit"
+                    >
+                      <Icon name="content_copy" className="icon" />
+                    </button>
+                  </div>
+                  <div className="system-build-row">
+                    <span className="system-build-label">Version</span>
+                    <span className="system-build-value">
+                      {import.meta.env.VITE_APP_VERSION || "dev"}
+                    </span>
+                    <button
+                      type="button"
+                      className="icon-button system-copy-button"
+                      onClick={() => onCopyBuildInfo(import.meta.env.VITE_APP_VERSION || "dev")}
+                      title="Copy version"
+                    >
+                      <Icon name="content_copy" className="icon" />
+                    </button>
+                  </div>
+                  <div className="system-build-row">
+                    <span className="system-build-label">Branch</span>
+                    <span className="system-build-value">
+                      {import.meta.env.VITE_IMAGE_TAG || "dev"}
+                    </span>
+                    <button
+                      type="button"
+                      className="icon-button system-copy-button"
+                      onClick={() => onCopyBuildInfo(import.meta.env.VITE_IMAGE_TAG || "dev")}
+                      title="Copy branch"
+                    >
+                      <Icon name="content_copy" className="icon" />
+                    </button>
+                  </div>
+                  <div className="system-build-row">
+                    <span className="system-build-label">Build time</span>
+                    <span className="system-build-value">
+                      {(() => {
+                        const buildTimeRaw = import.meta.env.VITE_BUILD_TIME || "";
+                        const buildTime =
+                          typeof buildTimeRaw === "string"
+                            ? buildTimeRaw.trim().replace(/^['"]|['"]$/g, "")
+                            : buildTimeRaw;
+
+                        if (!buildTime || buildTime === "dev-build") return "dev-build";
+
+                        const numericValue = Number(buildTime);
+                        if (!Number.isNaN(numericValue)) {
+                          const looksLikeMillis = numericValue > 1e12;
+                          const looksLikeSeconds = numericValue > 1e9 && numericValue < 1e12;
+                          if (looksLikeMillis || looksLikeSeconds) {
+                            const date = new Date(looksLikeMillis ? numericValue : numericValue * 1000);
+                            if (!Number.isNaN(date.getTime())) return date.toLocaleString();
+                          }
+                          return `build #${buildTime}`;
+                        }
+
+                        const d = new Date(buildTime);
+                        if (Number.isNaN(d.getTime())) return buildTime;
+                        return d.toLocaleString();
+                      })()}
+                    </span>
+                    <button
+                      type="button"
+                      className="icon-button system-copy-button"
+                      onClick={() => {
+                        const buildTimeRaw = import.meta.env.VITE_BUILD_TIME || "";
+                        onCopyBuildInfo(buildTimeRaw);
+                      }}
+                      title="Copy build time"
+                    >
+                      <Icon name="content_copy" className="icon" />
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           ) : null}
