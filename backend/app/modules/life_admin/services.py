@@ -553,7 +553,7 @@ def ListRecords(db: Session, category_id: int) -> list[LifeRecord]:
     return (
         db.query(LifeRecord)
         .filter(LifeRecord.CategoryId == category_id)
-        .order_by(LifeRecord.CreatedAt.desc(), LifeRecord.Id.desc())
+        .order_by(LifeRecord.SortOrder.asc(), LifeRecord.Id.asc())
         .all()
     )
 
@@ -566,10 +566,17 @@ def CreateRecord(
 ) -> LifeRecord:
     data, fields = NormalizeRecordData(db, category_id, input_data["Data"])
     now = NowUtc()
+    max_sort = (
+        db.query(func.coalesce(func.max(LifeRecord.SortOrder), 0))
+        .filter(LifeRecord.CategoryId == category_id)
+        .scalar()
+        or 0
+    )
     record = LifeRecord(
         CategoryId=category_id,
         Title=input_data.get("Title"),
         DataJson=json.dumps(data),
+        SortOrder=max_sort + 1,
         CreatedByUserId=user_id,
         UpdatedByUserId=user_id,
         CreatedAt=now,
@@ -616,6 +623,23 @@ def DeleteRecord(db: Session, record_id: int) -> bool:
     db.delete(record)
     db.commit()
     return True
+
+
+def UpdateRecordOrder(db: Session, category_id: int, ordered_ids: list[int]) -> None:
+    if not ordered_ids:
+        return
+    records = (
+        db.query(LifeRecord)
+        .filter(LifeRecord.CategoryId == category_id, LifeRecord.Id.in_(ordered_ids))
+        .all()
+    )
+    if len(records) != len(ordered_ids):
+        raise ValueError("Invalid record order")
+    order_map = {record_id: index + 1 for index, record_id in enumerate(ordered_ids)}
+    for record in records:
+        record.SortOrder = order_map[record.Id]
+        db.add(record)
+    db.commit()
 
 
 def ListRecordLookup(db: Session, category_id: int) -> list[LifeRecord]:

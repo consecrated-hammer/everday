@@ -27,6 +27,7 @@ from app.modules.life_admin.schemas import (
     RecordCreate,
     RecordLookupOut,
     RecordOut,
+    RecordOrderUpdate,
     RecordUpdate,
 )
 
@@ -107,6 +108,7 @@ def _record_out(record) -> RecordOut:
         CategoryId=record.CategoryId,
         Title=record.Title,
         Data=data,
+        SortOrder=record.SortOrder,
         CreatedAt=record.CreatedAt,
         UpdatedAt=record.UpdatedAt,
     )
@@ -366,6 +368,19 @@ def UpdateRecord(
     if not record:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Record not found")
     return _record_out(record)
+
+
+@router.put("/categories/{category_id}/records/order", status_code=status.HTTP_204_NO_CONTENT)
+def UpdateRecordOrder(
+    category_id: int,
+    payload: RecordOrderUpdate,
+    db: Session = Depends(GetDb),
+    user: UserContext = Depends(RequireModuleRole("life_admin", write=True)),
+) -> None:
+    try:
+        services.UpdateRecordOrder(db, category_id, payload.OrderedIds)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
 @router.delete("/records/{record_id}", status_code=status.HTTP_204_NO_CONTENT)

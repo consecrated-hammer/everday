@@ -35,5 +35,13 @@ module.exports = {
       { allowConstantExport: true },
     ],
   },
+  overrides: [
+    {
+      files: ["src/pages/LifeAdmin/**/*.jsx", "src/pages/Budget/**/*.jsx"],
+      rules: {
+        "no-use-before-define": ["error", { functions: false, classes: true, variables: true }],
+      },
+    },
+  ],
   ignorePatterns: ["dist", "node_modules"],
 };

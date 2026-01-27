@@ -127,6 +127,13 @@ export const UpdateLifeRecord = async (recordId, payload) => {
   });
 };
 
+export const UpdateLifeRecordOrder = async (categoryId, orderedIds) => {
+  return RequestJson(`/life-admin/categories/${categoryId}/records/order`, {
+    method: "PUT",
+    body: JSON.stringify({ OrderedIds: orderedIds })
+  });
+};
+
 export const DeleteLifeRecord = async (recordId) => {
   return RequestJson(`/life-admin/records/${recordId}`, {
     method: "DELETE"

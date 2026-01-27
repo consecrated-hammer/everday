@@ -96,6 +96,7 @@ class LifeRecord(Base):
     CategoryId = Column(Integer, nullable=False, index=True)
     Title = Column(String(200))
     DataJson = Column(Text, nullable=False)
+    SortOrder = Column(Integer, nullable=False, default=0)
     CreatedByUserId = Column(Integer, nullable=False, index=True)
     UpdatedByUserId = Column(Integer, nullable=False, index=True)
     CreatedAt = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)

@@ -1,5 +1,5 @@
 export const DefaultExpenseColumns = [
-  { Key: "Order", Label: "Order", Visible: true, Width: 56, Locked: true },
+  { Key: "Order", Label: "Row #", Visible: true, Width: 64, Locked: true },
   { Key: "Label", Label: "Expense", Visible: true, Width: 220 },
   { Key: "Amount", Label: "Amount", Visible: true, Width: 140 },
   { Key: "Frequency", Label: "Frequency", Visible: true, Width: 140 },
@@ -15,6 +15,8 @@ export const DefaultExpenseColumns = [
   { Key: "Interval", Label: "Every", Visible: false, Width: 100 },
   { Key: "Actions", Label: "Actions", Visible: true, Width: 120, Locked: true }
 ];
+
+export const RequiredExpenseColumns = ["Label", "Amount", "Frequency"];
 
 export const DefaultExpenseTableState = {
   Columns: DefaultExpenseColumns,

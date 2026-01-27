@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+
+import { GridCellKind } from "@glideapps/glide-data-grid";
 
 import DataTable from "../../components/DataTable.jsx";
-import { ExpenseTable } from "../../components/ExpenseTable.jsx";
+import { ExpenseGrid } from "../../components/ExpenseGrid.jsx";
 import Icon from "../../components/Icon.jsx";
 import {
   CreateExpense,
@@ -20,7 +23,8 @@ import {
 } from "../../lib/budgetApi.js";
 import {
   DefaultExpenseTableState,
-  NormalizeExpenseTableState
+  NormalizeExpenseTableState,
+  RequiredExpenseColumns
 } from "../../lib/expenseTable.js";
 import { ToNumber } from "../../lib/formatters.js";
 
@@ -69,25 +73,30 @@ const ResolveExpensePeriodValue = (expense, periodKey, fallbackValue) => {
   return ToNumber(fallbackValue);
 };
 
+const BuildSelectOptions = (values) => {
+  const options = [{ value: "", label: "None" }];
+  (values || []).forEach((value) => {
+    const label = value || "None";
+    const normalized = value || "";
+    if (!options.some((option) => option.value === normalized)) {
+      options.push({ value: normalized, label });
+    }
+  });
+  return options;
+};
+
 const BudgetExpenses = () => {
   const [expenses, setExpenses] = useState([]);
   const [accounts, setAccounts] = useState([]);
   const [types, setTypes] = useState([]);
-  const [expenseForm, setExpenseForm] = useState(InitialExpenseForm);
-  const [editExpenseForm, setEditExpenseForm] = useState(InitialExpenseForm);
-  const [editingExpenseId, setEditingExpenseId] = useState(null);
-  const [expenseModalOpen, setExpenseModalOpen] = useState(false);
-  const [expenseModalMode, setExpenseModalMode] = useState("add");
-  const [spreadsheetMode, setSpreadsheetMode] = useState(false);
-  const expenseAddLabelRef = useRef(null);
+  const [draftExpense, setDraftExpense] = useState(null);
   const [expenseSearch, setExpenseSearch] = useState("");
   const [expenseColumnsOpen, setExpenseColumnsOpen] = useState(false);
-  const [expenseActiveFilter, setExpenseActiveFilter] = useState(null);
+  const [filterPopover, setFilterPopover] = useState(null);
+  const filterPopoverRef = useRef(null);
   const [expenseMenuOpen, setExpenseMenuOpen] = useState(false);
-  const expenseResizeRef = useRef({ key: null, startX: 0, startWidth: 0 });
-  const [draggingExpenseId, setDraggingExpenseId] = useState(null);
-  const [dragOverExpenseId, setDragOverExpenseId] = useState(null);
   const expensePanelRef = useRef(null);
+  const expenseGridRef = useRef(null);
   const [expenseTableState, setExpenseTableState] = useState(DefaultExpenseTableState);
   const [expenseTableLoaded, setExpenseTableLoaded] = useState(false);
   const [accountForm, setAccountForm] = useState(emptyAccountForm);
@@ -102,6 +111,7 @@ const BudgetExpenses = () => {
   const [error, setError] = useState("");
 
   const expenseTableKey = "budget-expenses";
+  const requiredExpenseKeys = useMemo(() => new Set(RequiredExpenseColumns), []);
 
   const loadExpenses = useCallback(async () => {
     const data = await FetchExpenses();
@@ -165,26 +175,29 @@ const BudgetExpenses = () => {
       if (!expensePanelRef.current || !expensePanelRef.current.contains(event.target)) {
         setExpenseColumnsOpen(false);
         setExpenseMenuOpen(false);
-        setExpenseActiveFilter(null);
+        setFilterPopover(null);
         return;
       }
       if (
         event.target.closest(".dropdown") ||
         event.target.closest(".toolbar-button") ||
         event.target.closest(".filter-icon") ||
-        event.target.closest(".expense-filter-dropdown")
+        event.target.closest(".expense-filter-dropdown") ||
+        event.target.closest(".expense-filters-panel") ||
+        event.target.closest(".filter-panel") ||
+        event.target.closest(".grid-filter-popover")
       ) {
         return;
       }
       setExpenseColumnsOpen(false);
       setExpenseMenuOpen(false);
-      setExpenseActiveFilter(null);
+      setFilterPopover(null);
     };
     const onKey = (event) => {
       if (event.key === "Escape") {
         setExpenseColumnsOpen(false);
         setExpenseMenuOpen(false);
-        setExpenseActiveFilter(null);
+        setFilterPopover(null);
       }
     };
     document.addEventListener("mousedown", onClick);
@@ -196,11 +209,19 @@ const BudgetExpenses = () => {
   }, []);
 
   useEffect(() => {
-    if (!spreadsheetMode) {
-      setEditingExpenseId(null);
-      setEditExpenseForm(InitialExpenseForm);
+    if (!draftExpense) {
+      return;
     }
-  }, [spreadsheetMode]);
+    const onKey = (event) => {
+      if (event.key === "Escape") {
+        setDraftExpense(null);
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [draftExpense]);
 
   const expenseColumnConfig = useMemo(() => {
     return expenseTableState.Columns.reduce((acc, column) => {
@@ -392,6 +413,37 @@ const BudgetExpenses = () => {
     return sorted;
   }, [filteredExpenses, expenseTableState]);
 
+  const displayExpenses = useMemo(() => {
+    if (!draftExpense) {
+      return sortedExpenses;
+    }
+    return [
+      ...sortedExpenses,
+      { ...draftExpense, __isDraft: true }
+    ];
+  }, [draftExpense, sortedExpenses]);
+
+  const expenseSelectOptions = useMemo(
+    () => ({
+      Frequency: BuildSelectOptions(expenseFilterOptions?.Frequency || []),
+      Account: BuildSelectOptions(expenseFilterOptions?.Account || []),
+      Type: BuildSelectOptions(expenseFilterOptions?.Type || []),
+      Cadence: BuildSelectOptions(expenseFilterOptions?.Cadence || [])
+    }),
+    [expenseFilterOptions]
+  );
+
+  const hasActiveFilters = useMemo(
+    () => Object.values(expenseFilters).some((values) => values && values.length > 0),
+    [expenseFilters]
+  );
+
+  const canReorder =
+    !draftExpense &&
+    !expenseSearch.trim() &&
+    !hasActiveFilters &&
+    (expenseTableState.Sort?.Key === "Order" || !expenseTableState.Sort?.Key);
+
   const visibleColumnKeys = expenseTableState.Columns.filter(
     (column) => column.Visible !== false
   ).map((column) => column.Key);
@@ -401,137 +453,116 @@ const BudgetExpenses = () => {
     ) || null;
 
   const StartAddExpense = () => {
-    setEditingExpenseId(null);
-    setExpenseForm(InitialExpenseForm);
-    setExpenseModalMode("add");
-    setExpenseModalOpen(true);
+    expenseGridRef.current?.appendRow(0, true);
   };
 
-  const CloseExpenseModal = () => {
-    if (expenseModalMode === "edit") {
-      setEditingExpenseId(null);
-      setEditExpenseForm(InitialExpenseForm);
-    } else {
-      setExpenseForm(InitialExpenseForm);
-    }
-    setExpenseModalOpen(false);
+  const BuildExpensePayloadFromExpense = (expense, overrides = {}) => {
+    const next = { ...expense, ...overrides };
+    const nextDueDate = next.NextDueDate || null;
+    return {
+      Label: String(next.Label || "").trim(),
+      Amount: Number(next.Amount),
+      Frequency: next.Frequency,
+      Account: next.Account || null,
+      Type: next.Type || null,
+      NextDueDate: nextDueDate,
+      Cadence: next.Cadence || null,
+      Interval: next.Interval ? Number(next.Interval) : null,
+      Month: nextDueDate ? new Date(nextDueDate).getMonth() + 1 : null,
+      DayOfMonth: nextDueDate ? new Date(nextDueDate).getDate() : null,
+      Enabled: Boolean(next.Enabled),
+      Notes: next.Notes || null
+    };
   };
 
-  const StartEditExpense = (expense, openModal = true) => {
-    setEditingExpenseId(expense.Id);
-    setEditExpenseForm({
-      Label: expense.Label,
-      Amount: expense.Amount,
-      Frequency: expense.Frequency,
-      Account: expense.Account || "",
-      Type: expense.Type || "",
-      NextDueDate: expense.NextDueDate || "",
-      Cadence: expense.Cadence || "",
-      Interval: expense.Interval ? String(expense.Interval) : "",
-      Enabled: expense.Enabled,
-      Notes: expense.Notes || ""
-    });
-    if (openModal) {
-      setExpenseModalMode("edit");
-      setExpenseModalOpen(true);
-    }
-  };
-
-  const HandleExpenseSubmit = async (event) => {
-    event.preventDefault();
-    try {
-      setStatus("saving");
-      setError("");
-      const nextDueDate = expenseForm.NextDueDate || null;
-      const payload = {
-        Label: expenseForm.Label.trim(),
-        Amount: Number(expenseForm.Amount),
-        Frequency: expenseForm.Frequency,
-        Account: expenseForm.Account || null,
-        Type: expenseForm.Type || null,
-        NextDueDate: nextDueDate,
-        Cadence: expenseForm.Cadence || null,
-        Interval: expenseForm.Interval ? Number(expenseForm.Interval) : null,
-        Month: nextDueDate ? new Date(nextDueDate).getMonth() + 1 : null,
-        DayOfMonth: nextDueDate ? new Date(nextDueDate).getDate() : null,
-        Enabled: expenseForm.Enabled,
-        Notes: expenseForm.Notes || null
-      };
-      await CreateExpense(payload);
-      setExpenseForm(InitialExpenseForm);
-      if (spreadsheetMode) {
-        requestAnimationFrame(() => {
-          expenseAddLabelRef.current?.focus();
-        });
+  const isExpenseMissingRequired = useCallback(
+    (key, value) => {
+      if (!requiredExpenseKeys.has(key)) {
+        return false;
       }
-      setExpenseModalOpen(false);
-      await loadExpenses();
-    } catch (err) {
-      setStatus("error");
-      setError(err?.message || "Failed to save expense");
-    } finally {
-      setStatus("ready");
-    }
-  };
+      if (key === "Label") {
+        return !String(value || "").trim();
+      }
+      if (key === "Amount") {
+        return !Number(value || 0);
+      }
+      if (key === "Frequency") {
+        return !String(value || "").trim();
+      }
+      return false;
+    },
+    [requiredExpenseKeys]
+  );
 
-  const SaveExpenseEdit = async (expenseId) => {
+  const isExpenseReady = (expense) =>
+    String(expense.Label || "").trim() && Number(expense.Amount) && expense.Frequency;
+
+  const missingExpenseRequired = useMemo(() => {
+    if (!draftExpense) {
+      return [];
+    }
+    return RequiredExpenseColumns
+      .filter((key) => isExpenseMissingRequired(key, draftExpense[key]))
+      .map((key) => expenseColumnConfig[key]?.Label || key);
+  }, [draftExpense, expenseColumnConfig, isExpenseMissingRequired]);
+
+  const HandleExpenseCellEdited = async (expense, key, newValue) => {
+    const nextValue =
+      newValue?.kind === GridCellKind.Custom
+        ? newValue?.data?.value ?? ""
+        : newValue?.kind === GridCellKind.Number
+          ? newValue.data
+          : newValue?.data ?? "";
+    const overrides = { [key]: nextValue };
+    if (key === "Interval") {
+      overrides.Interval = nextValue ? Number(nextValue) : null;
+    }
+    if (key === "Amount") {
+      overrides.Amount = Number(nextValue || 0);
+    }
+    if (key === "NextDueDate") {
+      overrides.NextDueDate = nextValue || null;
+    }
+    if (key === "Label" && typeof nextValue === "string") {
+      overrides.Label = nextValue.trim();
+    }
+
+    if (expense.__isDraft) {
+      const nextDraft = { ...expense, ...overrides };
+      setDraftExpense(nextDraft);
+      if (!isExpenseReady(nextDraft)) {
+        return;
+      }
+      try {
+        setStatus("saving");
+        setError("");
+        const payload = BuildExpensePayloadFromExpense(nextDraft);
+        await CreateExpense(payload);
+        setDraftExpense(null);
+        await loadExpenses();
+      } catch (err) {
+        setStatus("error");
+        setError(err?.message || "Failed to add expense");
+      } finally {
+        setStatus("ready");
+      }
+      return;
+    }
+
     try {
       setStatus("saving");
       setError("");
-      const nextDueDate = editExpenseForm.NextDueDate || null;
-      const payload = {
-        Label: editExpenseForm.Label.trim(),
-        Amount: Number(editExpenseForm.Amount),
-        Frequency: editExpenseForm.Frequency,
-        Account: editExpenseForm.Account || null,
-        Type: editExpenseForm.Type || null,
-        NextDueDate: nextDueDate,
-        Cadence: editExpenseForm.Cadence || null,
-        Interval: editExpenseForm.Interval ? Number(editExpenseForm.Interval) : null,
-        Month: nextDueDate ? new Date(nextDueDate).getMonth() + 1 : null,
-        DayOfMonth: nextDueDate ? new Date(nextDueDate).getDate() : null,
-        Enabled: editExpenseForm.Enabled,
-        Notes: editExpenseForm.Notes || null
-      };
-      await UpdateExpense(expenseId, payload);
-      setEditingExpenseId(null);
-      setEditExpenseForm(InitialExpenseForm);
-      setExpenseModalOpen(false);
-      await loadExpenses();
+      const payload = BuildExpensePayloadFromExpense(expense, overrides);
+      const updated = await UpdateExpense(expense.Id, payload);
+      setExpenses((current) =>
+        current.map((entry) => (entry.Id === updated.Id ? updated : entry))
+      );
     } catch (err) {
       setStatus("error");
       setError(err?.message || "Failed to update expense");
     } finally {
       setStatus("ready");
     }
-  };
-
-  const CancelExpenseEdit = () => {
-    if (expenseModalOpen) {
-      CloseExpenseModal();
-      return;
-    }
-    setEditingExpenseId(null);
-    setEditExpenseForm(InitialExpenseForm);
-  };
-
-  const ToggleExpenseEnabled = async (expense) => {
-    const payload = {
-      Label: expense.Label,
-      Amount: Number(expense.Amount),
-      Frequency: expense.Frequency,
-      Account: expense.Account,
-      Type: expense.Type,
-      NextDueDate: expense.NextDueDate,
-      Cadence: expense.Cadence,
-      Interval: expense.Interval,
-      Month: expense.Month,
-      DayOfMonth: expense.DayOfMonth,
-      Enabled: !expense.Enabled,
-      Notes: expense.Notes
-    };
-    await UpdateExpense(expense.Id, payload);
-    await loadExpenses();
   };
 
   const DeleteExpenseItem = async (expenseId) => {
@@ -543,7 +574,6 @@ const BudgetExpenses = () => {
       setError("");
       await DeleteExpense(expenseId);
       await loadExpenses();
-      CloseExpenseModal();
     } catch (err) {
       setStatus("error");
       setError(err?.message || "Failed to delete expense");
@@ -553,6 +583,9 @@ const BudgetExpenses = () => {
   };
 
   const ToggleExpenseColumnVisibility = (key) => {
+    if (requiredExpenseKeys.has(key)) {
+      return;
+    }
     const column = expenseColumnConfig[key];
     if (column?.Locked) {
       return;
@@ -580,36 +613,34 @@ const BudgetExpenses = () => {
     }));
   };
 
-  const StartExpenseColumnResize = (key, event) => {
-    expenseResizeRef.current = {
-      key,
-      startX: event.clientX,
-      startWidth: expenseColumnConfig[key]?.Width || 120
-    };
-    document.addEventListener("mousemove", HandleExpenseColumnResize);
-    document.addEventListener("mouseup", StopExpenseColumnResize);
-  };
-
-  const HandleExpenseColumnResize = (event) => {
-    const { key, startX, startWidth } = expenseResizeRef.current;
-    if (!key) {
+  const HandleExpenseHeaderClick = (key) => {
+    if (!key || key === "Actions") {
       return;
     }
-    const delta = event.clientX - startX;
+    SetExpenseSort(key);
+  };
+
+  const HandleExpenseHeaderContextMenu = (key, event) => {
+    if (!key || key === "Actions") {
+      return;
+    }
+    if (!expenseFilterOptions?.[key]) {
+      return;
+    }
+    event.preventDefault();
+    const label = expenseColumnConfig[key]?.Label || key;
+    setFilterPopover({ key, label, bounds: event.bounds });
+  };
+
+  const HandleExpenseColumnResize = (key, nextWidth) => {
     const minWidth = 60;
-    const nextWidth = Math.max(minWidth, startWidth + delta);
+    const safeWidth = Math.max(minWidth, Math.round(nextWidth));
     setExpenseTableState((current) => ({
       ...current,
       Columns: current.Columns.map((column) =>
-        column.Key === key ? { ...column, Width: nextWidth } : column
+        column.Key === key ? { ...column, Width: safeWidth } : column
       )
     }));
-  };
-
-  const StopExpenseColumnResize = () => {
-    expenseResizeRef.current = { key: null, startX: 0, startWidth: 0 };
-    document.removeEventListener("mousemove", HandleExpenseColumnResize);
-    document.removeEventListener("mouseup", StopExpenseColumnResize);
   };
 
   const ToggleExpenseFilterValue = (key, value) => {
@@ -671,39 +702,22 @@ const BudgetExpenses = () => {
     return target >= 0 && target < columns.length;
   };
 
-  const StartExpenseDrag = (expenseId, event) => {
-    setDraggingExpenseId(expenseId);
-    event.dataTransfer.effectAllowed = "move";
-  };
-
-  const HandleExpenseDragOver = (expenseId, event) => {
-    event.preventDefault();
-    if (draggingExpenseId && expenseId !== draggingExpenseId) {
-      setDragOverExpenseId(expenseId);
-    }
-  };
-
-  const HandleExpenseDragLeave = () => {
-    setDragOverExpenseId(null);
-  };
-
-  const HandleExpenseDrop = async (expenseId, event) => {
-    event.preventDefault();
-    if (!draggingExpenseId || draggingExpenseId === expenseId) {
-      setDragOverExpenseId(null);
+  const HandleExpenseRowMoved = async (startIndex, endIndex) => {
+    if (!canReorder || startIndex === endIndex) {
       return;
     }
-    const currentOrder = [...expenses]
-      .sort((a, b) => (a.DisplayOrder ?? 0) - (b.DisplayOrder ?? 0))
-      .map((expense) => expense.Id);
-    const fromIndex = currentOrder.indexOf(draggingExpenseId);
-    const toIndex = currentOrder.indexOf(expenseId);
-    if (fromIndex === -1 || toIndex === -1) {
+    const ordered = [...sortedExpenses].map((expense) => expense.Id);
+    if (
+      startIndex < 0 ||
+      endIndex < 0 ||
+      startIndex >= ordered.length ||
+      endIndex >= ordered.length
+    ) {
       return;
     }
-    const reordered = [...currentOrder];
-    const [moved] = reordered.splice(fromIndex, 1);
-    reordered.splice(toIndex, 0, moved);
+    const reordered = [...ordered];
+    const [moved] = reordered.splice(startIndex, 1);
+    reordered.splice(endIndex, 0, moved);
     try {
       setStatus("saving");
       await UpdateExpenseOrder({ OrderedIds: reordered });
@@ -722,35 +736,24 @@ const BudgetExpenses = () => {
       setError(err?.message || "Failed to reorder expenses");
     } finally {
       setStatus("ready");
-      setDragOverExpenseId(null);
-      setDraggingExpenseId(null);
     }
   };
 
-  const TrySubmitExpense = () => {
-    if (!expenseForm.Label.trim() || !expenseForm.Amount) {
-      return;
+  const HandleExpenseRowAppended = useCallback(() => {
+    if (draftExpense) {
+      return "bottom";
     }
-    HandleExpenseSubmit({ preventDefault: () => {} });
-  };
-
-  const HandleExpenseAddKeyDown = (event) => {
-    if (event.key === "Enter") {
-      event.preventDefault();
-      TrySubmitExpense();
-    }
-  };
-
-  const HandleExpenseEditKeyDown = (event, expenseId) => {
-    if (event.key === "Enter") {
-      event.preventDefault();
-      SaveExpenseEdit(expenseId);
-    }
-    if (event.key === "Escape") {
-      event.preventDefault();
-      CancelExpenseEdit();
-    }
-  };
+    const maxOrder = expenses.reduce(
+      (acc, expense) => Math.max(acc, expense.DisplayOrder || 0),
+      0
+    );
+    setDraftExpense({
+      ...InitialExpenseForm,
+      Id: "__draft__",
+      DisplayOrder: maxOrder + 1
+    });
+    return "bottom";
+  }, [draftExpense, expenses]);
 
   const onAccountChange = (event) => {
     const { name, value, type, checked } = event.target;
@@ -916,6 +919,19 @@ const BudgetExpenses = () => {
             </div>
           </div>
           <div className="toolbar-right">
+            {draftExpense ? (
+              <div className="grid-draft-banner grid-draft-banner--inline">
+                <div>
+                  <strong>Draft row in progress.</strong>{" "}
+                  {missingExpenseRequired.length > 0
+                    ? `Missing required: ${missingExpenseRequired.join(", ")}.`
+                    : "All required fields are set. Press Enter to save."}
+                </div>
+                <button type="button" onClick={() => setDraftExpense(null)}>
+                  Discard (Esc)
+                </button>
+              </div>
+            ) : null}
             <div className="toolbar-flyout">
               <button
                 type="button"
@@ -923,7 +939,6 @@ const BudgetExpenses = () => {
                 onClick={() => {
                   setExpenseColumnsOpen((prev) => !prev);
                   setExpenseMenuOpen(false);
-                  setExpenseActiveFilter(null);
                 }}
               >
                 <Icon name="columns" className="icon" />
@@ -936,9 +951,9 @@ const BudgetExpenses = () => {
                       <label className="columns-label">
                         <input
                           type="checkbox"
-                          checked={column.Visible !== false}
+                          checked={requiredExpenseKeys.has(column.Key) || column.Visible !== false}
                           onChange={() => ToggleExpenseColumnVisibility(column.Key)}
-                          disabled={column.Locked}
+                          disabled={column.Locked || requiredExpenseKeys.has(column.Key)}
                         />
                         <span>{column.Label || column.Key}</span>
                       </label>
@@ -967,25 +982,15 @@ const BudgetExpenses = () => {
                 </div>
               ) : null}
             </div>
-            <label className="toolbar-toggle">
-              <span>Quick edit</span>
-              <span className="settings-switch-inline">
-                <input
-                  type="checkbox"
-                  checked={spreadsheetMode}
-                  onChange={(event) => setSpreadsheetMode(event.target.checked)}
-                />
-                <span className="switch-track" aria-hidden="true">
-                  <span className="switch-thumb" />
-                </span>
-              </span>
-            </label>
             <div className="toolbar-flyout">
               <button
                 type="button"
                 className="toolbar-button icon-only"
                 aria-label="Table options"
-                onClick={() => setExpenseMenuOpen((prev) => !prev)}
+                onClick={() => {
+                  setExpenseMenuOpen((prev) => !prev);
+                  setExpenseColumnsOpen(false);
+                }}
               >
                 <Icon name="more" className="icon" />
               </button>
@@ -1000,300 +1005,84 @@ const BudgetExpenses = () => {
           </div>
         </div>
 
-        {spreadsheetMode ? (
-          <div className="expense-hint">
-            <span>Quick edit is on. Click a row to edit.</span>
-            <span>Enter saves. Esc cancels.</span>
-          </div>
-        ) : null}
+        {filterPopover
+          ? createPortal(
+              <div
+                className="grid-filter-popover"
+                ref={filterPopoverRef}
+                style={{
+                  position: "fixed",
+                  left: filterPopover.bounds?.x ?? 0,
+                  top: (filterPopover.bounds?.y ?? 0) + (filterPopover.bounds?.height ?? 0) + 6
+                }}
+              >
+                <div className="grid-filters-header">
+                  <span>{filterPopover.label || filterPopover.key} filter</span>
+                  <button type="button" onClick={() => setFilterPopover(null)}>
+                    Close
+                  </button>
+                </div>
+                <div className="grid-filter-options">
+                  {(expenseFilterOptions?.[filterPopover.key] || []).length === 0 ? (
+                    <div className="grid-filter-empty">No options</div>
+                  ) : (
+                    expenseFilterOptions[filterPopover.key].map((option) => (
+                      <label key={option || "none"} className="grid-filter-option">
+                        <input
+                          type="checkbox"
+                          checked={(expenseFilters[filterPopover.key] || []).includes(option)}
+                          onChange={() => ToggleExpenseFilterValue(filterPopover.key, option)}
+                        />
+                        {option || "None"}
+                      </label>
+                    ))
+                  )}
+                </div>
+                <div className="grid-filter-actions">
+                  <button type="button" onClick={() => ClearExpenseFilter(filterPopover.key)}>
+                    Clear
+                  </button>
+                </div>
+              </div>,
+              document.getElementById("portal") || document.body
+            )
+          : null}
 
-        <ExpenseTable
-          expenseColumns={expenseTableState.Columns}
-          expenseTableState={expenseTableState}
-          sortedExpenses={sortedExpenses}
-          spreadsheetMode={spreadsheetMode}
-          editingExpenseId={editingExpenseId}
-          editExpenseForm={editExpenseForm}
-          expenseForm={expenseForm}
-          expenseAddLabelRef={expenseAddLabelRef}
-          expenseAccounts={accounts}
-          expenseTypes={types}
-          expenseTotals={expenseTotals}
-          expenseTotalLabelKey={expenseTotalLabelKey}
-          expenseFilters={expenseFilters}
-          expenseFilterOptions={expenseFilterOptions}
-          activeFilterKey={expenseActiveFilter}
-          onActivateFilter={(key) => {
-            setExpenseColumnsOpen(false);
-            setExpenseMenuOpen(false);
-            setExpenseActiveFilter((current) => (current === key ? null : key));
-          }}
-          onToggleFilterValue={ToggleExpenseFilterValue}
-          onClearFilter={ClearExpenseFilter}
-          onSetSort={SetExpenseSort}
-          onStartResize={StartExpenseColumnResize}
-          onDragStart={StartExpenseDrag}
-          onDragOver={HandleExpenseDragOver}
-          onDragLeave={HandleExpenseDragLeave}
-          onDrop={HandleExpenseDrop}
-          draggingExpenseId={draggingExpenseId}
-          dragOverExpenseId={dragOverExpenseId}
-          onAddChange={(field, value) => setExpenseForm((prev) => ({ ...prev, [field]: value }))}
-          onAddKeyDown={HandleExpenseAddKeyDown}
-          onEditChange={(field, value) =>
-            setEditExpenseForm((prev) => ({ ...prev, [field]: value }))
-          }
-          onEditKeyDown={HandleExpenseEditKeyDown}
-          onStartEdit={StartEditExpense}
-          onSaveEdit={SaveExpenseEdit}
-          onCancelEdit={CancelExpenseEdit}
-          onDelete={DeleteExpenseItem}
-          onToggleEnabled={ToggleExpenseEnabled}
-          onRequestQuickEdit={() => setSpreadsheetMode(true)}
-        />
+        {displayExpenses.length === 0 ? (
+          <div className="table-empty">
+            <p>No expenses yet. Add a row to get started.</p>
+            <button type="button" className="primary-button" onClick={StartAddExpense}>
+              Add first expense
+            </button>
+          </div>
+        ) : (
+          <ExpenseGrid
+            gridRef={expenseGridRef}
+            expenseColumns={expenseTableState.Columns}
+            displayExpenses={displayExpenses}
+            expenseTotals={expenseTotals}
+            expenseTotalLabelKey={expenseTotalLabelKey}
+            selectOptions={expenseSelectOptions}
+            sortState={expenseTableState.Sort}
+            filterState={expenseFilters}
+            canReorder={canReorder}
+            onCellEdited={HandleExpenseCellEdited}
+            onColumnResize={HandleExpenseColumnResize}
+            onRowMoved={HandleExpenseRowMoved}
+            onRowAppended={HandleExpenseRowAppended}
+            onHeaderClicked={HandleExpenseHeaderClick}
+            onHeaderContextMenu={HandleExpenseHeaderContextMenu}
+            onDeleteExpense={(expense) => {
+              if (expense.__isDraft) {
+                setDraftExpense(null);
+                return;
+              }
+              DeleteExpenseItem(expense.Id);
+            }}
+          />
+        )}
       </div>
 
-      {expenseModalOpen ? (
-        <div className="modal-backdrop" role="dialog" aria-modal="true">
-          <div className="modal">
-            <div className="modal-header">
-              <h3>{expenseModalMode === "edit" ? "Edit expense" : "Add expense"}</h3>
-              <div className="modal-header-actions">
-                <button type="button" className="icon-button" onClick={CloseExpenseModal} aria-label="Close">
-                  <Icon name="close" className="icon action-icon" />
-                  <span className="action-label">Close</span>
-                </button>
-              </div>
-            </div>
-            <form
-              className="form-grid"
-              onSubmit={(event) => {
-                if (expenseModalMode === "edit") {
-                  event.preventDefault();
-                  SaveExpenseEdit(editingExpenseId);
-                  return;
-                }
-                HandleExpenseSubmit(event);
-              }}
-            >
-              <label>
-                <span>Label</span>
-                <input
-                  name="Label"
-                  value={expenseModalMode === "edit" ? editExpenseForm.Label : expenseForm.Label}
-                  onChange={(event) => {
-                    const value = event.target.value;
-                    if (expenseModalMode === "edit") {
-                      setEditExpenseForm((prev) => ({ ...prev, Label: value }));
-                    } else {
-                      setExpenseForm((prev) => ({ ...prev, Label: value }));
-                    }
-                  }}
-                  required
-                />
-              </label>
-              <label>
-                <span>Amount</span>
-                <input
-                  name="Amount"
-                  type="number"
-                  step="0.01"
-                  value={expenseModalMode === "edit" ? editExpenseForm.Amount : expenseForm.Amount}
-                  onChange={(event) => {
-                    const value = event.target.value;
-                    if (expenseModalMode === "edit") {
-                      setEditExpenseForm((prev) => ({ ...prev, Amount: value }));
-                    } else {
-                      setExpenseForm((prev) => ({ ...prev, Amount: value }));
-                    }
-                  }}
-                  required
-                />
-              </label>
-              <label>
-                <span>Frequency</span>
-                <select
-                  name="Frequency"
-                  value={
-                    expenseModalMode === "edit" ? editExpenseForm.Frequency : expenseForm.Frequency
-                  }
-                  onChange={(event) => {
-                    const value = event.target.value;
-                    if (expenseModalMode === "edit") {
-                      setEditExpenseForm((prev) => ({ ...prev, Frequency: value }));
-                    } else {
-                      setExpenseForm((prev) => ({ ...prev, Frequency: value }));
-                    }
-                  }}
-                >
-                  <option value="Weekly">Weekly</option>
-                  <option value="Fortnightly">Fortnightly</option>
-                  <option value="Monthly">Monthly</option>
-                  <option value="Quarterly">Quarterly</option>
-                  <option value="Annually">Annually</option>
-                </select>
-              </label>
-              <label>
-                <span>Account</span>
-                <select
-                  name="Account"
-                  value={expenseModalMode === "edit" ? editExpenseForm.Account : expenseForm.Account}
-                  onChange={(event) => {
-                    const value = event.target.value;
-                    if (expenseModalMode === "edit") {
-                      setEditExpenseForm((prev) => ({ ...prev, Account: value }));
-                    } else {
-                      setExpenseForm((prev) => ({ ...prev, Account: value }));
-                    }
-                  }}
-                >
-                  <option value="">Select</option>
-                  {accounts.map((account) => (
-                    <option key={account.Id} value={account.Name}>
-                      {account.Enabled ? account.Name : `${account.Name} (disabled)`}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                <span>Type</span>
-                <select
-                  name="Type"
-                  value={expenseModalMode === "edit" ? editExpenseForm.Type : expenseForm.Type}
-                  onChange={(event) => {
-                    const value = event.target.value;
-                    if (expenseModalMode === "edit") {
-                      setEditExpenseForm((prev) => ({ ...prev, Type: value }));
-                    } else {
-                      setExpenseForm((prev) => ({ ...prev, Type: value }));
-                    }
-                  }}
-                >
-                  <option value="">Select</option>
-                  {types.map((entry) => (
-                    <option key={entry.Id} value={entry.Name}>
-                      {entry.Enabled ? entry.Name : `${entry.Name} (disabled)`}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                <span>Next due date</span>
-                <input
-                  name="NextDueDate"
-                  type="date"
-                  value={
-                    expenseModalMode === "edit" ? editExpenseForm.NextDueDate : expenseForm.NextDueDate
-                  }
-                  onChange={(event) => {
-                    const value = event.target.value;
-                    if (expenseModalMode === "edit") {
-                      setEditExpenseForm((prev) => ({ ...prev, NextDueDate: value }));
-                    } else {
-                      setExpenseForm((prev) => ({ ...prev, NextDueDate: value }));
-                    }
-                  }}
-                />
-              </label>
-              <label>
-                <span>Cadence</span>
-                <select
-                  name="Cadence"
-                  value={expenseModalMode === "edit" ? editExpenseForm.Cadence : expenseForm.Cadence}
-                  onChange={(event) => {
-                    const value = event.target.value;
-                    if (expenseModalMode === "edit") {
-                      setEditExpenseForm((prev) => ({ ...prev, Cadence: value }));
-                    } else {
-                      setExpenseForm((prev) => ({ ...prev, Cadence: value }));
-                    }
-                  }}
-                >
-                  <option value="">Select</option>
-                  <option value="Monthly">Monthly</option>
-                  <option value="Quarterly">Quarterly</option>
-                  <option value="Annually">Annually</option>
-                  <option value="EveryNYears">Every N years</option>
-                  <option value="OneOff">One-off</option>
-                </select>
-              </label>
-              <label>
-                <span>Every</span>
-                <input
-                  name="Interval"
-                  type="number"
-                  value={expenseModalMode === "edit" ? editExpenseForm.Interval : expenseForm.Interval}
-                  onChange={(event) => {
-                    const value = event.target.value;
-                    if (expenseModalMode === "edit") {
-                      setEditExpenseForm((prev) => ({ ...prev, Interval: value }));
-                    } else {
-                      setExpenseForm((prev) => ({ ...prev, Interval: value }));
-                    }
-                  }}
-                />
-              </label>
-              <label className="form-span">
-                <span>Notes</span>
-                <textarea
-                  name="Notes"
-                  value={expenseModalMode === "edit" ? editExpenseForm.Notes : expenseForm.Notes}
-                  onChange={(event) => {
-                    const value = event.target.value;
-                    if (expenseModalMode === "edit") {
-                      setEditExpenseForm((prev) => ({ ...prev, Notes: value }));
-                    } else {
-                      setExpenseForm((prev) => ({ ...prev, Notes: value }));
-                    }
-                  }}
-                  rows="3"
-                />
-              </label>
-              {expenseModalMode === "edit" ? (
-                <div className="form-switch-row form-span">
-                  <span className="form-switch-label">Enabled</span>
-                  <label className="settings-switch-inline">
-                    <input
-                      name="Enabled"
-                      type="checkbox"
-                      checked={editExpenseForm.Enabled}
-                      onChange={(event) =>
-                        setEditExpenseForm((prev) => ({ ...prev, Enabled: event.target.checked }))
-                      }
-                    />
-                    <span className="switch-track" aria-hidden="true">
-                      <span className="switch-thumb" />
-                    </span>
-                  </label>
-                </div>
-              ) : null}
-              <div className="form-actions form-actions--icons">
-                <button
-                  type="submit"
-                  className="icon-button is-primary"
-                  disabled={status === "saving"}
-                  aria-label={expenseModalMode === "edit" ? "Save expense" : "Add expense"}
-                >
-                  <Icon name="save" className="icon action-icon" />
-                  <span className="action-label">{expenseModalMode === "edit" ? "Save" : "Add"}</span>
-                </button>
-                {expenseModalMode === "edit" ? (
-                  <button
-                    type="button"
-                    className="icon-button is-danger"
-                    onClick={() => DeleteExpenseItem(editingExpenseId)}
-                    disabled={status === "saving"}
-                    aria-label="Delete expense"
-                  >
-                    <Icon name="trash" className="icon action-icon" />
-                    <span className="action-label">Delete</span>
-                  </button>
-                ) : null}
-              </div>
-            </form>
-          </div>
-        </div>
-      ) : null}
 
       {accountManagerOpen ? (
         <div className="modal-backdrop" role="dialog" aria-modal="true">
