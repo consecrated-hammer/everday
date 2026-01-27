@@ -98,10 +98,17 @@ A task is “done” when:
 ### Verification (dev container only)
 - Use `./scripts/dev.sh` for all local testing and verification.
 - Do not use `npm run dev`; all checks run inside the dev container.
+- Default workflow: lint → tests → build/deploy
 - Flags:
-  - `--lint-only` runs lint and exits (no build/deploy).
-  - `--build-only` runs build/deploy without lint.
+  - `--lint-only` runs lint and exits (no tests, no build/deploy).
+  - `--test-only` runs tests and exits (no lint, no build/deploy).
+  - `--build-only` runs build/deploy without lint or tests.
+  - `--skip-tests` skips test running (runs lint + build/deploy).
+- Tests run automatically before deployment by default.
+- **Failed tests will halt the script** - deployment will not proceed if tests fail.
 - Documentation-only changes do not require lint checks.
+- Tests run in the dev container with proper PYTHONPATH, matching CI environment exactly.
+- Run `./scripts/dev.sh --test-only` to quickly verify tests before committing.
 
 ### Shared SQL (hosted in main stack)
 - Single SQL Server container: `batserver-sql`
