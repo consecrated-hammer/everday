@@ -3133,12 +3133,32 @@ select option:checked {
 }
 
 .health-reminder-slot {
-  gap: 8px;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px 12px;
 }
 
 .health-reminder-slot-select {
   min-width: 140px;
+  justify-self: end;
+}
+
+.health-reminder-slot .switch-pill {
+  justify-self: end;
+}
+
+@media (max-width: 720px) {
+  .health-reminder-slot {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+  }
+
+  .health-reminder-slot-select {
+    grid-column: 1 / -1;
+    justify-self: start;
+    width: 100%;
+  }
 }
 
 .settings-health-column {
@@ -6337,12 +6357,6 @@ th {
 .health-slot-summary-row .icon {
   font-size: 0.9rem;
   color: var(--text-muted);
-}
-
-.health-slot-summary-list li span:last-child {
-  font-size: 0.78rem;
-  color: var(--text-soft);
-  white-space: nowrap;
 }
 
 .health-add-header {

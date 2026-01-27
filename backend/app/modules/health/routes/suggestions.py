@@ -9,7 +9,7 @@ from app.modules.health.services.daily_ai_service import RunDailyAiSuggestions
 
 
 def _IsAdmin(user: UserContext) -> bool:
-    return user.Role == "Admin"
+    return user.Role in {"Admin", "Parent"}
 
 
 router = APIRouter()

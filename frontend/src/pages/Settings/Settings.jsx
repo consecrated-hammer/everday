@@ -17,7 +17,6 @@ import {
   FetchRecommendationHistory,
   GetAiRecommendations,
   RotateHaeApiKey,
-  RunHealthReminders,
   UpdateHealthProfile,
   UpdateHealthSettings
 } from "../../lib/healthApi.js";
@@ -407,9 +406,6 @@ const Settings = () => {
   const [healthStatus, setHealthStatus] = useState("idle");
   const [healthError, setHealthError] = useState("");
   const [healthAiStatus, setHealthAiStatus] = useState("idle");
-  const [healthReminderRunStatus, setHealthReminderRunStatus] = useState("idle");
-  const [healthReminderRunResult, setHealthReminderRunResult] = useState(null);
-  const [healthReminderRunError, setHealthReminderRunError] = useState("");
   const [healthRecommendation, setHealthRecommendation] = useState(null);
   const [healthRecommendationHistory, setHealthRecommendationHistory] = useState([]);
   const [healthAutoTuneWeekly, setHealthAutoTuneWeekly] = useState(false);
@@ -489,7 +485,6 @@ const Settings = () => {
   const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:8100";
   const activeSection = SettingsSections.includes(section) ? section : "appearance";
   const isParent = GetRole() === "Parent";
-  const isAdmin = GetRole() === "Admin";
   const latestTaskRun = taskRunHistory[0] || null;
   const taskNeedsAttention = Boolean(
     taskSettingsStatus === "error" ||
@@ -851,9 +846,6 @@ const Settings = () => {
       setHealthHaeKeyStatus("idle");
       setHealthHaeCopied(false);
       setHealthRecommendationHistory(history.Logs || []);
-      setHealthReminderRunStatus("idle");
-      setHealthReminderRunResult(null);
-      setHealthReminderRunError("");
       healthProfileSavedRef.current = JSON.stringify(BuildHealthProfilePayload(nextProfile));
       healthSettingsSavedRef.current = JSON.stringify(
         BuildHealthSettingsPayload(nextTargets, nextShowWeightChart, nextShowStepsChart, nextReminders)
@@ -996,28 +988,6 @@ const Settings = () => {
   const onWeightReminderTimeChange = (event) => {
     const nextValue = event.target.value;
     setHealthReminders((prev) => ({ ...prev, WeightReminderTime: nextValue }));
-  };
-
-  const runHealthRemindersNow = async () => {
-    if (!isAdmin) {
-      return;
-    }
-    const now = new Date();
-    const runDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(
-      now.getDate()
-    ).padStart(2, "0")}`;
-    const runTime = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
-    try {
-      setHealthReminderRunStatus("loading");
-      setHealthReminderRunError("");
-      setHealthReminderRunResult(null);
-      const result = await RunHealthReminders({ RunDate: runDate, RunTime: runTime });
-      setHealthReminderRunResult(result);
-      setHealthReminderRunStatus("ready");
-    } catch (err) {
-      setHealthReminderRunStatus("error");
-      setHealthReminderRunError(err?.message || "Failed to run reminders");
-    }
   };
 
   const onSubmitProfile = async (event) => {
@@ -2615,68 +2585,9 @@ const Settings = () => {
                               </select>
                             </label>
                             <div className="settings-divider" />
-                            {isAdmin ? (
-                              <div className="form-stack">
-                                <div className="form-actions">
-                                  <button
-                                    type="button"
-                                    className="button-secondary"
-                                    onClick={runHealthRemindersNow}
-                                    disabled={healthReminderRunStatus === "loading"}
-                                  >
-                                    {healthReminderRunStatus === "loading"
-                                      ? "Running reminders..."
-                                      : "Run reminders now"}
-                                  </button>
-                                </div>
-                                {healthReminderRunError ? (
-                                  <p className="form-error">{healthReminderRunError}</p>
-                                ) : null}
-                                {healthReminderRunResult ? (
-                                  <div className="settings-list settings-list--slim">
-                                    <div className="settings-item">
-                                      <div>
-                                        <h4>Eligible users</h4>
-                                        <p>Users with reminders due at this time.</p>
-                                      </div>
-                                      <p>{healthReminderRunResult.EligibleUsers ?? 0}</p>
-                                    </div>
-                                    <div className="settings-item">
-                                      <div>
-                                        <h4>Processed users</h4>
-                                        <p>Users evaluated during the run.</p>
-                                      </div>
-                                      <p>{healthReminderRunResult.ProcessedUsers ?? 0}</p>
-                                    </div>
-                                    <div className="settings-item">
-                                      <div>
-                                        <h4>Notifications sent</h4>
-                                        <p>Reminders that were delivered.</p>
-                                      </div>
-                                      <p>{healthReminderRunResult.NotificationsSent ?? 0}</p>
-                                    </div>
-                                    <div className="settings-item">
-                                      <div>
-                                        <h4>Skipped</h4>
-                                        <p>Already logged or already run at this time.</p>
-                                      </div>
-                                      <p>{healthReminderRunResult.Skipped ?? 0}</p>
-                                    </div>
-                                    <div className="settings-item">
-                                      <div>
-                                        <h4>Errors</h4>
-                                        <p>Failures during the run.</p>
-                                      </div>
-                                      <p>{healthReminderRunResult.Errors ?? 0}</p>
-                                    </div>
-                                  </div>
-                                ) : null}
-                              </div>
-                            ) : (
-                              <p className="form-note">
-                                Only admin accounts can run reminders manually.
-                              </p>
-                            )}
+                            <p className="form-note">
+                              Reminders are sent automatically by the server scheduler when enabled.
+                            </p>
                           </div>
                         </div>
                       </div>

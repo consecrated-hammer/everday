@@ -16,6 +16,7 @@ from sqlalchemy.exc import SAWarning
 from app.core.bootstrap import EnsureDatabaseSetup
 from app.core.logging import setup_logging
 from app.core.migrations import RunMigrations
+import app.db as db_module
 from app.modules.auth.router import router as auth_router
 from app.modules.core.router import router as core_router
 from app.modules.budget.router import router as budget_router
@@ -29,6 +30,7 @@ from app.modules.notifications.router import router as notifications_router
 from app.modules.tasks.router import router as tasks_router
 from app.modules.integrations.google.router import router as google_router
 from app.modules.notes.routes.notes import router as notes_router
+from app.modules.health.services.reminders_service import RunDailyHealthReminders
 
 setup_logging()
 warnings.filterwarnings(
@@ -40,6 +42,9 @@ warnings.filterwarnings(
 app = FastAPI(title="Everday API")
 logger = logging.getLogger("app.request")
 startup_logger = logging.getLogger("app.startup")
+reminders_logger = logging.getLogger("app.reminders")
+_reminders_task: asyncio.Task | None = None
+_reminders_stop_event = asyncio.Event()
 
 allowed_origins = os.getenv("ALLOWED_ORIGINS", "").strip()
 if not allowed_origins:
@@ -204,6 +209,18 @@ if static_dir.exists():
 @app.on_event("startup")
 async def startup_tasks() -> None:
     await _run_startup_db_tasks()
+    global _reminders_task
+    if _reminders_task is None or _reminders_task.done():
+        _reminders_stop_event.clear()
+        _reminders_task = asyncio.create_task(_health_reminders_loop())
+
+
+@app.on_event("shutdown")
+async def shutdown_tasks() -> None:
+    global _reminders_task
+    _reminders_stop_event.set()
+    if _reminders_task and not _reminders_task.done():
+        _reminders_task.cancel()
 
 
 def _env_int(name: str, default: int) -> int:
@@ -218,6 +235,59 @@ def _env_float(name: str, default: float) -> float:
         return float(os.getenv(name, "").strip() or default)
     except ValueError:
         return default
+
+
+def _env_bool(name: str, default: bool) -> bool:
+    raw = os.getenv(name, "").strip().lower()
+    if not raw:
+        return default
+    if raw in {"1", "true", "yes", "on"}:
+        return True
+    if raw in {"0", "false", "no", "off"}:
+        return False
+    return default
+
+
+async def _health_reminders_loop() -> None:
+    enabled = _env_bool("HEALTH_REMINDERS_SCHEDULER_ENABLED", True)
+    if not enabled:
+        reminders_logger.info("health reminders scheduler disabled via env")
+        return
+
+    interval_seconds = max(30, _env_int("HEALTH_REMINDERS_INTERVAL_SECONDS", 300))
+    admin_user_id = _env_int("HEALTH_REMINDERS_ADMIN_USER_ID", 1)
+    reminders_logger.info(
+        "health reminders scheduler started (interval=%ss, admin_user_id=%s)",
+        interval_seconds,
+        admin_user_id,
+    )
+
+    while not _reminders_stop_event.is_set():
+        started = time.perf_counter()
+        try:
+            db_module._ensure_engine()
+            db = db_module.SessionLocal()
+            try:
+                result = RunDailyHealthReminders(db, admin_user_id=admin_user_id)
+                reminders_logger.info(
+                    "health reminders run complete eligible=%s processed=%s sent=%s skipped=%s errors=%s",
+                    result.get("EligibleUsers", 0),
+                    result.get("ProcessedUsers", 0),
+                    result.get("NotificationsSent", 0),
+                    result.get("Skipped", 0),
+                    result.get("Errors", 0),
+                )
+            finally:
+                db.close()
+        except Exception:  # noqa: BLE001
+            reminders_logger.exception("health reminders scheduler run failed")
+
+        elapsed_seconds = int(time.perf_counter() - started)
+        sleep_for = max(1, interval_seconds - elapsed_seconds)
+        try:
+            await asyncio.wait_for(_reminders_stop_event.wait(), timeout=sleep_for)
+        except asyncio.TimeoutError:
+            continue
 
 
 async def _run_startup_db_tasks() -> None:

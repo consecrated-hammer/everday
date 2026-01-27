@@ -33,7 +33,7 @@ router = APIRouter()
 
 
 def _IsAdmin(user: UserContext) -> bool:
-    return user.Role == "Admin"
+    return user.Role in {"Admin", "Parent"}
 
 
 @router.get("", response_model=UserSettings)
