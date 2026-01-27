@@ -14,6 +14,37 @@ const BuildNumberFormatter = (showDecimals) =>
     maximumFractionDigits: showDecimals ? 2 : 0
   });
 
+const HasExplicitTimezone = (value) => /([zZ]|[+-]\d{2}:\d{2})$/.test(value);
+const IsDateOnlyString = (value) => /^\d{4}-\d{2}-\d{2}$/.test(value);
+
+const NormalizeUtcDateString = (value) => {
+  if (typeof value !== "string") {
+    return value;
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return trimmed;
+  }
+  if (IsDateOnlyString(trimmed)) {
+    return trimmed;
+  }
+  // Backend emits naive UTC timestamps (no timezone suffix). Treat them as UTC.
+  const withIsoSeparator = trimmed.includes("T") ? trimmed : trimmed.replace(" ", "T");
+  if (HasExplicitTimezone(withIsoSeparator)) {
+    return withIsoSeparator;
+  }
+  return `${withIsoSeparator}Z`;
+};
+
+const ParseDateValue = (value) => {
+  const normalized = NormalizeUtcDateString(value);
+  const parsed = new Date(normalized);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+  return parsed;
+};
+
 export const FormatCurrency = (value) => {
   if (value === null || value === undefined || Number.isNaN(Number(value))) {
     return "-";
@@ -34,8 +65,8 @@ export const FormatDate = (value) => {
   if (!value) {
     return "-";
   }
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
+  const parsed = ParseDateValue(value);
+  if (!parsed) {
     return String(value);
   }
   return parsed.toLocaleDateString("en-AU");
@@ -45,8 +76,8 @@ export const FormatTime = (value) => {
   if (!value) {
     return "-";
   }
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
+  const parsed = ParseDateValue(value);
+  if (!parsed) {
     return String(value);
   }
   return parsed.toLocaleTimeString("en-AU", { hour: "2-digit", minute: "2-digit" });
@@ -56,8 +87,8 @@ export const FormatDateTime = (value) => {
   if (!value) {
     return "-";
   }
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
+  const parsed = ParseDateValue(value);
+  if (!parsed) {
     return String(value);
   }
   return `${parsed.toLocaleDateString("en-AU")} ${parsed.toLocaleTimeString("en-AU", {

@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, Unicode, UnicodeText
 from sqlalchemy.orm import relationship
 from app.db import Base
 
@@ -10,9 +10,9 @@ class Note(Base):
 
     Id = Column(Integer, primary_key=True, index=True)
     UserId = Column(Integer, ForeignKey("auth.users.Id"), nullable=False, index=True)
-    Title = Column(String(500), nullable=False)
-    Content = Column(Text, nullable=True)
-    Labels = Column(Text, nullable=True)  # JSON array of strings
+    Title = Column(Unicode(500), nullable=False)
+    Content = Column(UnicodeText, nullable=True)
+    Labels = Column(UnicodeText, nullable=True)  # JSON array of strings
     IsPinned = Column(Boolean, default=False)
     ArchivedAt = Column(DateTime, nullable=True, index=True)
     CreatedAt = Column(DateTime, default=datetime.utcnow)
@@ -31,7 +31,7 @@ class NoteItem(Base):
 
     Id = Column(Integer, primary_key=True, index=True)
     NoteId = Column(Integer, ForeignKey("notes.Notes.Id", ondelete="CASCADE"), nullable=False)
-    Text = Column(String(1000), nullable=False)
+    Text = Column(Unicode(1000), nullable=False)
     Checked = Column(Boolean, default=False)
     OrderIndex = Column(Integer, nullable=False)
     CreatedAt = Column(DateTime, default=datetime.utcnow)
@@ -71,7 +71,7 @@ class NoteAssociation(Base):
 
     Id = Column(Integer, primary_key=True, index=True)
     NoteId = Column(Integer, ForeignKey("notes.Notes.Id", ondelete="CASCADE"), nullable=False)
-    ModuleName = Column(String(100), nullable=False)
+    ModuleName = Column(Unicode(100), nullable=False)
     RecordId = Column(Integer, nullable=False)
     CreatedAt = Column(DateTime, default=datetime.utcnow)
 

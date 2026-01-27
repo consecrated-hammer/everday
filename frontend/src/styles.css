@@ -13322,6 +13322,18 @@ body.kids-theme {
   justify-content: flex-end;
 }
 
+@media (min-width: 769px) {
+  .notes-modal .notes-form-actions {
+    position: sticky;
+    bottom: 0;
+    z-index: 1;
+    padding-top: 12px;
+    background: var(--surface-strong);
+    border-top: 1px solid var(--border);
+    box-shadow: 0 -8px 20px rgba(30, 20, 10, 0.08);
+  }
+}
+
 .notes-rich-editor {
   border: 1px solid var(--border);
   border-radius: 12px;
