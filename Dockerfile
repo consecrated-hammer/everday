@@ -51,6 +51,7 @@ RUN pip install --no-cache-dir -r /app/requirements.txt
 COPY backend/app /app/app
 COPY backend/alembic /app/alembic
 COPY backend/alembic.ini /app/alembic.ini
+COPY backend/tests /app/tests
 
 COPY --from=frontend-build /frontend/dist /app/app/static
 
