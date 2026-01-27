@@ -259,3 +259,71 @@ Enforcement rules:
   - Expose via admin-only POST endpoint (e.g., `/api/module/feature/run-daily`).
   - Return summary counts: eligible, processed, sent, errors.
 - Scheduling (future): cron job or task scheduler calls endpoint with admin auth token.
+
+### GitHub workflow and issue management
+- Project board: https://github.com/users/consecrated-hammer/projects/2
+- All issues assigned to `consecrated-hammer`
+- Labels:
+  - Module: `module:health`, `module:kids`, `module:tasks`, `module:life-admin`, `module:budget`, `module:shopping`, `module:notes`
+  - Type: `bug`, `feature`, `ui`, `ux`, `mobile`, `ai`, `integration`, `suggestion`
+
+#### Branch naming
+Pattern: `<type>/<module>-<brief-description>-<issue-num>`
+- Types: `fix/`, `feat/`, `refactor/`, `chore/`
+- Examples:
+  - `fix/health-ai-food-photo-86`
+  - `feat/kids-mobile-chores-91`
+
+#### Commit message format
+```
+<type>: <short summary> (max ~50 chars)
+<blank line>
+<detailed explanation> (wrap at ~72 chars)
+<blank line>
+Fixes #<issue-number>
+```
+
+Example:
+```
+fix: unable to save AI food from photo
+
+Fixed issue where AI-detected food items from photo scanning
+could not be saved to the user's food log.
+
+Fixes #86
+```
+
+#### PR workflow
+```bash
+# 1. Create branch from main
+git checkout -b fix/health-ai-food-photo-86
+
+# 2. Make changes and commit
+git add .
+git commit -m "fix: unable to save AI food from photo
+
+Fixed issue where AI-detected food items from photo scanning
+could not be saved to the user's food log.
+
+Fixes #86"
+
+# 3. Push and create PR
+git push -u origin fix/health-ai-food-photo-86
+gh pr create \
+  --title "Fix: Unable to save AI food from photo (#86)" \
+  --body "Fixes #86 - resolves issue preventing AI-detected food items from being saved" \
+  --label "module:health"
+
+# 4. Merge when ready (auto-closes issue via "Fixes #86")
+gh pr merge --squash --delete-branch
+```
+
+#### Issue linking
+- Use `Fixes #XX`, `Closes #XX`, or `Resolves #XX` in commit messages or PR descriptions to auto-close issues on merge
+- Multiple issues in one PR: `Fixes #87, Fixes #91`
+- Prefer separate PRs for independent issues (enables parallel review and selective merging)
+
+#### Batch work strategies
+- **Option 1**: Multiple commits in one branch/PR for tightly coupled changes
+- **Option 2**: Separate branches and PRs for independent issues (recommended)
+- **Option 3**: Stacked PRs for complex multi-part features (use `--base` to PR into parent branch)
