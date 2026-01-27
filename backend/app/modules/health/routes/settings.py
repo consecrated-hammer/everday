@@ -5,6 +5,8 @@ from app.db import GetDb
 from app.modules.auth.deps import RequireModuleRole, UserContext
 from app.modules.health.schemas import (
     HaeApiKeyResponse,
+    HealthReminderRunRequest,
+    HealthReminderRunResponse,
     GoalRecommendationInput,
     NutritionRecommendationResponse,
     RecommendationLogListResponse,
@@ -24,9 +26,14 @@ from app.modules.health.services.settings_service import (
     UpdateSettings,
     UpdateUserProfile,
 )
+from app.modules.health.services.reminders_service import RunDailyHealthReminders
 from app.modules.health.utils.rbac import IsParent
 
 router = APIRouter()
+
+
+def _IsAdmin(user: UserContext) -> bool:
+    return user.Role in {"Admin", "Parent"}
 
 
 @router.get("", response_model=UserSettings)
@@ -106,3 +113,23 @@ def RotateHaeKeyRoute(
     user: UserContext = Depends(RequireModuleRole("health", write=True)),
 ) -> HaeApiKeyResponse:
     return RotateHaeApiKey(db, user.Id)
+
+
+@router.post("/reminders/run-daily", response_model=HealthReminderRunResponse)
+def RunHealthRemindersRoute(
+    payload: HealthReminderRunRequest | None = None,
+    db: Session = Depends(GetDb),
+    user: UserContext = Depends(RequireModuleRole("health", write=True)),
+) -> HealthReminderRunResponse:
+    if not _IsAdmin(user):
+        raise HTTPException(status_code=403, detail="Access denied")
+    try:
+        result = RunDailyHealthReminders(
+            db,
+            admin_user_id=user.Id,
+            run_date=payload.RunDate if payload else None,
+            run_time=payload.RunTime if payload else None,
+        )
+        return HealthReminderRunResponse(**result)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc

@@ -14,6 +14,7 @@ from app.modules.health.schemas import (
     GoalRecommendationInput,
     GoalSummary,
     GoalType,
+    MealType,
     Targets,
     UpdateProfileInput,
     UpdateSettingsInput,
@@ -33,7 +34,14 @@ from app.modules.health.services.nutrition_recommendations_service import (
     GetAiNutritionRecommendations,
 )
 from app.modules.health.services.recommendation_logs_service import SaveRecommendationLog
-from app.modules.health.utils.defaults import DefaultTargets, DefaultTodayLayout
+from app.modules.health.utils.defaults import (
+    DefaultFoodReminderSlots,
+    DefaultFoodReminderTimes,
+    DefaultReminderTimeZone,
+    DefaultTargets,
+    DefaultTodayLayout,
+    DefaultWeightReminderTime,
+)
 from app.modules.notifications.services import CreateNotification
 
 Logger = logging.getLogger(__name__)
@@ -62,6 +70,123 @@ def _ParseBarOrder(value: str | None) -> list[str]:
 
 def _SerializeBarOrder(value: list[str]) -> str:
     return ",".join(value)
+
+
+AllowedMealTypes = {member.value for member in MealType}
+
+
+def _IsValidTime(value: str | None) -> bool:
+    if not value:
+        return False
+    try:
+        datetime.strptime(value, "%H:%M")
+        return True
+    except ValueError:
+        return False
+
+
+def _NormalizeFoodReminderTimes(value: dict[str, str] | None) -> dict[str, str]:
+    normalized = dict(DefaultFoodReminderTimes)
+    if not value:
+        return normalized
+    for meal_type, time_value in value.items():
+        if meal_type not in AllowedMealTypes:
+            continue
+        if _IsValidTime(time_value):
+            normalized[meal_type] = time_value
+    return normalized
+
+
+def _ParseFoodReminderTimes(value: str | None) -> dict[str, str]:
+    if not value:
+        return dict(DefaultFoodReminderTimes)
+    try:
+        parsed = json.loads(value)
+        if isinstance(parsed, dict):
+            return _NormalizeFoodReminderTimes({str(k): str(v) for k, v in parsed.items()})
+    except json.JSONDecodeError:
+        pass
+    return dict(DefaultFoodReminderTimes)
+
+
+def _SerializeFoodReminderTimes(value: dict[str, str] | None) -> str:
+    normalized = _NormalizeFoodReminderTimes(value)
+    return json.dumps(normalized, separators=(",", ":"))
+
+
+def _NormalizeFoodReminderSlots(
+    value: dict[str, dict | str] | None,
+    fallback_enabled: bool | None = None,
+    fallback_times: dict[str, str] | None = None,
+) -> dict[str, dict[str, object]]:
+    normalized = {
+        meal_type: {"Enabled": bool(slot["Enabled"]), "Time": str(slot["Time"])}
+        for meal_type, slot in DefaultFoodReminderSlots.items()
+    }
+    if fallback_times:
+        times = _NormalizeFoodReminderTimes(fallback_times)
+        for meal_type, time_value in times.items():
+            if meal_type in normalized:
+                normalized[meal_type]["Time"] = time_value
+    if fallback_enabled:
+        for meal_type in normalized:
+            normalized[meal_type]["Enabled"] = True
+    if not value:
+        return normalized
+    for meal_type, slot_value in value.items():
+        if meal_type not in AllowedMealTypes:
+            continue
+        if isinstance(slot_value, dict):
+            enabled_value = slot_value.get("Enabled", slot_value.get("enabled"))
+            time_value = slot_value.get("Time", slot_value.get("time"))
+            normalized[meal_type]["Enabled"] = bool(
+                normalized[meal_type]["Enabled"] if enabled_value is None else enabled_value
+            )
+            if _IsValidTime(str(time_value) if time_value is not None else None):
+                normalized[meal_type]["Time"] = str(time_value)
+            continue
+        if _IsValidTime(str(slot_value)):
+            normalized[meal_type]["Time"] = str(slot_value)
+    return normalized
+
+
+def _ParseFoodReminderSlots(record: SettingsModel) -> dict[str, dict[str, object]]:
+    legacy_times = _ParseFoodReminderTimes(record.FoodReminderTimes)
+    legacy_enabled = (
+        bool(record.FoodRemindersEnabled) if record.FoodRemindersEnabled is not None else False
+    )
+    raw_value = record.FoodReminderSlots
+    if not raw_value:
+        return _NormalizeFoodReminderSlots(
+            None, fallback_enabled=legacy_enabled, fallback_times=legacy_times
+        )
+    try:
+        parsed = json.loads(raw_value)
+        if isinstance(parsed, dict):
+            normalized_input = {str(k): v for k, v in parsed.items()}
+            return _NormalizeFoodReminderSlots(
+                normalized_input, fallback_enabled=legacy_enabled, fallback_times=legacy_times
+            )
+    except json.JSONDecodeError:
+        pass
+    return _NormalizeFoodReminderSlots(
+        None, fallback_enabled=legacy_enabled, fallback_times=legacy_times
+    )
+
+
+def _SerializeFoodReminderSlots(value: dict[str, dict | str] | None) -> str:
+    normalized = _NormalizeFoodReminderSlots(value)
+    return json.dumps(normalized, separators=(",", ":"))
+
+
+def _ResolveReminderTimeZone(value: str | None) -> str:
+    if value and value.strip():
+        return value.strip()
+    return DefaultReminderTimeZone
+
+
+def _ResolveWeightReminderTime(value: str | None) -> str:
+    return value if _IsValidTime(value) else DefaultWeightReminderTime
 
 
 def _ShouldAutoTuneTargets(record: SettingsModel) -> bool:
@@ -293,6 +418,12 @@ def EnsureSettingsForUser(db: Session, UserId: int) -> SettingsModel:
         GoalUpdatedAt=None,
         GoalCompletedAt=None,
         GoalCompletionNotifiedAt=None,
+        FoodRemindersEnabled=False,
+        FoodReminderTimes=_SerializeFoodReminderTimes(DefaultFoodReminderTimes),
+        FoodReminderSlots=_SerializeFoodReminderSlots(DefaultFoodReminderSlots),
+        WeightRemindersEnabled=False,
+        WeightReminderTime=DefaultWeightReminderTime,
+        ReminderTimeZone=DefaultReminderTimeZone,
     )
     db.add(record)
     db.commit()
@@ -433,6 +564,16 @@ def GetUserSettings(db: Session, UserId: int) -> UserSettings:
         ShowWeightProjectionOnToday=bool(record.ShowWeightProjectionOnToday)
         if record.ShowWeightProjectionOnToday is not None
         else True,
+        ReminderTimeZone=_ResolveReminderTimeZone(record.ReminderTimeZone),
+        FoodRemindersEnabled=bool(record.FoodRemindersEnabled)
+        if record.FoodRemindersEnabled is not None
+        else False,
+        FoodReminderTimes=_ParseFoodReminderTimes(record.FoodReminderTimes),
+        FoodReminderSlots=_ParseFoodReminderSlots(record),
+        WeightRemindersEnabled=bool(record.WeightRemindersEnabled)
+        if record.WeightRemindersEnabled is not None
+        else False,
+        WeightReminderTime=_ResolveWeightReminderTime(record.WeightReminderTime),
         HaeApiKeyConfigured=bool(record.HaeApiKeyHash),
         HaeApiKeyLast4=record.HaeApiKeyLast4,
         HaeApiKeyCreatedAt=record.HaeApiKeyCreatedAt,
@@ -478,6 +619,16 @@ def UpdateSettings(db: Session, UserId: int, Input: UpdateSettingsInput) -> User
             record.TodayLayout = json.dumps(value)
         elif field == "BarOrder" and value is not None:
             record.BarOrder = _SerializeBarOrder(value)
+        elif field == "FoodReminderSlots":
+            record.FoodReminderSlots = _SerializeFoodReminderSlots(value)
+        elif field == "FoodReminderTimes":
+            record.FoodReminderTimes = _SerializeFoodReminderTimes(value)
+        elif field == "WeightReminderTime":
+            if value is not None and not _IsValidTime(value):
+                raise ValueError("Reminder time must be in HH:MM format.")
+            record.WeightReminderTime = value or DefaultWeightReminderTime
+        elif field == "ReminderTimeZone":
+            record.ReminderTimeZone = _ResolveReminderTimeZone(value)
         elif value is not None:
             setattr(record, field, value)
 

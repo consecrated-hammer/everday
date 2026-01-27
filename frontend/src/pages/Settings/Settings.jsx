@@ -122,6 +122,104 @@ const BuildTimeOptions = (stepMinutes = 15) => {
 
 const TimeOptions = BuildTimeOptions();
 
+const MealReminderSlots = [
+  { key: "Breakfast", label: "Breakfast" },
+  { key: "Snack1", label: "Snack 1" },
+  { key: "Lunch", label: "Lunch" },
+  { key: "Snack2", label: "Snack 2" },
+  { key: "Dinner", label: "Dinner" },
+  { key: "Snack3", label: "Snack 3" }
+];
+
+const DefaultMealReminderTimes = {
+  Breakfast: "08:00",
+  Snack1: "10:30",
+  Lunch: "12:30",
+  Snack2: "15:30",
+  Dinner: "18:30",
+  Snack3: "20:30"
+};
+
+const DefaultWeightReminderTime = "08:00";
+
+const NormalizeFoodReminderTimes = (times) => {
+  const normalized = { ...DefaultMealReminderTimes };
+  if (!times || typeof times !== "object") {
+    return normalized;
+  }
+  MealReminderSlots.forEach(({ key }) => {
+    const value = times[key];
+    if (typeof value === "string" && /^\d{2}:\d{2}$/.test(value)) {
+      normalized[key] = value;
+    }
+  });
+  return normalized;
+};
+
+const DefaultFoodReminderSlots = MealReminderSlots.reduce((acc, slot) => {
+  acc[slot.key] = {
+    Enabled: false,
+    Time: DefaultMealReminderTimes[slot.key] || "08:00"
+  };
+  return acc;
+}, {});
+
+const NormalizeFoodReminderSlots = (settings) => {
+  const normalized = { ...DefaultFoodReminderSlots };
+  const legacyTimes = NormalizeFoodReminderTimes(settings?.FoodReminderTimes);
+  const legacyEnabled = Boolean(settings?.FoodRemindersEnabled);
+  MealReminderSlots.forEach(({ key }) => {
+    normalized[key] = {
+      Enabled: legacyEnabled,
+      Time: legacyTimes[key]
+    };
+  });
+  const slots = settings?.FoodReminderSlots;
+  if (!slots || typeof slots !== "object") {
+    return normalized;
+  }
+  MealReminderSlots.forEach(({ key }) => {
+    const slot = slots[key];
+    if (!slot || typeof slot !== "object") {
+      return;
+    }
+    const nextEnabled =
+      typeof slot.Enabled === "boolean"
+        ? slot.Enabled
+        : typeof slot.enabled === "boolean"
+          ? slot.enabled
+          : normalized[key].Enabled;
+    const nextTime =
+      typeof slot.Time === "string" && /^\d{2}:\d{2}$/.test(slot.Time)
+        ? slot.Time
+        : typeof slot.time === "string" && /^\d{2}:\d{2}$/.test(slot.time)
+          ? slot.time
+          : normalized[key].Time;
+    normalized[key] = {
+      Enabled: nextEnabled,
+      Time: nextTime
+    };
+  });
+  return normalized;
+};
+
+const EmptyHealthReminders = {
+  ReminderTimeZone: ResolveUserTimeZone(),
+  FoodReminderSlots: { ...DefaultFoodReminderSlots },
+  WeightRemindersEnabled: false,
+  WeightReminderTime: DefaultWeightReminderTime
+};
+
+const BuildHealthRemindersState = (settings) => ({
+  ReminderTimeZone: settings.ReminderTimeZone || ResolveUserTimeZone(),
+  FoodReminderSlots: NormalizeFoodReminderSlots(settings),
+  WeightRemindersEnabled: Boolean(settings.WeightRemindersEnabled),
+  WeightReminderTime:
+    typeof settings.WeightReminderTime === "string" && /^\d{2}:\d{2}$/.test(settings.WeightReminderTime)
+      ? settings.WeightReminderTime
+      : DefaultWeightReminderTime
+});
+
 const BuildHealthTargetsState = (targets) => ({
   ...EmptyHealthTargets,
   ...targets,
@@ -171,29 +269,50 @@ const BuildHealthProfilePayload = (profile) => ({
   ActivityLevel: profile.ActivityLevel || null
 });
 
-const BuildHealthSettingsPayload = (targets, showWeightChart, showStepsChart) => ({
-  DailyCalorieTarget: Number(targets.DailyCalorieTarget || 0),
-  ProteinTargetMin: Number(targets.ProteinTargetMin || 0),
-  ProteinTargetMax: Number(targets.ProteinTargetMax || 0),
-  StepTarget: Number(targets.StepTarget || 0),
-  StepKcalFactor: Number(targets.StepKcalFactor || 0),
-  FibreTarget: targets.FibreTarget ? Number(targets.FibreTarget) : null,
-  CarbsTarget: targets.CarbsTarget ? Number(targets.CarbsTarget) : null,
-  FatTarget: targets.FatTarget ? Number(targets.FatTarget) : null,
-  SaturatedFatTarget: targets.SaturatedFatTarget ? Number(targets.SaturatedFatTarget) : null,
-  SugarTarget: targets.SugarTarget ? Number(targets.SugarTarget) : null,
-  SodiumTarget: targets.SodiumTarget ? Number(targets.SodiumTarget) : null,
-  ShowProteinOnToday: targets.ShowProteinOnToday,
-  ShowStepsOnToday: targets.ShowStepsOnToday,
-  ShowFibreOnToday: targets.ShowFibreOnToday,
-  ShowCarbsOnToday: targets.ShowCarbsOnToday,
-  ShowFatOnToday: targets.ShowFatOnToday,
-  ShowSaturatedFatOnToday: targets.ShowSaturatedFatOnToday,
-  ShowSugarOnToday: targets.ShowSugarOnToday,
-  ShowSodiumOnToday: targets.ShowSodiumOnToday,
-  ShowWeightChartOnToday: showWeightChart,
-  ShowStepsChartOnToday: showStepsChart
-});
+const BuildHealthSettingsPayload = (targets, showWeightChart, showStepsChart, reminders) => {
+  const reminderState = reminders || EmptyHealthReminders;
+  const foodReminderSlots = NormalizeFoodReminderSlots({
+    FoodReminderSlots: reminderState.FoodReminderSlots
+  });
+  const foodReminderTimes = {};
+  let anyFoodReminderEnabled = false;
+  MealReminderSlots.forEach(({ key }) => {
+    const slot = foodReminderSlots[key];
+    foodReminderTimes[key] = slot?.Time || DefaultMealReminderTimes[key];
+    if (slot?.Enabled) {
+      anyFoodReminderEnabled = true;
+    }
+  });
+  return {
+    DailyCalorieTarget: Number(targets.DailyCalorieTarget || 0),
+    ProteinTargetMin: Number(targets.ProteinTargetMin || 0),
+    ProteinTargetMax: Number(targets.ProteinTargetMax || 0),
+    StepTarget: Number(targets.StepTarget || 0),
+    StepKcalFactor: Number(targets.StepKcalFactor || 0),
+    FibreTarget: targets.FibreTarget ? Number(targets.FibreTarget) : null,
+    CarbsTarget: targets.CarbsTarget ? Number(targets.CarbsTarget) : null,
+    FatTarget: targets.FatTarget ? Number(targets.FatTarget) : null,
+    SaturatedFatTarget: targets.SaturatedFatTarget ? Number(targets.SaturatedFatTarget) : null,
+    SugarTarget: targets.SugarTarget ? Number(targets.SugarTarget) : null,
+    SodiumTarget: targets.SodiumTarget ? Number(targets.SodiumTarget) : null,
+    ShowProteinOnToday: targets.ShowProteinOnToday,
+    ShowStepsOnToday: targets.ShowStepsOnToday,
+    ShowFibreOnToday: targets.ShowFibreOnToday,
+    ShowCarbsOnToday: targets.ShowCarbsOnToday,
+    ShowFatOnToday: targets.ShowFatOnToday,
+    ShowSaturatedFatOnToday: targets.ShowSaturatedFatOnToday,
+    ShowSugarOnToday: targets.ShowSugarOnToday,
+    ShowSodiumOnToday: targets.ShowSodiumOnToday,
+    ShowWeightChartOnToday: showWeightChart,
+    ShowStepsChartOnToday: showStepsChart,
+    ReminderTimeZone: reminderState.ReminderTimeZone || ResolveUserTimeZone(),
+    FoodRemindersEnabled: anyFoodReminderEnabled,
+    FoodReminderTimes: foodReminderTimes,
+    FoodReminderSlots: foodReminderSlots,
+    WeightRemindersEnabled: reminderState.WeightRemindersEnabled,
+    WeightReminderTime: reminderState.WeightReminderTime || DefaultWeightReminderTime
+  };
+};
 
 const FormatRelativeTime = (value) => {
   if (!value) return "Not checked";
@@ -283,6 +402,7 @@ const Settings = () => {
   });
   const [healthProfile, setHealthProfile] = useState(EmptyHealthProfile);
   const [healthTargets, setHealthTargets] = useState(EmptyHealthTargets);
+  const [healthReminders, setHealthReminders] = useState(EmptyHealthReminders);
   const [healthStatus, setHealthStatus] = useState("idle");
   const [healthError, setHealthError] = useState("");
   const [healthAiStatus, setHealthAiStatus] = useState("idle");
@@ -708,7 +828,9 @@ const Settings = () => {
       };
       const nextShowWeightChart = settings.ShowWeightChartOnToday !== false;
       const nextShowStepsChart = settings.ShowStepsChartOnToday !== false;
+      const nextReminders = BuildHealthRemindersState(settings);
       setHealthTargets(nextTargets);
+      setHealthReminders(nextReminders);
       setHealthProfile(nextProfile);
       setHealthAutoTuneWeekly(Boolean(settings.AutoTuneTargetsWeekly));
       setHealthAutoTuneLastRunAt(
@@ -726,7 +848,7 @@ const Settings = () => {
       setHealthRecommendationHistory(history.Logs || []);
       healthProfileSavedRef.current = JSON.stringify(BuildHealthProfilePayload(nextProfile));
       healthSettingsSavedRef.current = JSON.stringify(
-        BuildHealthSettingsPayload(nextTargets, nextShowWeightChart, nextShowStepsChart)
+        BuildHealthSettingsPayload(nextTargets, nextShowWeightChart, nextShowStepsChart, nextReminders)
       );
       healthLoadedRef.current = true;
       setHealthStatus("ready");
@@ -832,6 +954,42 @@ const Settings = () => {
     setHealthTargets((prev) => ({ ...prev, [name]: nextValue }));
   };
 
+  const onMealReminderEnabledChange = (mealType, enabled) => {
+    setHealthReminders((prev) => ({
+      ...prev,
+      FoodReminderSlots: {
+        ...prev.FoodReminderSlots,
+        [mealType]: {
+          ...(prev.FoodReminderSlots[mealType] || DefaultFoodReminderSlots[mealType]),
+          Enabled: enabled
+        }
+      }
+    }));
+  };
+
+  const onMealReminderTimeChange = (mealType, timeValue) => {
+    setHealthReminders((prev) => ({
+      ...prev,
+      FoodReminderSlots: {
+        ...prev.FoodReminderSlots,
+        [mealType]: {
+          ...(prev.FoodReminderSlots[mealType] || DefaultFoodReminderSlots[mealType]),
+          Time: timeValue
+        }
+      }
+    }));
+  };
+
+  const onWeightRemindersEnabledChange = (event) => {
+    const nextValue = event.target.checked;
+    setHealthReminders((prev) => ({ ...prev, WeightRemindersEnabled: nextValue }));
+  };
+
+  const onWeightReminderTimeChange = (event) => {
+    const nextValue = event.target.value;
+    setHealthReminders((prev) => ({ ...prev, WeightReminderTime: nextValue }));
+  };
+
   const onSubmitProfile = async (event) => {
     event.preventDefault();
     if (!profileTarget) {
@@ -901,7 +1059,8 @@ const Settings = () => {
     const payload = BuildHealthSettingsPayload(
       healthTargets,
       healthShowWeightChart,
-      healthShowStepsChart
+      healthShowStepsChart,
+      healthReminders
     );
     const serialized = JSON.stringify(payload);
     if (serialized === healthSettingsSavedRef.current) {
@@ -927,7 +1086,7 @@ const Settings = () => {
         clearTimeout(healthSettingsSaveTimer.current);
       }
     };
-  }, [healthTargets, healthShowWeightChart, healthShowStepsChart]);
+  }, [healthTargets, healthShowWeightChart, healthShowStepsChart, healthReminders]);
 
   const rotateHaeApiKey = async () => {
     try {
@@ -1047,8 +1206,10 @@ const Settings = () => {
         updated.ShowStepsChartOnToday !== undefined
           ? updated.ShowStepsChartOnToday !== false
           : healthShowStepsChart;
+      const nextReminders = BuildHealthRemindersState(updated);
+      setHealthReminders(nextReminders);
       healthSettingsSavedRef.current = JSON.stringify(
-        BuildHealthSettingsPayload(nextTargets, nextShowWeight, nextShowSteps)
+        BuildHealthSettingsPayload(nextTargets, nextShowWeight, nextShowSteps, nextReminders)
       );
       setHealthAiStatus("ready");
     } catch (err) {
@@ -2306,6 +2467,127 @@ const Settings = () => {
                             >
                               {healthGoal ? "Update goal" : "Set goal"}
                             </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="settings-health-group">
+                    <div className="settings-group-header">Reminders</div>
+                    <div className="settings-health-columns">
+                      <div className="settings-health-column">
+                        <div className="settings-subsection settings-subsection--actions-bottom">
+                          <div className="settings-subsection-header">
+                            <h4>Food logging</h4>
+                            <p>Set reminder times for each meal slot.</p>
+                          </div>
+                          <div className="form-stack">
+                            {MealReminderSlots.map((slot) => {
+                              const slotConfig =
+                                healthReminders.FoodReminderSlots[slot.key] ||
+                                DefaultFoodReminderSlots[slot.key];
+                              const inputId = `health-food-reminder-${slot.key.toLowerCase()}`;
+                              return (
+                                <div
+                                  key={slot.key}
+                                  className="form-switch-row form-switch-row--inline health-reminder-slot"
+                                >
+                                  <span className="form-switch-label">{slot.label}</span>
+                                  <div className="switch-pill">
+                                    <input
+                                      id={inputId}
+                                      type="checkbox"
+                                      aria-label={`${slot.label} reminder enabled`}
+                                      checked={Boolean(slotConfig?.Enabled)}
+                                      onChange={(event) =>
+                                        onMealReminderEnabledChange(slot.key, event.target.checked)
+                                      }
+                                    />
+                                    <label htmlFor={inputId} className="switch-pill-track">
+                                      <span className="switch-pill-icon switch-pill-icon--off">
+                                        <Icon name="toggleOff" className="icon" />
+                                      </span>
+                                      <span className="switch-pill-icon switch-pill-icon--on">
+                                        <Icon name="toggleOn" className="icon" />
+                                      </span>
+                                      <span className="switch-pill-text switch-pill-text--off">Off</span>
+                                      <span className="switch-pill-text switch-pill-text--on">On</span>
+                                    </label>
+                                  </div>
+                                  <select
+                                    className="health-reminder-slot-select"
+                                    value={slotConfig?.Time || DefaultMealReminderTimes[slot.key]}
+                                    onChange={(event) =>
+                                      onMealReminderTimeChange(slot.key, event.target.value)
+                                    }
+                                    disabled={!slotConfig?.Enabled}
+                                  >
+                                    {TimeOptions.map((option) => (
+                                      <option key={option.value} value={option.value}>
+                                        {option.label}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+                              );
+                            })}
+                            <p className="form-note">
+                              Reminders are sent only when the scheduled run matches the selected
+                              time and the slot has not been logged.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="settings-health-column">
+                        <div className="settings-subsection settings-subsection--actions-bottom">
+                          <div className="settings-subsection-header">
+                            <h4>Weight logging</h4>
+                            <p>Set a daily reminder to log your weight.</p>
+                          </div>
+                          <div className="form-stack">
+                            <div className="form-switch-row form-switch-row--inline">
+                              <span className="form-switch-label">Enable weight reminders</span>
+                              <div className="switch-pill">
+                                <input
+                                  id="health-weight-reminders-enabled"
+                                  type="checkbox"
+                                  aria-label="Enable weight reminders"
+                                  checked={healthReminders.WeightRemindersEnabled}
+                                  onChange={onWeightRemindersEnabledChange}
+                                />
+                                <label
+                                  htmlFor="health-weight-reminders-enabled"
+                                  className="switch-pill-track"
+                                >
+                                  <span className="switch-pill-icon switch-pill-icon--off">
+                                    <Icon name="toggleOff" className="icon" />
+                                  </span>
+                                  <span className="switch-pill-icon switch-pill-icon--on">
+                                    <Icon name="toggleOn" className="icon" />
+                                  </span>
+                                  <span className="switch-pill-text switch-pill-text--off">Off</span>
+                                  <span className="switch-pill-text switch-pill-text--on">On</span>
+                                </label>
+                              </div>
+                            </div>
+                            <label>
+                              <span>Reminder time</span>
+                              <select
+                                value={healthReminders.WeightReminderTime}
+                                onChange={onWeightReminderTimeChange}
+                                disabled={!healthReminders.WeightRemindersEnabled}
+                              >
+                                {TimeOptions.map((option) => (
+                                  <option key={option.value} value={option.value}>
+                                    {option.label}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            <div className="settings-divider" />
+                            <p className="form-note">
+                              Reminders are sent automatically by the server scheduler when enabled.
+                            </p>
                           </div>
                         </div>
                       </div>

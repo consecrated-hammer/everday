@@ -291,6 +291,16 @@ const GroupEntriesByMeal = (entries) => {
   return grouped;
 };
 
+const FormatEntryLabel = (entry) => {
+  const baseLabel = entry.TemplateName || entry.FoodName || "Item";
+  const quantity = Number(entry.Quantity || 1);
+  if (!Number.isFinite(quantity) || quantity <= 1) {
+    return baseLabel;
+  }
+  const multiplier = FormatAmount(quantity) || String(quantity);
+  return `${baseLabel} (x${multiplier})`;
+};
+
 const BuildEasyLabel = (option) => {
   const label = option.Label || "serving";
   const normalized = label.toLowerCase();
@@ -369,6 +379,9 @@ const Log = ({ InitialDate, InitialAddMode }) => {
   const initialDate = InitialDate || fallbackDate;
   const initialMonth = initialDate.slice(0, 7);
   const initialAddMode = InitialAddMode ?? searchParams.get("add") === "1";
+  const initialModeParam = searchParams.get("mode");
+  const initialMode =
+    initialModeParam === "describe" || initialModeParam === "scan" ? initialModeParam : null;
   const today = useMemo(() => FormatDate(new Date()), []);
 
   const [logDate, setLogDate] = useState(initialDate);
@@ -1184,7 +1197,8 @@ const Log = ({ InitialDate, InitialAddMode }) => {
 
   const onAdjustQuantity = (delta) => {
     const current = Number(form.Quantity || 0);
-    const nextValue = Math.max(0.25, Number.isFinite(current) ? current + delta : 1);
+    const baseValue = Number.isFinite(current) ? current : 1;
+    const nextValue = Math.max(1, Math.round(baseValue + delta));
     setForm((prev) => ({ ...prev, Quantity: String(nextValue) }));
   };
 
@@ -1454,6 +1468,19 @@ const Log = ({ InitialDate, InitialAddMode }) => {
       scanLibraryInputRef.current.value = "";
     }
   };
+
+  useEffect(() => {
+    if (!initialAddMode || !initialMode) {
+      return;
+    }
+    if (initialMode === "describe") {
+      setDescribeOpen(true);
+      setScanOpen(false);
+      return;
+    }
+    setScanOpen(true);
+    setDescribeOpen(false);
+  }, [initialAddMode, initialMode]);
 
   const handleScanFile = async (event) => {
     const file = event.target.files?.[0];
@@ -2021,7 +2048,7 @@ const Log = ({ InitialDate, InitialAddMode }) => {
               </div>
               <ul className="health-slot-summary-list">
                 {slotEntries.map((entry) => {
-                  const entryLabel = entry.TemplateName || entry.FoodName || "Item";
+                  const entryLabel = FormatEntryLabel(entry);
                   const entryIcon = entry.MealTemplateId ? "meal" : "food";
                   return (
                     <li key={entry.MealEntryId}>
@@ -2043,7 +2070,9 @@ const Log = ({ InitialDate, InitialAddMode }) => {
                               <Icon name={entryIcon} className="icon" />
                             </span>
                           )}
-                          <span className="health-entry-title">{entryLabel}</span>
+                          <span className="health-entry-title" title={entryLabel}>
+                            {entryLabel}
+                          </span>
                         </span>
                         <span className="health-slot-summary-kcal">
                           {FormatNumber(
@@ -2549,7 +2578,7 @@ const Log = ({ InitialDate, InitialAddMode }) => {
           <ul className="health-summary-list">
             {slotEntries.length ? (
               slotEntries.map((entry) => {
-                const entryLabel = entry.TemplateName || entry.FoodName || "Item";
+                const entryLabel = FormatEntryLabel(entry);
                 const entryIcon = entry.MealTemplateId ? "meal" : "food";
                 return (
                   <li key={entry.MealEntryId}>
@@ -2571,7 +2600,9 @@ const Log = ({ InitialDate, InitialAddMode }) => {
                             <Icon name={entryIcon} className="icon" />
                           </span>
                         )}
-                        <span className="health-entry-title">{entryLabel}</span>
+                        <span className="health-entry-title" title={entryLabel}>
+                          {entryLabel}
+                        </span>
                       </span>
                       <span>
                         {Math.round((entry.CaloriesPerServing || 0) * (entry.Quantity || 1))} kcal
@@ -2764,15 +2795,15 @@ const Log = ({ InitialDate, InitialAddMode }) => {
                         <button
                           type="button"
                           className="icon-button is-secondary"
-                          onClick={() => onAdjustQuantity(-0.25)}
+                          onClick={() => onAdjustQuantity(-1)}
                           aria-label="Decrease amount"
                         >
                           -
                         </button>
                         <input
                           type="number"
-                          min="0.25"
-                          step="0.25"
+                          min="1"
+                          step="1"
                           value={form.Quantity}
                           aria-label="Amount"
                           onChange={(event) =>
@@ -2782,7 +2813,7 @@ const Log = ({ InitialDate, InitialAddMode }) => {
                         <button
                           type="button"
                           className="icon-button is-secondary"
-                          onClick={() => onAdjustQuantity(0.25)}
+                          onClick={() => onAdjustQuantity(1)}
                           aria-label="Increase amount"
                         >
                           +

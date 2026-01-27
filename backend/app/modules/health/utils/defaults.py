@@ -10,6 +10,21 @@ DefaultTargets = Targets(
 
 DefaultTodayLayout = ["snapshot", "checkins", "quickadd"]
 
+DefaultReminderTimeZone = "UTC"
+DefaultFoodReminderTimes = {
+    "Breakfast": "08:00",
+    "Snack1": "10:30",
+    "Lunch": "12:30",
+    "Snack2": "15:30",
+    "Dinner": "18:30",
+    "Snack3": "20:30",
+}
+DefaultFoodReminderSlots = {
+    meal_type: {"Enabled": False, "Time": time_value}
+    for meal_type, time_value in DefaultFoodReminderTimes.items()
+}
+DefaultWeightReminderTime = "08:00"
+
 DefaultFoods: list[tuple[str, str, int, float]] = [
     ("Coffee With Sugar And Light Milk", "1 cup", 70, 2),
     ("Sanitarium Weet-Bix", "1 biscuit (16 g)", 64, 2.7),
