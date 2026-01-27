@@ -1,6 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes, useParams } from "react-router-dom";
 
 import AppShell from "./components/AppShell.jsx";
+import ErrorBoundary from "./components/ErrorBoundary.jsx";
 import RequireAuth from "./components/RequireAuth.jsx";
 import RequireKidsOnly from "./components/RequireKidsOnly.jsx";
 import RequireKidsRedirect from "./components/RequireKidsRedirect.jsx";
@@ -38,10 +39,11 @@ const HealthHistoryRedirect = () => {
 };
 
 const App = () => (
-  <BrowserRouter>
-    <Routes>
-      <Route path="/login" element={<Login />} />
-      <Route path="/reset" element={<ResetPassword />} />
+  <ErrorBoundary>
+    <BrowserRouter>
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route path="/reset" element={<ResetPassword />} />
       <Route
         element={
           <RequireAuth>
@@ -101,6 +103,7 @@ const App = () => (
       </Route>
     </Routes>
   </BrowserRouter>
+  </ErrorBoundary>
 );
 
 export default App;
