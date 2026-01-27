@@ -13,22 +13,28 @@ cd "${ROOT_DIR}"
 
 lint_only=false
 build_only=false
+skip_tests=false
+test_only=false
 
 usage() {
   cat <<EOF
-Usage: ./scripts/dev.sh [--lint-only] [--build-only] [--help]
+Usage: ./scripts/dev.sh [--lint-only] [--build-only] [--test-only] [--skip-tests] [--help]
 
-Defaults to running both lint and build/deploy.
+Defaults to running lint, tests, then build/deploy.
 
 Flags:
-  --lint-only   Run lint and exit (no build/deploy).
-  --build-only  Build and deploy without running lint.
+  --lint-only   Run lint and exit (no tests, no build/deploy).
+  --build-only  Build and deploy without running lint or tests.
+  --test-only   Run tests and exit (no lint, no build/deploy).
+  --skip-tests  Skip running tests (run lint and build/deploy).
   --help        Show this help text.
 
 Examples:
   ./scripts/dev.sh
   ./scripts/dev.sh --lint-only
   ./scripts/dev.sh --build-only
+  ./scripts/dev.sh --test-only
+  ./scripts/dev.sh --skip-tests
 EOF
 }
 
@@ -39,6 +45,12 @@ while [[ $# -gt 0 ]]; do
       ;;
     --build-only)
       build_only=true
+      ;;
+    --test-only)
+      test_only=true
+      ;;
+    --skip-tests)
+      skip_tests=true
       ;;
     -h|--help)
       usage
@@ -54,7 +66,13 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ "${lint_only}" == "true" && "${build_only}" == "true" ]]; then
-  echo "❌ Choose only one of --lint-only or --build-only."
+  echo "❌ Choose only one of --lint-only, --build-only, or --test-only."
+  usage
+  exit 1
+fi
+
+if [[ "${test_only}" == "true" && ("${lint_only}" == "true" || "${build_only}" == "true") ]]; then
+  echo "❌ Choose only one of --lint-only, --build-only, or --test-only."
   usage
   exit 1
 fi
@@ -65,6 +83,26 @@ run_lint() {
     (cd "${ROOT_DIR}/frontend" && npm run lint)
   else
     echo "❌ Lint failed: frontend/package.json not found."
+    exit 1
+  fi
+}
+
+run_tests() {
+  echo "Running backend tests..."
+  
+  # Check if dev container is running
+  if ! docker ps --format '{{.Names}}' | grep -q "^everday-dev$"; then
+    echo "⚠️  Dev container not running. Building and starting container first..."
+    run_build
+    # Wait a moment for container to be ready
+    sleep 2
+  fi
+  
+  # Run tests in container with proper PYTHONPATH
+  if docker exec -w /app everday-dev sh -c "PYTHONPATH=/app pytest tests/ -v --tb=short"; then
+    echo "✅ All tests passed!"
+  else
+    echo "❌ Tests failed!"
     exit 1
   fi
 }
@@ -101,6 +139,11 @@ run_build() {
   echo "🛑 Stop: docker compose --env-file ${ROOT_DIR}/.env.dev -f ${ROOT_DIR}/docker-compose.traefik.dev.yml down"
 }
 
+if [[ "${test_only}" == "true" ]]; then
+  run_tests
+  exit 0
+fi
+
 if [[ "${build_only}" == "true" ]]; then
   run_build
   exit 0
@@ -110,6 +153,10 @@ run_lint
 
 if [[ "${lint_only}" == "true" ]]; then
   exit 0
+fi
+
+if [[ "${skip_tests}" == "false" ]]; then
+  run_tests
 fi
 
 run_build

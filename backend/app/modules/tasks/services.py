@@ -745,7 +745,14 @@ def DeleteTask(db: Session, user: UserContext, task_id: int) -> None:
     record = db.query(Task).filter(Task.Id == task_id).first()
     if not record:
         raise TaskNotFoundError("Task not found")
-    _EnsureCanReassign(user, record)
+    
+    # For shared lists, allow admins to delete any task
+    task_list = db.query(TaskList).filter(TaskList.Id == record.TaskListId).first()
+    if task_list and task_list.IsShared and IsAdmin(user):
+        pass  # Admin can delete tasks in shared lists
+    else:
+        _EnsureCanReassign(user, record)
+    
     db.query(TaskTagLink).filter(TaskTagLink.TaskId == record.Id).delete()
     db.query(TaskAssignee).filter(TaskAssignee.TaskId == record.Id).delete()
     db.delete(record)
