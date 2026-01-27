@@ -13,6 +13,7 @@ import {
   LookupFoodTextOptions,
   MultiSourceSearch,
   ParseMealTemplateText,
+  ScanFoodImage,
   UpdateFood,
   UpdateMealTemplate
 } from "../../lib/healthApi.js";
@@ -91,6 +92,70 @@ const ParseServingDescription = (value) => {
   const quantity = Number(rawQty);
   return Number.isNaN(quantity) ? { quantity: 1, unit: "serving" } : { quantity, unit };
 };
+
+const ParseOptionalNumber = (value) => {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  const text = String(value).trim();
+  if (!text) {
+    return null;
+  }
+  const numeric = Number(text);
+  return Number.isFinite(numeric) ? numeric : null;
+};
+
+const ReadFileAsBase64 = (file) =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = String(reader.result || "");
+      const base64 = result.includes(",") ? result.split(",").pop() : result;
+      resolve(base64 || "");
+    };
+    reader.onerror = () => reject(reader.error || new Error("Failed to read file"));
+    reader.readAsDataURL(file);
+  });
+
+const BuildScanFormFromResult = (result) => ({
+  FoodName: result?.FoodName || "",
+  ServingQuantity: String(result?.ServingQuantity ?? 1),
+  ServingUnit: result?.ServingUnit || "serving",
+  CaloriesPerServing:
+    result?.CaloriesPerServing === null || result?.CaloriesPerServing === undefined
+      ? ""
+      : String(result.CaloriesPerServing),
+  ProteinPerServing:
+    result?.ProteinPerServing === null || result?.ProteinPerServing === undefined
+      ? ""
+      : String(result.ProteinPerServing),
+  FibrePerServing:
+    result?.FibrePerServing === null || result?.FibrePerServing === undefined
+      ? ""
+      : String(result.FibrePerServing),
+  CarbsPerServing:
+    result?.CarbsPerServing === null || result?.CarbsPerServing === undefined
+      ? ""
+      : String(result.CarbsPerServing),
+  FatPerServing:
+    result?.FatPerServing === null || result?.FatPerServing === undefined
+      ? ""
+      : String(result.FatPerServing),
+  SaturatedFatPerServing:
+    result?.SaturatedFatPerServing === null || result?.SaturatedFatPerServing === undefined
+      ? ""
+      : String(result.SaturatedFatPerServing),
+  SugarPerServing:
+    result?.SugarPerServing === null || result?.SugarPerServing === undefined
+      ? ""
+      : String(result.SugarPerServing),
+  SodiumPerServing:
+    result?.SodiumPerServing === null || result?.SodiumPerServing === undefined
+      ? ""
+      : String(result.SodiumPerServing),
+  Summary: result?.Summary || "",
+  Confidence: result?.Confidence || "",
+});
 
 const FoodEditEssentialsSection = ({
   foodForm,
@@ -302,6 +367,21 @@ const Foods = () => {
   const addHandledRef = useRef(null);
   const sortMenuRef = useRef(null);
   const filterMenuRef = useRef(null);
+  const scanInputRef = useRef(null);
+  const scanLibraryInputRef = useRef(null);
+  const scanSaveRef = useRef(false);
+
+  const [scanOpen, setScanOpen] = useState(false);
+  const [scanMode, setScanMode] = useState("meal");
+  const [scanStatus, setScanStatus] = useState("idle");
+  const [scanError, setScanError] = useState("");
+  const [scanResult, setScanResult] = useState(null);
+  const [scanForm, setScanForm] = useState(null);
+  const [scanQuestions, setScanQuestions] = useState([]);
+  const [scanImageName, setScanImageName] = useState("");
+  const [scanImageBase64, setScanImageBase64] = useState("");
+  const [scanNote, setScanNote] = useState("");
+  const [scanSaveMode, setScanSaveMode] = useState(null);
 
   const [foodForm, setFoodForm] = useState(EmptyFoodForm);
   const [foodImageUrl, setFoodImageUrl] = useState("");
@@ -1216,18 +1296,164 @@ const Foods = () => {
     setAiMealDescription
   ]);
 
+  const resetScanState = useCallback(() => {
+    setScanStatus("idle");
+    setScanError("");
+    setScanResult(null);
+    setScanForm(null);
+    setScanQuestions([]);
+    setScanImageName("");
+    setScanImageBase64("");
+    setScanNote("");
+    setScanSaveMode(null);
+    scanSaveRef.current = false;
+    if (scanInputRef.current) {
+      scanInputRef.current.value = "";
+    }
+    if (scanLibraryInputRef.current) {
+      scanLibraryInputRef.current.value = "";
+    }
+  }, []);
+
+  const handleScanFile = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+    event.target.value = "";
+    setScanStatus("loading");
+    setScanError("");
+    setScanResult(null);
+    setScanForm(null);
+    setScanQuestions([]);
+    try {
+      const base64 = await ReadFileAsBase64(file);
+      setScanImageName(file.name || "photo");
+      setScanImageBase64(base64);
+      setScanStatus("idle");
+    } catch (err) {
+      setScanStatus("error");
+      setScanError(err?.message || "Failed to read photo");
+    }
+  };
+
+  const runScan = async () => {
+    if (!scanImageBase64) {
+      setScanError("Choose a photo first.");
+      return;
+    }
+    try {
+      setScanStatus("loading");
+      setScanError("");
+      const noteValue = scanNote.trim();
+      const payload = {
+        ImageBase64: scanImageBase64,
+        Mode: scanMode,
+        Note: noteValue || null,
+      };
+      const result = await ScanFoodImage(payload);
+      setScanResult(result);
+      setScanForm(BuildScanFormFromResult(result));
+      setScanQuestions(result?.Questions || []);
+      setScanStatus("ready");
+    } catch (err) {
+      setScanStatus("error");
+      setScanError(err?.message || "Failed to scan photo");
+    }
+  };
+
+  const saveScanFood = async () => {
+    if (!scanForm) {
+      return;
+    }
+    if (scanSaveRef.current) {
+      return;
+    }
+    const name = scanForm.FoodName.trim();
+    if (!name) {
+      setScanError("Food name is required.");
+      return;
+    }
+    const servingQty = Number(scanForm.ServingQuantity);
+    if (!Number.isFinite(servingQty) || servingQty <= 0) {
+      setScanError("Serving quantity is required.");
+      return;
+    }
+    const servingUnit = scanForm.ServingUnit.trim();
+    if (!servingUnit) {
+      setScanError("Serving unit is required.");
+      return;
+    }
+    const caloriesValue = Math.round(Number(scanForm.CaloriesPerServing));
+    if (!Number.isFinite(caloriesValue) || caloriesValue <= 0) {
+      setScanError("Calories per serving is required.");
+      return;
+    }
+    const proteinValue = Number(scanForm.ProteinPerServing);
+    if (!Number.isFinite(proteinValue) || proteinValue < 0) {
+      setScanError("Protein per serving is required.");
+      return;
+    }
+
+    const payload = {
+      FoodName: name,
+      ServingQuantity: servingQty,
+      ServingUnit: servingUnit,
+      CaloriesPerServing: caloriesValue,
+      ProteinPerServing: proteinValue,
+      FibrePerServing: ParseOptionalNumber(scanForm.FibrePerServing),
+      CarbsPerServing: ParseOptionalNumber(scanForm.CarbsPerServing),
+      FatPerServing: ParseOptionalNumber(scanForm.FatPerServing),
+      SaturatedFatPerServing: ParseOptionalNumber(scanForm.SaturatedFatPerServing),
+      SugarPerServing: ParseOptionalNumber(scanForm.SugarPerServing),
+      SodiumPerServing: ParseOptionalNumber(scanForm.SodiumPerServing),
+      DataSource: "ai",
+      CountryCode: "AU",
+      IsFavourite: false,
+      ImageBase64: scanImageBase64 || null,
+    };
+
+    try {
+      scanSaveRef.current = true;
+      setScanSaveMode("save");
+      let food = await CreateFood(payload);
+      if (!food.ImageUrl && scanImageBase64) {
+        food = await UpdateFood(food.FoodId, { ImageBase64: scanImageBase64 });
+      }
+      await loadData();
+      setScanOpen(false);
+      resetScanState();
+      setStatus("ready");
+      setError("");
+      setSelectedFoodId(food.FoodId);
+    } catch (err) {
+      setScanError(err?.message || "Failed to save scan");
+      setStatus("error");
+    } finally {
+      setScanSaveMode(null);
+      scanSaveRef.current = false;
+    }
+  };
+
   const startDescribeMeal = useCallback(() => {
     startAddMeal();
     setMealEntryMode("assistant");
   }, [startAddMeal, setMealEntryMode]);
 
   const startScanPhoto = useCallback(() => {
-    const params = new URLSearchParams();
-    params.set("add", "1");
-    params.set("mode", "scan");
-    params.set("return", "foods");
-    navigate(`/health/log?${params.toString()}`);
-  }, [navigate]);
+    setScanOpen((prev) => {
+      const next = !prev;
+      if (next) {
+        setShowFoodForm(false);
+        setShowMealForm(false);
+        setError("");
+        setStatus("ready");
+      } else {
+        resetScanState();
+      }
+      return next;
+    });
+  }, [resetScanState, setShowFoodForm, setShowMealForm]);
 
   useEffect(() => {
     const addMode = searchParams.get("add");
@@ -1626,6 +1852,7 @@ const Foods = () => {
   );
 
   const isFormOpen = showFoodForm || showMealForm;
+  const isScanSaving = scanSaveMode !== null;
 
   return (
     <div className={`health-foods${isFormOpen ? " is-form-open" : ""}`}>
@@ -1652,6 +1879,281 @@ const Foods = () => {
                 <span>Add manually</span>
               </button>
             </div>
+            {scanOpen ? (
+              <div className="health-scan-panel health-foods-scan-panel">
+                <div className="health-scan-header">
+                  <div>
+                    <h4>Scan a meal or label</h4>
+                    <p>Scan a photo to add a food.</p>
+                  </div>
+                  <button
+                    type="button"
+                    className="button-secondary"
+                    onClick={() => {
+                      setScanOpen(false);
+                      resetScanState();
+                    }}
+                  >
+                    Close
+                  </button>
+                </div>
+                <div className="health-scan-controls">
+                  <div className="health-scan-modes">
+                    <button
+                      type="button"
+                      className={`health-mode-button${scanMode === "meal" ? " is-active" : ""}`}
+                      onClick={() => setScanMode("meal")}
+                    >
+                      Meal photo
+                    </button>
+                    <button
+                      type="button"
+                      className={`health-mode-button${scanMode === "label" ? " is-active" : ""}`}
+                      onClick={() => setScanMode("label")}
+                    >
+                      Nutrition label
+                    </button>
+                  </div>
+                  <div className="health-scan-actions">
+                    <input
+                      ref={scanInputRef}
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      className="health-scan-input"
+                      onChange={handleScanFile}
+                    />
+                    <input
+                      ref={scanLibraryInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="health-scan-input"
+                      onChange={handleScanFile}
+                    />
+                    <button
+                      type="button"
+                      className="button-secondary"
+                      onClick={() => scanInputRef.current?.click()}
+                      disabled={scanStatus === "loading"}
+                    >
+                      Use camera
+                    </button>
+                    <button
+                      type="button"
+                      className="button-secondary"
+                      onClick={() => scanLibraryInputRef.current?.click()}
+                      disabled={scanStatus === "loading"}
+                    >
+                      Upload photo
+                    </button>
+                  </div>
+                  {scanImageName ? (
+                    <span className="health-scan-file">{scanImageName}</span>
+                  ) : (
+                    <span className="health-scan-hint">No photo selected.</span>
+                  )}
+                </div>
+                <div className="health-scan-note">
+                  <label className="health-form-span">
+                    <span>Notes for AI (optional)</span>
+                    <textarea
+                      value={scanNote}
+                      onChange={(event) => setScanNote(event.target.value)}
+                      placeholder="e.g. includes dressing, low sugar"
+                    />
+                  </label>
+                  <div className="health-scan-actions">
+                    <button
+                      type="button"
+                      className="primary-button"
+                      onClick={runScan}
+                      disabled={scanStatus === "loading" || !scanImageBase64}
+                    >
+                      {scanStatus === "loading" ? "Analyzing..." : "Analyze photo"}
+                    </button>
+                  </div>
+                </div>
+                {scanStatus === "loading" ? (
+                  <p className="health-scan-status">Scanning photo...</p>
+                ) : null}
+                {scanError ? <p className="form-error">{scanError}</p> : null}
+                {scanResult && scanForm ? (
+                  <div className="health-scan-result">
+                    <div className="health-scan-meta">
+                      <span className="health-scan-confidence">
+                        Confidence: {scanForm.Confidence || scanResult.Confidence}
+                      </span>
+                      {scanForm.Summary ? <p>{scanForm.Summary}</p> : null}
+                    </div>
+                    {scanQuestions.length ? (
+                      <ul className="health-scan-questions">
+                        {scanQuestions.map((question, index) => (
+                          <li key={`${index}-${question}`}>{question}</li>
+                        ))}
+                      </ul>
+                    ) : null}
+                    <div className="health-log-form health-scan-form">
+                      <label className="health-form-span">
+                        <span>Food name</span>
+                        <input
+                          value={scanForm.FoodName}
+                          onChange={(event) =>
+                            setScanForm((prev) => ({ ...prev, FoodName: event.target.value }))
+                          }
+                        />
+                      </label>
+                      <div className="health-form-row health-form-row--compact">
+                        <label>
+                          <span>Serving quantity</span>
+                          <input
+                            type="number"
+                            min="0.01"
+                            step="0.01"
+                            value={scanForm.ServingQuantity}
+                            onChange={(event) =>
+                              setScanForm((prev) => ({
+                                ...prev,
+                                ServingQuantity: event.target.value,
+                              }))
+                            }
+                          />
+                        </label>
+                        <label>
+                          <span>Serving unit</span>
+                          <input
+                            value={scanForm.ServingUnit}
+                            onChange={(event) =>
+                              setScanForm((prev) => ({ ...prev, ServingUnit: event.target.value }))
+                            }
+                          />
+                        </label>
+                        <label>
+                          <span>Calories</span>
+                          <input
+                            type="number"
+                            min="0"
+                            step="1"
+                            value={scanForm.CaloriesPerServing}
+                            onChange={(event) =>
+                              setScanForm((prev) => ({
+                                ...prev,
+                                CaloriesPerServing: event.target.value,
+                              }))
+                            }
+                          />
+                        </label>
+                        <label>
+                          <span>Protein (g)</span>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.1"
+                            value={scanForm.ProteinPerServing}
+                            onChange={(event) =>
+                              setScanForm((prev) => ({
+                                ...prev,
+                                ProteinPerServing: event.target.value,
+                              }))
+                            }
+                          />
+                        </label>
+                      </div>
+                    </div>
+                    <details className="health-scan-advanced health-log-form">
+                      <summary>Advanced nutrients</summary>
+                      <div className="health-form-row health-form-row--compact">
+                        <label>
+                          <span>Carbs (g)</span>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.1"
+                            value={scanForm.CarbsPerServing}
+                            onChange={(event) =>
+                              setScanForm((prev) => ({ ...prev, CarbsPerServing: event.target.value }))
+                            }
+                          />
+                        </label>
+                        <label>
+                          <span>Fat (g)</span>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.1"
+                            value={scanForm.FatPerServing}
+                            onChange={(event) =>
+                              setScanForm((prev) => ({ ...prev, FatPerServing: event.target.value }))
+                            }
+                          />
+                        </label>
+                        <label>
+                          <span>Fibre (g)</span>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.1"
+                            value={scanForm.FibrePerServing}
+                            onChange={(event) =>
+                              setScanForm((prev) => ({ ...prev, FibrePerServing: event.target.value }))
+                            }
+                          />
+                        </label>
+                        <label>
+                          <span>Sat fat (g)</span>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.1"
+                            value={scanForm.SaturatedFatPerServing}
+                            onChange={(event) =>
+                              setScanForm((prev) => ({
+                                ...prev,
+                                SaturatedFatPerServing: event.target.value,
+                              }))
+                            }
+                          />
+                        </label>
+                        <label>
+                          <span>Sugar (g)</span>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.1"
+                            value={scanForm.SugarPerServing}
+                            onChange={(event) =>
+                              setScanForm((prev) => ({ ...prev, SugarPerServing: event.target.value }))
+                            }
+                          />
+                        </label>
+                        <label>
+                          <span>Sodium (mg)</span>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.1"
+                            value={scanForm.SodiumPerServing}
+                            onChange={(event) =>
+                              setScanForm((prev) => ({ ...prev, SodiumPerServing: event.target.value }))
+                            }
+                          />
+                        </label>
+                      </div>
+                    </details>
+                    <div className="health-scan-footer">
+                      <button
+                        type="button"
+                        className="primary-button"
+                        onClick={saveScanFood}
+                        disabled={isScanSaving}
+                        aria-busy={scanSaveMode === "save"}
+                      >
+                        {scanSaveMode === "save" ? "Saving..." : "Save food"}
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
             <input
               className="health-search"
               type="search"

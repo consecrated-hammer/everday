@@ -90,6 +90,7 @@ class Settings(Base):
     GoalCompletionNotifiedAt = Column(DateTime(timezone=True))
     FoodRemindersEnabled = Column(Boolean, nullable=False, default=False)
     FoodReminderTimes = Column(Text)
+    FoodReminderSlots = Column(Text)
     WeightRemindersEnabled = Column(Boolean, nullable=False, default=False)
     WeightReminderTime = Column(String(5))
     ReminderTimeZone = Column(String(64))

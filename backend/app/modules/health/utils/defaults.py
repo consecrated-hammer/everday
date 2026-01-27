@@ -19,6 +19,10 @@ DefaultFoodReminderTimes = {
     "Dinner": "18:30",
     "Snack3": "20:30",
 }
+DefaultFoodReminderSlots = {
+    meal_type: {"Enabled": False, "Time": time_value}
+    for meal_type, time_value in DefaultFoodReminderTimes.items()
+}
 DefaultWeightReminderTime = "08:00"
 
 DefaultFoods: list[tuple[str, str, int, float]] = [

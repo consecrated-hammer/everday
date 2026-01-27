@@ -157,18 +157,63 @@ const NormalizeFoodReminderTimes = (times) => {
   return normalized;
 };
 
+const DefaultFoodReminderSlots = MealReminderSlots.reduce((acc, slot) => {
+  acc[slot.key] = {
+    Enabled: false,
+    Time: DefaultMealReminderTimes[slot.key] || "08:00"
+  };
+  return acc;
+}, {});
+
+const NormalizeFoodReminderSlots = (settings) => {
+  const normalized = { ...DefaultFoodReminderSlots };
+  const legacyTimes = NormalizeFoodReminderTimes(settings?.FoodReminderTimes);
+  const legacyEnabled = Boolean(settings?.FoodRemindersEnabled);
+  MealReminderSlots.forEach(({ key }) => {
+    normalized[key] = {
+      Enabled: legacyEnabled,
+      Time: legacyTimes[key]
+    };
+  });
+  const slots = settings?.FoodReminderSlots;
+  if (!slots || typeof slots !== "object") {
+    return normalized;
+  }
+  MealReminderSlots.forEach(({ key }) => {
+    const slot = slots[key];
+    if (!slot || typeof slot !== "object") {
+      return;
+    }
+    const nextEnabled =
+      typeof slot.Enabled === "boolean"
+        ? slot.Enabled
+        : typeof slot.enabled === "boolean"
+          ? slot.enabled
+          : normalized[key].Enabled;
+    const nextTime =
+      typeof slot.Time === "string" && /^\d{2}:\d{2}$/.test(slot.Time)
+        ? slot.Time
+        : typeof slot.time === "string" && /^\d{2}:\d{2}$/.test(slot.time)
+          ? slot.time
+          : normalized[key].Time;
+    normalized[key] = {
+      Enabled: nextEnabled,
+      Time: nextTime
+    };
+  });
+  return normalized;
+};
+
 const EmptyHealthReminders = {
   ReminderTimeZone: ResolveUserTimeZone(),
-  FoodRemindersEnabled: false,
-  FoodReminderTimes: { ...DefaultMealReminderTimes },
+  FoodReminderSlots: { ...DefaultFoodReminderSlots },
   WeightRemindersEnabled: false,
   WeightReminderTime: DefaultWeightReminderTime
 };
 
 const BuildHealthRemindersState = (settings) => ({
   ReminderTimeZone: settings.ReminderTimeZone || ResolveUserTimeZone(),
-  FoodRemindersEnabled: Boolean(settings.FoodRemindersEnabled),
-  FoodReminderTimes: NormalizeFoodReminderTimes(settings.FoodReminderTimes),
+  FoodReminderSlots: NormalizeFoodReminderSlots(settings),
   WeightRemindersEnabled: Boolean(settings.WeightRemindersEnabled),
   WeightReminderTime:
     typeof settings.WeightReminderTime === "string" && /^\d{2}:\d{2}$/.test(settings.WeightReminderTime)
@@ -227,6 +272,18 @@ const BuildHealthProfilePayload = (profile) => ({
 
 const BuildHealthSettingsPayload = (targets, showWeightChart, showStepsChart, reminders) => {
   const reminderState = reminders || EmptyHealthReminders;
+  const foodReminderSlots = NormalizeFoodReminderSlots({
+    FoodReminderSlots: reminderState.FoodReminderSlots
+  });
+  const foodReminderTimes = {};
+  let anyFoodReminderEnabled = false;
+  MealReminderSlots.forEach(({ key }) => {
+    const slot = foodReminderSlots[key];
+    foodReminderTimes[key] = slot?.Time || DefaultMealReminderTimes[key];
+    if (slot?.Enabled) {
+      anyFoodReminderEnabled = true;
+    }
+  });
   return {
     DailyCalorieTarget: Number(targets.DailyCalorieTarget || 0),
     ProteinTargetMin: Number(targets.ProteinTargetMin || 0),
@@ -250,8 +307,9 @@ const BuildHealthSettingsPayload = (targets, showWeightChart, showStepsChart, re
     ShowWeightChartOnToday: showWeightChart,
     ShowStepsChartOnToday: showStepsChart,
     ReminderTimeZone: reminderState.ReminderTimeZone || ResolveUserTimeZone(),
-    FoodRemindersEnabled: reminderState.FoodRemindersEnabled,
-    FoodReminderTimes: reminderState.FoodReminderTimes,
+    FoodRemindersEnabled: anyFoodReminderEnabled,
+    FoodReminderTimes: foodReminderTimes,
+    FoodReminderSlots: foodReminderSlots,
     WeightRemindersEnabled: reminderState.WeightRemindersEnabled,
     WeightReminderTime: reminderState.WeightReminderTime || DefaultWeightReminderTime
   };
@@ -904,17 +962,28 @@ const Settings = () => {
     setHealthTargets((prev) => ({ ...prev, [name]: nextValue }));
   };
 
-  const onFoodRemindersEnabledChange = (event) => {
-    const nextValue = event.target.checked;
-    setHealthReminders((prev) => ({ ...prev, FoodRemindersEnabled: nextValue }));
+  const onMealReminderEnabledChange = (mealType, enabled) => {
+    setHealthReminders((prev) => ({
+      ...prev,
+      FoodReminderSlots: {
+        ...prev.FoodReminderSlots,
+        [mealType]: {
+          ...(prev.FoodReminderSlots[mealType] || DefaultFoodReminderSlots[mealType]),
+          Enabled: enabled
+        }
+      }
+    }));
   };
 
   const onMealReminderTimeChange = (mealType, timeValue) => {
     setHealthReminders((prev) => ({
       ...prev,
-      FoodReminderTimes: {
-        ...prev.FoodReminderTimes,
-        [mealType]: timeValue
+      FoodReminderSlots: {
+        ...prev.FoodReminderSlots,
+        [mealType]: {
+          ...(prev.FoodReminderSlots[mealType] || DefaultFoodReminderSlots[mealType]),
+          Time: timeValue
+        }
       }
     }));
   };
@@ -2443,41 +2512,45 @@ const Settings = () => {
                             <p>Set reminder times for each meal slot.</p>
                           </div>
                           <div className="form-stack">
-                            <div className="form-switch-row form-switch-row--inline">
-                              <span className="form-switch-label">Enable food reminders</span>
-                              <div className="switch-pill">
-                                <input
-                                  id="health-food-reminders-enabled"
-                                  type="checkbox"
-                                  aria-label="Enable food reminders"
-                                  checked={healthReminders.FoodRemindersEnabled}
-                                  onChange={onFoodRemindersEnabledChange}
-                                />
-                                <label
-                                  htmlFor="health-food-reminders-enabled"
-                                  className="switch-pill-track"
+                            {MealReminderSlots.map((slot) => {
+                              const slotConfig =
+                                healthReminders.FoodReminderSlots[slot.key] ||
+                                DefaultFoodReminderSlots[slot.key];
+                              const inputId = `health-food-reminder-${slot.key.toLowerCase()}`;
+                              return (
+                                <div
+                                  key={slot.key}
+                                  className="form-switch-row form-switch-row--inline health-reminder-slot"
                                 >
-                                  <span className="switch-pill-icon switch-pill-icon--off">
-                                    <Icon name="toggleOff" className="icon" />
-                                  </span>
-                                  <span className="switch-pill-icon switch-pill-icon--on">
-                                    <Icon name="toggleOn" className="icon" />
-                                  </span>
-                                  <span className="switch-pill-text switch-pill-text--off">Off</span>
-                                  <span className="switch-pill-text switch-pill-text--on">On</span>
-                                </label>
-                              </div>
-                            </div>
-                            <div className="form-grid form-grid--kv">
-                              {MealReminderSlots.map((slot) => (
-                                <label key={slot.key}>
-                                  <span>{slot.label}</span>
+                                  <span className="form-switch-label">{slot.label}</span>
+                                  <div className="switch-pill">
+                                    <input
+                                      id={inputId}
+                                      type="checkbox"
+                                      aria-label={`${slot.label} reminder enabled`}
+                                      checked={Boolean(slotConfig?.Enabled)}
+                                      onChange={(event) =>
+                                        onMealReminderEnabledChange(slot.key, event.target.checked)
+                                      }
+                                    />
+                                    <label htmlFor={inputId} className="switch-pill-track">
+                                      <span className="switch-pill-icon switch-pill-icon--off">
+                                        <Icon name="toggleOff" className="icon" />
+                                      </span>
+                                      <span className="switch-pill-icon switch-pill-icon--on">
+                                        <Icon name="toggleOn" className="icon" />
+                                      </span>
+                                      <span className="switch-pill-text switch-pill-text--off">Off</span>
+                                      <span className="switch-pill-text switch-pill-text--on">On</span>
+                                    </label>
+                                  </div>
                                   <select
-                                    value={healthReminders.FoodReminderTimes[slot.key]}
+                                    className="health-reminder-slot-select"
+                                    value={slotConfig?.Time || DefaultMealReminderTimes[slot.key]}
                                     onChange={(event) =>
                                       onMealReminderTimeChange(slot.key, event.target.value)
                                     }
-                                    disabled={!healthReminders.FoodRemindersEnabled}
+                                    disabled={!slotConfig?.Enabled}
                                   >
                                     {TimeOptions.map((option) => (
                                       <option key={option.value} value={option.value}>
@@ -2485,9 +2558,9 @@ const Settings = () => {
                                       </option>
                                     ))}
                                   </select>
-                                </label>
-                              ))}
-                            </div>
+                                </div>
+                              );
+                            })}
                             <p className="form-note">
                               Reminders are sent only when the scheduled run matches the selected
                               time and the slot has not been logged.

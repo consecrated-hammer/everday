@@ -11,6 +11,7 @@ from app.modules.auth.models import User
 from app.modules.health.models import DailyLog, HealthReminderRun, MealEntry
 from app.modules.health.services.settings_service import EnsureSettingsForUser
 from app.modules.health.utils.defaults import (
+    DefaultFoodReminderSlots,
     DefaultFoodReminderTimes,
     DefaultWeightReminderTime,
 )
@@ -69,6 +70,52 @@ def _ParseFoodReminderTimes(value: str | None) -> dict[str, str]:
             continue
         if _IsValidTime(time_text):
             normalized[meal_key] = _NormalizeTime(time_text) or normalized[meal_key]
+    return normalized
+
+
+def _ParseFoodReminderSlots(
+    slots_value: str | None,
+    legacy_enabled: bool,
+    legacy_times: dict[str, str],
+) -> dict[str, dict[str, object]]:
+    normalized = {
+        meal_type: {"Enabled": bool(slot["Enabled"]), "Time": str(slot["Time"])}
+        for meal_type, slot in DefaultFoodReminderSlots.items()
+    }
+    for meal_type, time_value in legacy_times.items():
+        if meal_type in normalized and _IsValidTime(time_value):
+            normalized_time = _NormalizeTime(time_value)
+            if normalized_time:
+                normalized[meal_type]["Time"] = normalized_time
+    if legacy_enabled:
+        for meal_type in normalized:
+            normalized[meal_type]["Enabled"] = True
+    if not slots_value:
+        return normalized
+    try:
+        parsed = json.loads(slots_value)
+    except json.JSONDecodeError:
+        return normalized
+    if not isinstance(parsed, dict):
+        return normalized
+    for meal_type, slot_value in parsed.items():
+        meal_key = str(meal_type)
+        if meal_key not in normalized:
+            continue
+        if isinstance(slot_value, dict):
+            enabled_value = slot_value.get("Enabled", slot_value.get("enabled"))
+            time_value = slot_value.get("Time", slot_value.get("time"))
+            if enabled_value is not None:
+                normalized[meal_key]["Enabled"] = bool(enabled_value)
+            if _IsValidTime(str(time_value) if time_value is not None else None):
+                normalized[meal_key]["Time"] = (
+                    _NormalizeTime(str(time_value)) or normalized[meal_key]["Time"]
+                )
+            continue
+        if _IsValidTime(str(slot_value)):
+            normalized_time = _NormalizeTime(str(slot_value))
+            if normalized_time:
+                normalized[meal_key]["Time"] = normalized_time
     return normalized
 
 
@@ -228,51 +275,38 @@ def RunDailyHealthReminders(
 
     for user in parent_users:
         settings = EnsureSettingsForUser(db, user.Id)
-        food_times = _ParseFoodReminderTimes(settings.FoodReminderTimes)
+        legacy_times = _ParseFoodReminderTimes(settings.FoodReminderTimes)
+        food_slots = _ParseFoodReminderSlots(
+            settings.FoodReminderSlots,
+            legacy_enabled=bool(settings.FoodRemindersEnabled),
+            legacy_times=legacy_times,
+        )
         weight_time = settings.WeightReminderTime or DefaultWeightReminderTime
 
         user_eligible = False
         user_processed = False
 
         try:
-            if settings.FoodRemindersEnabled:
-                for meal_type, reminder_time in food_times.items():
-                    if not _TimeMatches(effective_time, reminder_time):
-                        continue
-                    user_eligible = True
-                    user_processed = True
-                    reminder_type = "Meal"
-                    if _AlreadyRan(
-                        db,
-                        user.Id,
-                        effective_date,
-                        effective_time,
-                        reminder_type,
-                        meal_type,
-                    ):
-                        skipped += 1
-                        continue
-                    if _HasMealEntry(db, user.Id, effective_date, meal_type):
-                        _RecordRun(
-                            db,
-                            user.Id,
-                            effective_date,
-                            effective_time,
-                            reminder_type,
-                            meal_type,
-                            result="skipped",
-                            notification_sent=False,
-                        )
-                        skipped += 1
-                        continue
-                    _SendMealReminder(
-                        db,
-                        admin_user_id,
-                        user.Id,
-                        effective_date,
-                        effective_time,
-                        meal_type,
-                    )
+            for meal_type, slot in food_slots.items():
+                if not bool(slot.get("Enabled")):
+                    continue
+                reminder_time = str(slot.get("Time") or "")
+                if not _TimeMatches(effective_time, reminder_time):
+                    continue
+                user_eligible = True
+                user_processed = True
+                reminder_type = "Meal"
+                if _AlreadyRan(
+                    db,
+                    user.Id,
+                    effective_date,
+                    effective_time,
+                    reminder_type,
+                    meal_type,
+                ):
+                    skipped += 1
+                    continue
+                if _HasMealEntry(db, user.Id, effective_date, meal_type):
                     _RecordRun(
                         db,
                         user.Id,
@@ -280,10 +314,30 @@ def RunDailyHealthReminders(
                         effective_time,
                         reminder_type,
                         meal_type,
-                        result="sent",
-                        notification_sent=True,
+                        result="skipped",
+                        notification_sent=False,
                     )
-                    notifications_sent += 1
+                    skipped += 1
+                    continue
+                _SendMealReminder(
+                    db,
+                    admin_user_id,
+                    user.Id,
+                    effective_date,
+                    effective_time,
+                    meal_type,
+                )
+                _RecordRun(
+                    db,
+                    user.Id,
+                    effective_date,
+                    effective_time,
+                    reminder_type,
+                    meal_type,
+                    result="sent",
+                    notification_sent=True,
+                )
+                notifications_sent += 1
 
             if settings.WeightRemindersEnabled and _TimeMatches(effective_time, weight_time):
                 user_eligible = True
