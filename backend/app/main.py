@@ -254,7 +254,7 @@ async def _health_reminders_loop() -> None:
         reminders_logger.info("health reminders scheduler disabled via env")
         return
 
-    interval_seconds = max(30, _env_int("HEALTH_REMINDERS_INTERVAL_SECONDS", 300))
+    interval_seconds = max(30, _env_int("HEALTH_REMINDERS_INTERVAL_SECONDS", 60))
     admin_user_id = _env_int("HEALTH_REMINDERS_ADMIN_USER_ID", 1)
     reminders_logger.info(
         "health reminders scheduler started (interval=%ss, admin_user_id=%s)",
