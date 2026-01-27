@@ -149,6 +149,7 @@ class RecordOut(BaseModel):
     CategoryId: int
     Title: str | None = None
     Data: dict[str, Any]
+    SortOrder: int = 0
     CreatedAt: datetime
     UpdatedAt: datetime
 
@@ -156,3 +157,7 @@ class RecordOut(BaseModel):
 class RecordLookupOut(BaseModel):
     Id: int
     Title: str
+
+
+class RecordOrderUpdate(BaseModel):
+    OrderedIds: list[int] = Field(default_factory=list)

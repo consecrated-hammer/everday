@@ -101,6 +101,7 @@ export const useLifeAdminRecords = (categoryId, fields) => {
     recordError,
     recordLookups,
     dropdownOptions,
-    reloadRecords: loadRecords
+    reloadRecords: loadRecords,
+    setRecords
   };
 };
