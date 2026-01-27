@@ -388,6 +388,7 @@ const Log = ({ InitialDate, InitialAddMode }) => {
   const searchInputRef = useRef(null);
   const scanInputRef = useRef(null);
   const scanLibraryInputRef = useRef(null);
+  const scanSaveRef = useRef(false);
 
   const [describeOpen, setDescribeOpen] = useState(false);
   const [describeText, setDescribeText] = useState("");
@@ -405,6 +406,7 @@ const Log = ({ InitialDate, InitialAddMode }) => {
   const [scanImageBase64, setScanImageBase64] = useState("");
   const [scanQuantity, setScanQuantity] = useState("1");
   const [scanNote, setScanNote] = useState("");
+  const [scanSaveMode, setScanSaveMode] = useState(null);
 
   const [recentStatus, setRecentStatus] = useState("idle");
   const [recentStats, setRecentStats] = useState({});
@@ -1536,6 +1538,9 @@ const Log = ({ InitialDate, InitialAddMode }) => {
     if (!validateScanForm()) {
       return;
     }
+    if (scanSaveRef.current) {
+      return;
+    }
     const name = scanForm.FoodName.trim();
     const servingQty = Number(scanForm.ServingQuantity);
     const servingUnit = NormalizeUnit(scanForm.ServingUnit.trim());
@@ -1570,6 +1575,8 @@ const Log = ({ InitialDate, InitialAddMode }) => {
     );
 
     try {
+      scanSaveRef.current = true;
+      setScanSaveMode(shouldLog ? "log" : "save");
       setStatus("saving");
       setScanError("");
       let food = existing || null;
@@ -1603,8 +1610,12 @@ const Log = ({ InitialDate, InitialAddMode }) => {
     } catch (err) {
       setStatus("error");
       setScanError(err?.message || "Failed to save scan");
+    } finally {
+      scanSaveRef.current = false;
+      setScanSaveMode(null);
     }
   };
+  const isScanSaving = scanSaveMode !== null;
 
   const slotEntries = useMemo(
     () => groupedEntries[activeMealType] || [],
@@ -2405,11 +2416,37 @@ const Log = ({ InitialDate, InitialAddMode }) => {
                     </div>
                   </details>
                   <div className="health-scan-footer">
-                    <button type="button" className="button-secondary" onClick={() => saveScanResult(false)}>
-                      Save food
+                    <button
+                      type="button"
+                      className="button-secondary"
+                      onClick={() => saveScanResult(false)}
+                      disabled={isScanSaving}
+                      aria-busy={scanSaveMode === "save"}
+                    >
+                      {scanSaveMode === "save" ? (
+                        <span className="health-lookup-loading">
+                          <span className="loading-spinner" aria-hidden="true" />
+                          <span>Saving</span>
+                        </span>
+                      ) : (
+                        "Save food"
+                      )}
                     </button>
-                    <button type="button" className="primary-button" onClick={() => saveScanResult(true)}>
-                      Save and log
+                    <button
+                      type="button"
+                      className="primary-button"
+                      onClick={() => saveScanResult(true)}
+                      disabled={isScanSaving}
+                      aria-busy={scanSaveMode === "log"}
+                    >
+                      {scanSaveMode === "log" ? (
+                        <span className="health-lookup-loading">
+                          <span className="loading-spinner" aria-hidden="true" />
+                          <span>Saving and logging</span>
+                        </span>
+                      ) : (
+                        "Save and log"
+                      )}
                     </button>
                   </div>
                 </div>
