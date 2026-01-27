@@ -169,6 +169,11 @@ class UserSettings(BaseModel):
     ShowWeightChartOnToday: bool = True
     ShowStepsChartOnToday: bool = True
     ShowWeightProjectionOnToday: bool = True
+    ReminderTimeZone: str = "UTC"
+    FoodRemindersEnabled: bool = False
+    FoodReminderTimes: dict[str, str] = Field(default_factory=dict)
+    WeightRemindersEnabled: bool = False
+    WeightReminderTime: str | None = None
     HaeApiKeyConfigured: bool = False
     HaeApiKeyLast4: str | None = None
     HaeApiKeyCreatedAt: datetime | None = None
@@ -200,6 +205,11 @@ class UpdateSettingsInput(BaseModel):
     ShowWeightChartOnToday: bool | None = None
     ShowStepsChartOnToday: bool | None = None
     ShowWeightProjectionOnToday: bool | None = None
+    ReminderTimeZone: str | None = None
+    FoodRemindersEnabled: bool | None = None
+    FoodReminderTimes: dict[str, str] | None = None
+    WeightRemindersEnabled: bool | None = None
+    WeightReminderTime: str | None = Field(default=None, pattern=r"^\d{2}:\d{2}$")
 
 
 class GoalSummary(BaseModel):
@@ -639,3 +649,16 @@ class RecommendationLog(BaseModel):
 
 class RecommendationLogListResponse(BaseModel):
     Logs: list[RecommendationLog]
+
+
+class HealthReminderRunRequest(BaseModel):
+    RunDate: date | None = None
+    RunTime: str | None = Field(default=None, pattern=r"^\d{2}:\d{2}$")
+
+
+class HealthReminderRunResponse(BaseModel):
+    EligibleUsers: int
+    ProcessedUsers: int
+    NotificationsSent: int
+    Skipped: int
+    Errors: int

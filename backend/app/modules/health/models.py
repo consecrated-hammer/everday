@@ -88,6 +88,11 @@ class Settings(Base):
     GoalUpdatedAt = Column(DateTime(timezone=True))
     GoalCompletedAt = Column(DateTime(timezone=True))
     GoalCompletionNotifiedAt = Column(DateTime(timezone=True))
+    FoodRemindersEnabled = Column(Boolean, nullable=False, default=False)
+    FoodReminderTimes = Column(Text)
+    WeightRemindersEnabled = Column(Boolean, nullable=False, default=False)
+    WeightReminderTime = Column(String(5))
+    ReminderTimeZone = Column(String(64))
     HaeApiKeyHash = Column(Text)
     HaeApiKeyLast4 = Column(String(8))
     HaeApiKeyCreatedAt = Column(DateTime(timezone=True))
@@ -258,6 +263,32 @@ class AiSuggestionRun(Base):
     RunDate = Column(Date, nullable=False)
     SuggestionsGenerated = Column(Integer, nullable=False, default=0)
     ModelUsed = Column(String(80))
+    NotificationSent = Column(Boolean, nullable=False, default=False)
+    ErrorMessage = Column(Text)
+    CreatedAt = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+
+
+class HealthReminderRun(Base):
+    __tablename__ = "reminder_runs"
+    __table_args__ = (
+        UniqueConstraint(
+            "UserId",
+            "RunDate",
+            "RunTime",
+            "ReminderType",
+            "MealType",
+            name="uq_health_reminder_runs_user_date_time_type_meal",
+        ),
+        {"schema": "health"},
+    )
+
+    Id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    UserId = Column(Integer, nullable=False, index=True)
+    RunDate = Column(Date, nullable=False, index=True)
+    RunTime = Column(String(5), nullable=False)
+    ReminderType = Column(String(20), nullable=False)
+    MealType = Column(String(30), nullable=False, default="")
+    Result = Column(String(20), nullable=False)
     NotificationSent = Column(Boolean, nullable=False, default=False)
     ErrorMessage = Column(Text)
     CreatedAt = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)

@@ -1216,6 +1216,19 @@ const Foods = () => {
     setAiMealDescription
   ]);
 
+  const startDescribeMeal = useCallback(() => {
+    startAddMeal();
+    setMealEntryMode("assistant");
+  }, [startAddMeal, setMealEntryMode]);
+
+  const startScanPhoto = useCallback(() => {
+    const params = new URLSearchParams();
+    params.set("add", "1");
+    params.set("mode", "scan");
+    params.set("return", "foods");
+    navigate(`/health/log?${params.toString()}`);
+  }, [navigate]);
+
   useEffect(() => {
     const addMode = searchParams.get("add");
     const draft = LoadMealDraft();
@@ -1619,6 +1632,26 @@ const Foods = () => {
       <div className="health-foods-browse">
         {!showFoodForm && !showMealForm ? (
           <div className="health-foods-toolbar">
+            <div className="health-add-actions health-foods-add-actions">
+              <button type="button" className="health-action-tile" onClick={startDescribeMeal}>
+                <span className="health-action-icon" aria-hidden="true">
+                  <Icon name="edit" className="icon" />
+                </span>
+                <span>Describe meal (AI)</span>
+              </button>
+              <button type="button" className="health-action-tile" onClick={startScanPhoto}>
+                <span className="health-action-icon" aria-hidden="true">
+                  <Icon name="camera" className="icon" />
+                </span>
+                <span>Scan photo (AI)</span>
+              </button>
+              <button type="button" className="health-action-tile" onClick={startAddFood}>
+                <span className="health-action-icon" aria-hidden="true">
+                  <Icon name="plus" className="icon" />
+                </span>
+                <span>Add manually</span>
+              </button>
+            </div>
             <input
               className="health-search"
               type="search"

@@ -17,6 +17,7 @@ import {
   FetchRecommendationHistory,
   GetAiRecommendations,
   RotateHaeApiKey,
+  RunHealthReminders,
   UpdateHealthProfile,
   UpdateHealthSettings
 } from "../../lib/healthApi.js";
@@ -122,6 +123,59 @@ const BuildTimeOptions = (stepMinutes = 15) => {
 
 const TimeOptions = BuildTimeOptions();
 
+const MealReminderSlots = [
+  { key: "Breakfast", label: "Breakfast" },
+  { key: "Snack1", label: "Snack 1" },
+  { key: "Lunch", label: "Lunch" },
+  { key: "Snack2", label: "Snack 2" },
+  { key: "Dinner", label: "Dinner" },
+  { key: "Snack3", label: "Snack 3" }
+];
+
+const DefaultMealReminderTimes = {
+  Breakfast: "08:00",
+  Snack1: "10:30",
+  Lunch: "12:30",
+  Snack2: "15:30",
+  Dinner: "18:30",
+  Snack3: "20:30"
+};
+
+const DefaultWeightReminderTime = "08:00";
+
+const NormalizeFoodReminderTimes = (times) => {
+  const normalized = { ...DefaultMealReminderTimes };
+  if (!times || typeof times !== "object") {
+    return normalized;
+  }
+  MealReminderSlots.forEach(({ key }) => {
+    const value = times[key];
+    if (typeof value === "string" && /^\d{2}:\d{2}$/.test(value)) {
+      normalized[key] = value;
+    }
+  });
+  return normalized;
+};
+
+const EmptyHealthReminders = {
+  ReminderTimeZone: ResolveUserTimeZone(),
+  FoodRemindersEnabled: false,
+  FoodReminderTimes: { ...DefaultMealReminderTimes },
+  WeightRemindersEnabled: false,
+  WeightReminderTime: DefaultWeightReminderTime
+};
+
+const BuildHealthRemindersState = (settings) => ({
+  ReminderTimeZone: settings.ReminderTimeZone || ResolveUserTimeZone(),
+  FoodRemindersEnabled: Boolean(settings.FoodRemindersEnabled),
+  FoodReminderTimes: NormalizeFoodReminderTimes(settings.FoodReminderTimes),
+  WeightRemindersEnabled: Boolean(settings.WeightRemindersEnabled),
+  WeightReminderTime:
+    typeof settings.WeightReminderTime === "string" && /^\d{2}:\d{2}$/.test(settings.WeightReminderTime)
+      ? settings.WeightReminderTime
+      : DefaultWeightReminderTime
+});
+
 const BuildHealthTargetsState = (targets) => ({
   ...EmptyHealthTargets,
   ...targets,
@@ -171,29 +225,37 @@ const BuildHealthProfilePayload = (profile) => ({
   ActivityLevel: profile.ActivityLevel || null
 });
 
-const BuildHealthSettingsPayload = (targets, showWeightChart, showStepsChart) => ({
-  DailyCalorieTarget: Number(targets.DailyCalorieTarget || 0),
-  ProteinTargetMin: Number(targets.ProteinTargetMin || 0),
-  ProteinTargetMax: Number(targets.ProteinTargetMax || 0),
-  StepTarget: Number(targets.StepTarget || 0),
-  StepKcalFactor: Number(targets.StepKcalFactor || 0),
-  FibreTarget: targets.FibreTarget ? Number(targets.FibreTarget) : null,
-  CarbsTarget: targets.CarbsTarget ? Number(targets.CarbsTarget) : null,
-  FatTarget: targets.FatTarget ? Number(targets.FatTarget) : null,
-  SaturatedFatTarget: targets.SaturatedFatTarget ? Number(targets.SaturatedFatTarget) : null,
-  SugarTarget: targets.SugarTarget ? Number(targets.SugarTarget) : null,
-  SodiumTarget: targets.SodiumTarget ? Number(targets.SodiumTarget) : null,
-  ShowProteinOnToday: targets.ShowProteinOnToday,
-  ShowStepsOnToday: targets.ShowStepsOnToday,
-  ShowFibreOnToday: targets.ShowFibreOnToday,
-  ShowCarbsOnToday: targets.ShowCarbsOnToday,
-  ShowFatOnToday: targets.ShowFatOnToday,
-  ShowSaturatedFatOnToday: targets.ShowSaturatedFatOnToday,
-  ShowSugarOnToday: targets.ShowSugarOnToday,
-  ShowSodiumOnToday: targets.ShowSodiumOnToday,
-  ShowWeightChartOnToday: showWeightChart,
-  ShowStepsChartOnToday: showStepsChart
-});
+const BuildHealthSettingsPayload = (targets, showWeightChart, showStepsChart, reminders) => {
+  const reminderState = reminders || EmptyHealthReminders;
+  return {
+    DailyCalorieTarget: Number(targets.DailyCalorieTarget || 0),
+    ProteinTargetMin: Number(targets.ProteinTargetMin || 0),
+    ProteinTargetMax: Number(targets.ProteinTargetMax || 0),
+    StepTarget: Number(targets.StepTarget || 0),
+    StepKcalFactor: Number(targets.StepKcalFactor || 0),
+    FibreTarget: targets.FibreTarget ? Number(targets.FibreTarget) : null,
+    CarbsTarget: targets.CarbsTarget ? Number(targets.CarbsTarget) : null,
+    FatTarget: targets.FatTarget ? Number(targets.FatTarget) : null,
+    SaturatedFatTarget: targets.SaturatedFatTarget ? Number(targets.SaturatedFatTarget) : null,
+    SugarTarget: targets.SugarTarget ? Number(targets.SugarTarget) : null,
+    SodiumTarget: targets.SodiumTarget ? Number(targets.SodiumTarget) : null,
+    ShowProteinOnToday: targets.ShowProteinOnToday,
+    ShowStepsOnToday: targets.ShowStepsOnToday,
+    ShowFibreOnToday: targets.ShowFibreOnToday,
+    ShowCarbsOnToday: targets.ShowCarbsOnToday,
+    ShowFatOnToday: targets.ShowFatOnToday,
+    ShowSaturatedFatOnToday: targets.ShowSaturatedFatOnToday,
+    ShowSugarOnToday: targets.ShowSugarOnToday,
+    ShowSodiumOnToday: targets.ShowSodiumOnToday,
+    ShowWeightChartOnToday: showWeightChart,
+    ShowStepsChartOnToday: showStepsChart,
+    ReminderTimeZone: reminderState.ReminderTimeZone || ResolveUserTimeZone(),
+    FoodRemindersEnabled: reminderState.FoodRemindersEnabled,
+    FoodReminderTimes: reminderState.FoodReminderTimes,
+    WeightRemindersEnabled: reminderState.WeightRemindersEnabled,
+    WeightReminderTime: reminderState.WeightReminderTime || DefaultWeightReminderTime
+  };
+};
 
 const FormatRelativeTime = (value) => {
   if (!value) return "Not checked";
@@ -283,9 +345,13 @@ const Settings = () => {
   });
   const [healthProfile, setHealthProfile] = useState(EmptyHealthProfile);
   const [healthTargets, setHealthTargets] = useState(EmptyHealthTargets);
+  const [healthReminders, setHealthReminders] = useState(EmptyHealthReminders);
   const [healthStatus, setHealthStatus] = useState("idle");
   const [healthError, setHealthError] = useState("");
   const [healthAiStatus, setHealthAiStatus] = useState("idle");
+  const [healthReminderRunStatus, setHealthReminderRunStatus] = useState("idle");
+  const [healthReminderRunResult, setHealthReminderRunResult] = useState(null);
+  const [healthReminderRunError, setHealthReminderRunError] = useState("");
   const [healthRecommendation, setHealthRecommendation] = useState(null);
   const [healthRecommendationHistory, setHealthRecommendationHistory] = useState([]);
   const [healthAutoTuneWeekly, setHealthAutoTuneWeekly] = useState(false);
@@ -365,6 +431,7 @@ const Settings = () => {
   const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:8100";
   const activeSection = SettingsSections.includes(section) ? section : "appearance";
   const isParent = GetRole() === "Parent";
+  const isAdmin = GetRole() === "Admin";
   const latestTaskRun = taskRunHistory[0] || null;
   const taskNeedsAttention = Boolean(
     taskSettingsStatus === "error" ||
@@ -708,7 +775,9 @@ const Settings = () => {
       };
       const nextShowWeightChart = settings.ShowWeightChartOnToday !== false;
       const nextShowStepsChart = settings.ShowStepsChartOnToday !== false;
+      const nextReminders = BuildHealthRemindersState(settings);
       setHealthTargets(nextTargets);
+      setHealthReminders(nextReminders);
       setHealthProfile(nextProfile);
       setHealthAutoTuneWeekly(Boolean(settings.AutoTuneTargetsWeekly));
       setHealthAutoTuneLastRunAt(
@@ -724,9 +793,12 @@ const Settings = () => {
       setHealthHaeKeyStatus("idle");
       setHealthHaeCopied(false);
       setHealthRecommendationHistory(history.Logs || []);
+      setHealthReminderRunStatus("idle");
+      setHealthReminderRunResult(null);
+      setHealthReminderRunError("");
       healthProfileSavedRef.current = JSON.stringify(BuildHealthProfilePayload(nextProfile));
       healthSettingsSavedRef.current = JSON.stringify(
-        BuildHealthSettingsPayload(nextTargets, nextShowWeightChart, nextShowStepsChart)
+        BuildHealthSettingsPayload(nextTargets, nextShowWeightChart, nextShowStepsChart, nextReminders)
       );
       healthLoadedRef.current = true;
       setHealthStatus("ready");
@@ -832,6 +904,53 @@ const Settings = () => {
     setHealthTargets((prev) => ({ ...prev, [name]: nextValue }));
   };
 
+  const onFoodRemindersEnabledChange = (event) => {
+    const nextValue = event.target.checked;
+    setHealthReminders((prev) => ({ ...prev, FoodRemindersEnabled: nextValue }));
+  };
+
+  const onMealReminderTimeChange = (mealType, timeValue) => {
+    setHealthReminders((prev) => ({
+      ...prev,
+      FoodReminderTimes: {
+        ...prev.FoodReminderTimes,
+        [mealType]: timeValue
+      }
+    }));
+  };
+
+  const onWeightRemindersEnabledChange = (event) => {
+    const nextValue = event.target.checked;
+    setHealthReminders((prev) => ({ ...prev, WeightRemindersEnabled: nextValue }));
+  };
+
+  const onWeightReminderTimeChange = (event) => {
+    const nextValue = event.target.value;
+    setHealthReminders((prev) => ({ ...prev, WeightReminderTime: nextValue }));
+  };
+
+  const runHealthRemindersNow = async () => {
+    if (!isAdmin) {
+      return;
+    }
+    const now = new Date();
+    const runDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(
+      now.getDate()
+    ).padStart(2, "0")}`;
+    const runTime = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+    try {
+      setHealthReminderRunStatus("loading");
+      setHealthReminderRunError("");
+      setHealthReminderRunResult(null);
+      const result = await RunHealthReminders({ RunDate: runDate, RunTime: runTime });
+      setHealthReminderRunResult(result);
+      setHealthReminderRunStatus("ready");
+    } catch (err) {
+      setHealthReminderRunStatus("error");
+      setHealthReminderRunError(err?.message || "Failed to run reminders");
+    }
+  };
+
   const onSubmitProfile = async (event) => {
     event.preventDefault();
     if (!profileTarget) {
@@ -901,7 +1020,8 @@ const Settings = () => {
     const payload = BuildHealthSettingsPayload(
       healthTargets,
       healthShowWeightChart,
-      healthShowStepsChart
+      healthShowStepsChart,
+      healthReminders
     );
     const serialized = JSON.stringify(payload);
     if (serialized === healthSettingsSavedRef.current) {
@@ -927,7 +1047,7 @@ const Settings = () => {
         clearTimeout(healthSettingsSaveTimer.current);
       }
     };
-  }, [healthTargets, healthShowWeightChart, healthShowStepsChart]);
+  }, [healthTargets, healthShowWeightChart, healthShowStepsChart, healthReminders]);
 
   const rotateHaeApiKey = async () => {
     try {
@@ -1047,8 +1167,10 @@ const Settings = () => {
         updated.ShowStepsChartOnToday !== undefined
           ? updated.ShowStepsChartOnToday !== false
           : healthShowStepsChart;
+      const nextReminders = BuildHealthRemindersState(updated);
+      setHealthReminders(nextReminders);
       healthSettingsSavedRef.current = JSON.stringify(
-        BuildHealthSettingsPayload(nextTargets, nextShowWeight, nextShowSteps)
+        BuildHealthSettingsPayload(nextTargets, nextShowWeight, nextShowSteps, nextReminders)
       );
       setHealthAiStatus("ready");
     } catch (err) {
@@ -2306,6 +2428,182 @@ const Settings = () => {
                             >
                               {healthGoal ? "Update goal" : "Set goal"}
                             </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="settings-health-group">
+                    <div className="settings-group-header">Reminders</div>
+                    <div className="settings-health-columns">
+                      <div className="settings-health-column">
+                        <div className="settings-subsection settings-subsection--actions-bottom">
+                          <div className="settings-subsection-header">
+                            <h4>Food logging</h4>
+                            <p>Set reminder times for each meal slot.</p>
+                          </div>
+                          <div className="form-stack">
+                            <div className="form-switch-row form-switch-row--inline">
+                              <span className="form-switch-label">Enable food reminders</span>
+                              <div className="switch-pill">
+                                <input
+                                  id="health-food-reminders-enabled"
+                                  type="checkbox"
+                                  aria-label="Enable food reminders"
+                                  checked={healthReminders.FoodRemindersEnabled}
+                                  onChange={onFoodRemindersEnabledChange}
+                                />
+                                <label
+                                  htmlFor="health-food-reminders-enabled"
+                                  className="switch-pill-track"
+                                >
+                                  <span className="switch-pill-icon switch-pill-icon--off">
+                                    <Icon name="toggleOff" className="icon" />
+                                  </span>
+                                  <span className="switch-pill-icon switch-pill-icon--on">
+                                    <Icon name="toggleOn" className="icon" />
+                                  </span>
+                                  <span className="switch-pill-text switch-pill-text--off">Off</span>
+                                  <span className="switch-pill-text switch-pill-text--on">On</span>
+                                </label>
+                              </div>
+                            </div>
+                            <div className="form-grid form-grid--kv">
+                              {MealReminderSlots.map((slot) => (
+                                <label key={slot.key}>
+                                  <span>{slot.label}</span>
+                                  <select
+                                    value={healthReminders.FoodReminderTimes[slot.key]}
+                                    onChange={(event) =>
+                                      onMealReminderTimeChange(slot.key, event.target.value)
+                                    }
+                                    disabled={!healthReminders.FoodRemindersEnabled}
+                                  >
+                                    {TimeOptions.map((option) => (
+                                      <option key={option.value} value={option.value}>
+                                        {option.label}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </label>
+                              ))}
+                            </div>
+                            <p className="form-note">
+                              Reminders are sent only when the scheduled run matches the selected
+                              time and the slot has not been logged.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="settings-health-column">
+                        <div className="settings-subsection settings-subsection--actions-bottom">
+                          <div className="settings-subsection-header">
+                            <h4>Weight logging</h4>
+                            <p>Set a daily reminder to log your weight.</p>
+                          </div>
+                          <div className="form-stack">
+                            <div className="form-switch-row form-switch-row--inline">
+                              <span className="form-switch-label">Enable weight reminders</span>
+                              <div className="switch-pill">
+                                <input
+                                  id="health-weight-reminders-enabled"
+                                  type="checkbox"
+                                  aria-label="Enable weight reminders"
+                                  checked={healthReminders.WeightRemindersEnabled}
+                                  onChange={onWeightRemindersEnabledChange}
+                                />
+                                <label
+                                  htmlFor="health-weight-reminders-enabled"
+                                  className="switch-pill-track"
+                                >
+                                  <span className="switch-pill-icon switch-pill-icon--off">
+                                    <Icon name="toggleOff" className="icon" />
+                                  </span>
+                                  <span className="switch-pill-icon switch-pill-icon--on">
+                                    <Icon name="toggleOn" className="icon" />
+                                  </span>
+                                  <span className="switch-pill-text switch-pill-text--off">Off</span>
+                                  <span className="switch-pill-text switch-pill-text--on">On</span>
+                                </label>
+                              </div>
+                            </div>
+                            <label>
+                              <span>Reminder time</span>
+                              <select
+                                value={healthReminders.WeightReminderTime}
+                                onChange={onWeightReminderTimeChange}
+                                disabled={!healthReminders.WeightRemindersEnabled}
+                              >
+                                {TimeOptions.map((option) => (
+                                  <option key={option.value} value={option.value}>
+                                    {option.label}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            <div className="settings-divider" />
+                            {isAdmin ? (
+                              <div className="form-stack">
+                                <div className="form-actions">
+                                  <button
+                                    type="button"
+                                    className="button-secondary"
+                                    onClick={runHealthRemindersNow}
+                                    disabled={healthReminderRunStatus === "loading"}
+                                  >
+                                    {healthReminderRunStatus === "loading"
+                                      ? "Running reminders..."
+                                      : "Run reminders now"}
+                                  </button>
+                                </div>
+                                {healthReminderRunError ? (
+                                  <p className="form-error">{healthReminderRunError}</p>
+                                ) : null}
+                                {healthReminderRunResult ? (
+                                  <div className="settings-list settings-list--slim">
+                                    <div className="settings-item">
+                                      <div>
+                                        <h4>Eligible users</h4>
+                                        <p>Users with reminders due at this time.</p>
+                                      </div>
+                                      <p>{healthReminderRunResult.EligibleUsers ?? 0}</p>
+                                    </div>
+                                    <div className="settings-item">
+                                      <div>
+                                        <h4>Processed users</h4>
+                                        <p>Users evaluated during the run.</p>
+                                      </div>
+                                      <p>{healthReminderRunResult.ProcessedUsers ?? 0}</p>
+                                    </div>
+                                    <div className="settings-item">
+                                      <div>
+                                        <h4>Notifications sent</h4>
+                                        <p>Reminders that were delivered.</p>
+                                      </div>
+                                      <p>{healthReminderRunResult.NotificationsSent ?? 0}</p>
+                                    </div>
+                                    <div className="settings-item">
+                                      <div>
+                                        <h4>Skipped</h4>
+                                        <p>Already logged or already run at this time.</p>
+                                      </div>
+                                      <p>{healthReminderRunResult.Skipped ?? 0}</p>
+                                    </div>
+                                    <div className="settings-item">
+                                      <div>
+                                        <h4>Errors</h4>
+                                        <p>Failures during the run.</p>
+                                      </div>
+                                      <p>{healthReminderRunResult.Errors ?? 0}</p>
+                                    </div>
+                                  </div>
+                                ) : null}
+                              </div>
+                            ) : (
+                              <p className="form-note">
+                                Only admin accounts can run reminders manually.
+                              </p>
+                            )}
                           </div>
                         </div>
                       </div>

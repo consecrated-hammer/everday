@@ -18,6 +18,11 @@ export const RotateHaeApiKey = () =>
   RequestJson(`${Health}/settings/hae-key/rotate`, {
     method: "POST"
   });
+export const RunHealthReminders = (payload) =>
+  RequestJson(`${Health}/settings/reminders/run-daily`, {
+    method: "POST",
+    body: payload ? JSON.stringify(payload) : undefined
+  });
 export const GetAiRecommendations = (payload) =>
   RequestJson(`${Health}/settings/ai-recommendations`, {
     method: "POST",

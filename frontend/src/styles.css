@@ -6292,6 +6292,10 @@ th {
 
 .health-entry-title {
   min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .health-entry-thumb {
@@ -7250,6 +7254,10 @@ th {
 .health-foods-toolbar {
   display: none;
   gap: 4px;
+}
+
+.health-foods-add-actions {
+  margin-bottom: 8px;
 }
 
 .health-foods.is-form-open .health-foods-browse {
