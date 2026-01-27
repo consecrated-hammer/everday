@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from datetime import date, datetime
 
 from sqlalchemy.orm import Session
@@ -31,6 +32,8 @@ MealTypeLabels = {
 
 def _IsValidTime(value: str | None) -> bool:
     if not value:
+        return False
+    if not re.fullmatch(r"\d{2}:\d{2}", value):
         return False
     try:
         datetime.strptime(value, "%H:%M")
