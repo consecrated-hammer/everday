@@ -105,6 +105,7 @@ const Builder = () => {
   const [openMenu, setOpenMenu] = useState(null);
   const [menuPosition, setMenuPosition] = useState(null);
   const builderRef = useRef(null);
+  const menuRef = useRef(null);
 
   const [categoryForm, setCategoryForm] = useState(EmptyCategoryForm);
   const [editingCategoryId, setEditingCategoryId] = useState(null);
@@ -160,6 +161,33 @@ const Builder = () => {
       document.removeEventListener("keydown", onKey);
     };
   }, []);
+
+  useEffect(() => {
+    if (!openMenu || !menuPosition) {
+      return undefined;
+    }
+    const frame = window.requestAnimationFrame(() => {
+      if (!menuRef.current) {
+        return;
+      }
+      const rect = menuRef.current.getBoundingClientRect();
+      const viewportPadding = 12;
+      const maxBottom = window.innerHeight - viewportPadding;
+      let nextTop = menuPosition.top;
+
+      if (rect.bottom > maxBottom) {
+        nextTop = Math.max(viewportPadding, menuPosition.top - (rect.bottom - maxBottom));
+      }
+      if (rect.top < viewportPadding) {
+        nextTop = viewportPadding;
+      }
+
+      if (nextTop !== menuPosition.top) {
+        setMenuPosition((prev) => (prev ? { ...prev, top: nextTop } : prev));
+      }
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [openMenu, menuPosition]);
 
   const activeCategory = useMemo(
     () => categories.find((entry) => entry.Id === activeCategoryId) || null,
@@ -683,6 +711,7 @@ const Builder = () => {
                             {isMenuOpen("category", category.Id) ? (
                               <div
                                 className="dropdown life-admin-context-menu"
+                                ref={menuRef}
                                 style={menuPosition ? { top: menuPosition.top, right: menuPosition.right } : undefined}
                               >
                                 <button
@@ -801,6 +830,7 @@ const Builder = () => {
                                 {isMenuOpen("field", field.Id) ? (
                                   <div
                                     className="dropdown life-admin-context-menu"
+                                    ref={menuRef}
                                     style={menuPosition ? { top: menuPosition.top, right: menuPosition.right } : undefined}
                                   >
                                     <button
@@ -952,6 +982,7 @@ const Builder = () => {
                                 {isMenuOpen("option", option.Id) ? (
                                   <div
                                     className="dropdown life-admin-context-menu"
+                                    ref={menuRef}
                                     style={menuPosition ? { top: menuPosition.top, right: menuPosition.right } : undefined}
                                   >
                                     <button
@@ -1045,6 +1076,7 @@ const Builder = () => {
                               {isMenuOpen("person", person.Id) ? (
                                 <div
                                   className="dropdown life-admin-context-menu"
+                                    ref={menuRef}
                                   style={menuPosition ? { top: menuPosition.top, right: menuPosition.right } : undefined}
                                 >
                                   <button
