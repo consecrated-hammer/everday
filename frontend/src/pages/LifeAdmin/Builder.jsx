@@ -624,29 +624,30 @@ const Builder = () => {
   const isMenuOpen = (type, id) => openMenu?.type === type && openMenu?.id === id;
 
   return (
-    <div className="life-admin-builder" ref={builderRef}>
-      <div className="life-admin-builder-header">
-        <div>
-          <h3>Builder</h3>
-          <p className="lede">Manage categories, fields, dropdowns, and people.</p>
+    <div className={`life-admin-builder${activeModal ? " is-modal-open" : ""}`} ref={builderRef}>
+      <div className="life-admin-builder-content">
+        <div className="life-admin-builder-header">
+          <div>
+            <h3>Builder</h3>
+            <p className="lede">Manage categories, fields, dropdowns, and people.</p>
+          </div>
         </div>
-      </div>
-      <div className="life-admin-tabs life-admin-tabs--underline" role="tablist" aria-label="Life admin builder tabs">
-        {BuilderTabs.map((tab) => (
-          <button
-            key={tab.key}
-            type="button"
-            className={`life-admin-tab${activeTab === tab.key ? " is-active" : ""}`}
-            onClick={() => setActiveTab(tab.key)}
-            aria-pressed={activeTab === tab.key}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
-      {error ? <p className="form-error">{error}</p> : null}
-      {actionError ? <p className="form-error">{actionError}</p> : null}
-      {status === "loading" ? <p className="form-note">Loading builder data.</p> : null}
+        <div className="life-admin-tabs life-admin-tabs--underline" role="tablist" aria-label="Life admin builder tabs">
+          {BuilderTabs.map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              className={`life-admin-tab${activeTab === tab.key ? " is-active" : ""}`}
+              onClick={() => setActiveTab(tab.key)}
+              aria-pressed={activeTab === tab.key}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+        {error ? <p className="form-error">{error}</p> : null}
+        {actionError ? <p className="form-error">{actionError}</p> : null}
+        {status === "loading" ? <p className="form-note">Loading builder data.</p> : null}
 
       {activeTab === "schema" ? (
         <div className="life-admin-builder-grid">
@@ -1105,6 +1106,7 @@ const Builder = () => {
         </section>
       ) : null}
 
+      </div>
       {activeModal === "category" ? (
         <div className="modal-backdrop" role="dialog" aria-modal="true" onClick={closeCategoryModal}>
           <div className="modal life-admin-modal" onClick={(event) => event.stopPropagation()}>

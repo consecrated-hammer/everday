@@ -2061,6 +2061,18 @@ select option:checked {
   gap: 12px;
 }
 
+.life-admin-builder-content {
+  display: grid;
+  gap: 12px;
+  transition: filter 150ms ease, opacity 150ms ease;
+}
+
+.life-admin-builder.is-modal-open .life-admin-builder-content {
+  filter: saturate(0.2) blur(1px);
+  opacity: 0.35;
+  pointer-events: none;
+}
+
 .life-admin-builder-header {
   display: flex;
   align-items: center;
@@ -2120,6 +2132,304 @@ select option:checked {
 .life-admin-records .income-table-header p {
   margin-top: 2px;
 }
+
+.life-admin-records-mobile {
+  display: grid;
+  gap: 14px;
+}
+
+.life-admin-records-mobile-toolbar {
+  display: grid;
+  gap: 12px;
+}
+
+.life-admin-records-mobile-nav {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--surface-strong);
+}
+
+.life-admin-records-mobile-count {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.life-admin-records-mobile-list {
+  display: grid;
+  gap: 10px;
+}
+
+.life-admin-record-card {
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: var(--surface-strong);
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.life-admin-record-card.is-editing {
+  border-color: rgba(51, 126, 209, 0.6);
+  box-shadow: 0 12px 24px rgba(43, 110, 246, 0.18);
+  background: linear-gradient(180deg, rgba(43, 110, 246, 0.08), rgba(255, 255, 255, 0.98));
+}
+
+.life-admin-record-card-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.life-admin-record-card-header h5 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.life-admin-record-card-body {
+  display: grid;
+  gap: 6px;
+}
+
+.life-admin-record-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.life-admin-record-mini-row {
+  display: grid;
+  grid-template-columns: minmax(110px, 38%) 1fr;
+  column-gap: 10px;
+  row-gap: 6px;
+  align-items: center;
+  min-height: 32px;
+}
+
+.life-admin-record-mini-row.is-wrapping {
+  align-items: start;
+}
+
+.life-admin-record-mini-row.is-stacked {
+  grid-template-columns: 1fr;
+}
+
+.life-admin-record-label-cell {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.life-admin-record-label-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  max-width: 100%;
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 4px 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+  min-height: 30px;
+  font-family: inherit;
+}
+
+.life-admin-record-label-text {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  line-height: 1.2;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.life-admin-record-label-text.is-wrapping {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  white-space: normal;
+  text-overflow: ellipsis;
+}
+
+.life-admin-record-label-tooltip {
+  max-width: min(280px, calc(100vw - 24px));
+  background: var(--surface-strong);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-size: 0.82rem;
+  color: var(--text);
+  box-shadow: var(--shadow);
+}
+
+.life-admin-multi-select {
+  position: relative;
+}
+
+.life-admin-multi-select-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+}
+
+.life-admin-multi-select-trigger .icon {
+  color: var(--text-muted);
+}
+
+.life-admin-multi-select-value {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.life-admin-multi-select-value.is-placeholder {
+  color: var(--text-muted);
+}
+
+.life-admin-multi-select-menu {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  padding: 8px;
+  display: grid;
+  gap: 6px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.life-admin-multi-select-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.life-admin-multi-select-option input {
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.life-admin-multi-select-option:hover {
+  background: var(--surface-muted);
+}
+
+.life-admin-record-mini-row.is-stacked .life-admin-record-label-cell,
+.life-admin-record-mini-row.is-stacked .life-admin-record-value-cell {
+  grid-column: 1 / -1;
+}
+
+.life-admin-record-mini-row.is-stacked .life-admin-record-label-chip {
+  width: fit-content;
+}
+
+.life-admin-record-mini-row.is-stacked .life-admin-record-value-cell {
+  margin-top: 6px;
+}
+
+.life-admin-record-value-cell {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  align-items: start;
+  color: var(--text);
+  word-break: break-word;
+}
+
+.life-admin-record-value-cell.is-numeric {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.life-admin-record-value-empty {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.life-admin-record-value-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.life-admin-record-value-chip {
+  padding: 4px 8px;
+  border-radius: 10px;
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  font-size: 0.82rem;
+}
+
+.life-admin-record-value-token {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  border-radius: 10px;
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  font-size: 0.82rem;
+  white-space: normal;
+  max-width: 100%;
+  flex-wrap: wrap;
+}
+
+.life-admin-record-value-text {
+  display: grid;
+  gap: 4px;
+}
+
+.life-admin-record-longtext {
+  white-space: pre-wrap;
+  line-height: 1.4;
+}
+
+.life-admin-record-longtext:not(.is-expanded) {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+}
+
+.life-admin-record-more {
+  justify-self: flex-start;
+}
+
+.life-admin-record-required {
+  margin-left: 6px;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+}
+
+.life-admin-record-date-range {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.life-admin-record-date-range-form {
+  row-gap: 8px;
+}
+
+
 
 .life-admin-panel .module-panel-header {
   margin-bottom: 10px;
@@ -4163,7 +4473,7 @@ th.cell-number .th-button {
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(20, 16, 12, 0.4);
+  background: rgba(15, 20, 32, 0.35);
   display: grid;
   align-items: start;
   justify-items: center;
@@ -4179,7 +4489,7 @@ th.cell-number .th-button {
   width: min(900px, 92vw);
   max-height: calc(100vh - 80px);
   overflow-y: auto;
-  box-shadow: 0 20px 60px rgba(44, 32, 20, 0.25);
+  box-shadow: var(--shadow);
   border: 1px solid var(--border);
 }
 

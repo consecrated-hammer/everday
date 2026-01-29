@@ -95,6 +95,12 @@ A task is “done” when:
 - DEV = `scripts/dev.sh` with `docker-compose.traefik.dev.yml` using `.env.dev`
 - PROD = main stack compose at `/mnt/docker/config/dockerconfigs/docker-compose.yml`
 
+### Afer any code changes
+- Frontend-only changes: run `./scripts/dev.sh --lint-only`
+- Backend-only changes: run `./scripts/dev.sh --test-only` and `./scripts/dev.sh --build-only`
+- Frontend + backend changes: run `./scripts/dev.sh` (runs lint + test + build)
+- Resolve any warnings or errors found.
+
 ### Verification (dev container only)
 - Use `./scripts/dev.sh` for all local testing and verification.
 - Do not use `npm run dev`; all checks run inside the dev container.

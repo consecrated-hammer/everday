@@ -31,6 +31,20 @@ const ParseLocalDate = (value) => {
 };
 
 const DaysInMonth = (year, month) => new Date(year, month, 0).getDate();
+const LabelWrapThreshold = 80;
+const LabelWrapSoftThreshold = 24;
+const LongPressDelayMs = 550;
+
+const FormatNumericValue = (value) => {
+  if (value === null || value === undefined) {
+    return "";
+  }
+  const numeric = typeof value === "number" ? value : Number(value);
+  if (Number.isFinite(numeric)) {
+    return numeric.toLocaleString();
+  }
+  return String(value);
+};
 
 const BuildDateRangeText = (value) => {
   if (!value || typeof value !== "object") {
@@ -80,6 +94,54 @@ const BuildDateRangeDuration = (startIso, endIso) => {
   return parts.join(", ");
 };
 
+const ResolveLookupLabel = (field, value, { dropdownLabelMap, personMap, recordLabelMap }) => {
+  if (value === null || value === undefined) {
+    return "";
+  }
+  if (field.FieldType === "Dropdown") {
+    return dropdownLabelMap[value] ?? value;
+  }
+  if (field.FieldType === "Person") {
+    return personMap[value] ?? value;
+  }
+  if (field.FieldType === "RecordLink") {
+    return recordLabelMap[value] ?? value;
+  }
+  return value;
+};
+
+const useLongPressCopy = (text) => {
+  const timerRef = useRef(null);
+
+  const clearTimer = useCallback(() => {
+    if (timerRef.current) {
+      window.clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+  }, []);
+
+  const startTimer = useCallback(() => {
+    if (!text || typeof navigator === "undefined" || !navigator.clipboard?.writeText) {
+      return;
+    }
+    clearTimer();
+    timerRef.current = window.setTimeout(async () => {
+      try {
+        await navigator.clipboard.writeText(String(text));
+      } catch (error) {
+        // Best-effort copy, ignore failures.
+      }
+    }, LongPressDelayMs);
+  }, [clearTimer, text]);
+
+  return {
+    onPointerDown: startTimer,
+    onPointerUp: clearTimer,
+    onPointerLeave: clearTimer,
+    onPointerCancel: clearTimer
+  };
+};
+
 const BuildSelectOptions = (entries, { valueKey = "Id", labelKey = "Name" } = {}) => {
   const options = [{ value: "", label: "None" }];
   (entries || []).forEach((entry) => {
@@ -91,6 +153,332 @@ const BuildSelectOptions = (entries, { valueKey = "Id", labelKey = "Name" } = {}
     }
   });
   return options;
+};
+
+const MultiSelectDropdown = ({ id, options, value, onChange, placeholder = "Select" }) => {
+  const triggerRef = useRef(null);
+  const menuRef = useRef(null);
+  const [isOpen, setIsOpen] = useState(false);
+  const [menuPosition, setMenuPosition] = useState(null);
+
+  const normalizedValue = useMemo(
+    () => (Array.isArray(value) ? value.map((entry) => String(entry)) : []),
+    [value]
+  );
+  const selectedSet = useMemo(() => new Set(normalizedValue), [normalizedValue]);
+  const selectedLabels = useMemo(
+    () =>
+      options
+        .filter((option) => selectedSet.has(String(option.value)))
+        .map((option) => option.label)
+        .filter((label) => String(label).trim() !== ""),
+    [options, selectedSet]
+  );
+
+  useEffect(() => {
+    if (!isOpen || !triggerRef.current) {
+      return;
+    }
+    const updatePosition = () => {
+      if (!triggerRef.current) {
+        return;
+      }
+      const rect = triggerRef.current.getBoundingClientRect();
+      const maxHeight = 260;
+      const padding = 12;
+      let top = rect.bottom + 8;
+      if (top + maxHeight > window.innerHeight - padding) {
+        top = Math.max(padding, rect.top - maxHeight - 8);
+      }
+      setMenuPosition({
+        left: Math.max(padding, rect.left),
+        top,
+        width: rect.width
+      });
+    };
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+    const onClick = (event) => {
+      if (menuRef.current?.contains(event.target)) {
+        return;
+      }
+      if (triggerRef.current?.contains(event.target)) {
+        return;
+      }
+      setIsOpen(false);
+    };
+    const onKey = (event) => {
+      if (event.key === "Escape") {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onClick);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [isOpen]);
+
+  const toggleValue = (optionValue) => {
+    const valueKey = String(optionValue);
+    const next = new Set(normalizedValue);
+    if (next.has(valueKey)) {
+      next.delete(valueKey);
+    } else {
+      next.add(valueKey);
+    }
+    onChange(Array.from(next));
+  };
+
+  return (
+    <div className="life-admin-multi-select">
+      <button
+        id={id}
+        type="button"
+        className="form-input life-admin-multi-select-trigger"
+        onClick={() => setIsOpen((prev) => !prev)}
+        aria-expanded={isOpen}
+        ref={triggerRef}
+      >
+        <span
+          className={`life-admin-multi-select-value${
+            selectedLabels.length === 0 ? " is-placeholder" : ""
+          }`}
+        >
+          {selectedLabels.length > 0 ? selectedLabels.join(", ") : placeholder}
+        </span>
+        <Icon name="chevronDown" className="icon" />
+      </button>
+      {isOpen && menuPosition
+        ? createPortal(
+            <div
+              className="life-admin-multi-select-menu"
+              ref={menuRef}
+              style={{
+                position: "fixed",
+                left: menuPosition.left,
+                top: menuPosition.top,
+                width: menuPosition.width
+              }}
+            >
+              {options.map((option) => {
+                const optionValue = String(option.value);
+                const isChecked = selectedSet.has(optionValue);
+                return (
+                  <label key={optionValue || "none"} className="life-admin-multi-select-option">
+                    <input
+                      type="checkbox"
+                      checked={isChecked}
+                      onChange={() => toggleValue(optionValue)}
+                    />
+                    <span>{option.label}</span>
+                  </label>
+                );
+              })}
+            </div>,
+            document.getElementById("portal") || document.body
+          )
+        : null}
+    </div>
+  );
+};
+
+const MobileRecordMiniRow = ({ field, value, lookupMaps, isEmptyValue }) => {
+  const labelButtonRef = useRef(null);
+  const tooltipRef = useRef(null);
+  const [valueExpanded, setValueExpanded] = useState(false);
+  const [isStacked, setIsStacked] = useState(field.Name.length > LabelWrapThreshold);
+  const [labelTooltipOpen, setLabelTooltipOpen] = useState(false);
+  const [labelTooltipBounds, setLabelTooltipBounds] = useState(null);
+  const allowWrap = field.Name.length > LabelWrapSoftThreshold;
+
+  const labelCopyHandlers = useLongPressCopy(field.Key);
+  const listValues = useMemo(() => {
+    const hasValue = !isEmptyValue(value);
+    const normalized = Array.isArray(value) ? value : field.IsMulti && hasValue ? [value] : null;
+    if (!normalized) {
+      return null;
+    }
+    const labels = normalized
+      .map((entry) => ResolveLookupLabel(field, entry, lookupMaps))
+      .map((entry) => String(entry ?? ""))
+      .filter((entry) => entry.trim() !== "");
+    return labels.length > 0 ? labels : null;
+  }, [field, isEmptyValue, lookupMaps, value]);
+
+  const isEmpty = isEmptyValue(value) || (Array.isArray(value) && !listValues);
+  const isDateRange = field.FieldType === "DateRange";
+  const isDate = field.FieldType === "Date";
+  const isBoolean = field.FieldType === "Boolean";
+  const isNumeric = field.FieldType === "Number" || field.FieldType === "Currency";
+  const resolvedValue = ResolveLookupLabel(field, value, lookupMaps);
+
+  const valueText = useMemo(() => {
+    if (isDateRange) {
+      return BuildDateRangeText(value);
+    }
+    if (isDate) {
+      return String(value || "");
+    }
+    if (isBoolean) {
+      return value ? "Yes" : "No";
+    }
+    if (isNumeric) {
+      return FormatNumericValue(resolvedValue);
+    }
+    if (resolvedValue === null || resolvedValue === undefined) {
+      return "";
+    }
+    return String(resolvedValue);
+  }, [isBoolean, isDate, isDateRange, isNumeric, resolvedValue, value]);
+
+  const valueCopyText = useMemo(() => {
+    if (listValues) {
+      return listValues.join(", ");
+    }
+    return valueText;
+  }, [listValues, valueText]);
+
+  const valueCopyHandlers = useLongPressCopy(valueCopyText);
+  const longTextThreshold = field.FieldType === "LongText" ? 120 : 160;
+  const hasLongText =
+    valueText.length > longTextThreshold || valueText.split("\n").length > 3;
+  const shouldClampText = hasLongText && !valueExpanded;
+
+  useEffect(() => {
+    if (field.Name.length > LabelWrapThreshold) {
+      setIsStacked(true);
+      return;
+    }
+    if (!allowWrap) {
+      setIsStacked(false);
+      return;
+    }
+    setIsStacked(false);
+  }, [allowWrap, field.Name]);
+
+  useEffect(() => {
+    if (!labelTooltipOpen) {
+      return;
+    }
+    const onClick = (event) => {
+      if (tooltipRef.current?.contains(event.target)) {
+        return;
+      }
+      if (labelButtonRef.current?.contains(event.target)) {
+        return;
+      }
+      setLabelTooltipOpen(false);
+    };
+    const onKey = (event) => {
+      if (event.key === "Escape") {
+        setLabelTooltipOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onClick);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [labelTooltipOpen]);
+
+  useEffect(() => {
+    if (!labelTooltipOpen || !labelButtonRef.current) {
+      return;
+    }
+    setLabelTooltipBounds(labelButtonRef.current.getBoundingClientRect());
+  }, [labelTooltipOpen]);
+
+  return (
+    <div
+      className={`life-admin-record-mini-row${allowWrap ? " is-wrapping" : ""}${
+        isStacked ? " is-stacked" : ""
+      }`}
+    >
+      <div className="life-admin-record-label-cell">
+        <button
+          type="button"
+          className="life-admin-record-label-chip"
+          title={field.Name}
+          {...labelCopyHandlers}
+          ref={labelButtonRef}
+          onClick={() => setLabelTooltipOpen((prev) => !prev)}
+        >
+          <span className={`life-admin-record-label-text${allowWrap ? " is-wrapping" : ""}`}>
+            {field.Name}
+          </span>
+        </button>
+        {labelTooltipOpen && labelTooltipBounds
+          ? createPortal(
+              <div
+                className="life-admin-record-label-tooltip"
+                ref={tooltipRef}
+                style={{
+                  position: "fixed",
+                  left: Math.min(labelTooltipBounds.left, window.innerWidth - 280),
+                  top: Math.min(labelTooltipBounds.bottom + 6, window.innerHeight - 140)
+                }}
+              >
+                {field.Name}
+              </div>,
+              document.getElementById("portal") || document.body
+            )
+          : null}
+      </div>
+      <div
+        className={`life-admin-record-value-cell${isNumeric ? " is-numeric" : ""}`}
+        {...valueCopyHandlers}
+      >
+        {isEmpty ? (
+          <span className="life-admin-record-value-empty">Not set</span>
+        ) : listValues ? (
+          <div className="life-admin-record-value-chips">
+            {listValues.map((entry, index) => (
+              <span key={`${field.Key}-${index}`} className="life-admin-record-value-chip">
+                {entry}
+              </span>
+            ))}
+          </div>
+        ) : isDate || isDateRange ? (
+          <span className="life-admin-record-value-token">{valueText}</span>
+        ) : (
+          <div className="life-admin-record-value-text">
+            <span
+              className={`life-admin-record-longtext${shouldClampText ? "" : " is-expanded"}`}
+            >
+              {valueText}
+            </span>
+            {hasLongText ? (
+              <button
+                type="button"
+                className="text-button life-admin-record-more"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setValueExpanded((prev) => !prev);
+                }}
+                onPointerDown={(event) => event.stopPropagation()}
+              >
+                {valueExpanded ? "Show less" : "More"}
+              </button>
+            ) : null}
+          </div>
+        )}
+      </div>
+    </div>
+  );
 };
 
 const Records = () => {
@@ -121,6 +509,12 @@ const Records = () => {
   const filterPopoverRef = useRef(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [draftRecord, setDraftRecord] = useState(null);
+  const [isMobileView, setIsMobileView] = useState(false);
+  const [mobileEditId, setMobileEditId] = useState(null);
+  const [mobileEditData, setMobileEditData] = useState({});
+  const [mobileAddOpen, setMobileAddOpen] = useState(false);
+  const [mobileAddData, setMobileAddData] = useState({});
+  const [mobileNavId, setMobileNavId] = useState(null);
   const [gridSelection, setGridSelection] = useState({
     columns: CompactSelection.empty(),
     rows: CompactSelection.empty()
@@ -129,6 +523,18 @@ const Records = () => {
   const gridRef = useRef(null);
   const gridShellRef = useRef(null);
   const selectAllRef = useRef(null);
+  const recordRefs = useRef({});
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) {
+      return;
+    }
+    const media = window.matchMedia("(max-width: 900px)");
+    const onChange = (event) => setIsMobileView(event.matches);
+    setIsMobileView(media.matches);
+    media.addEventListener("change", onChange);
+    return () => media.removeEventListener("change", onChange);
+  }, []);
 
   useEffect(() => {
     if (activeCategoryId) {
@@ -170,6 +576,10 @@ const Records = () => {
     setSearchTerm("");
     setColumnsOpen(false);
     setMenuOpen(false);
+    setMobileEditId(null);
+    setMobileEditData({});
+    setMobileAddOpen(false);
+    setMobileAddData({});
   }, [activeCategoryId, fields]);
 
   useEffect(() => {
@@ -210,6 +620,10 @@ const Records = () => {
     });
     return map;
   }, [recordLookups]);
+  const lookupMaps = useMemo(
+    () => ({ dropdownLabelMap, personMap, recordLabelMap }),
+    [dropdownLabelMap, personMap, recordLabelMap]
+  );
 
   const defaultVisibleColumns = useMemo(
     () => Object.fromEntries(fields.map((field) => [field.Key, true])),
@@ -384,6 +798,13 @@ const Records = () => {
   const onAddRecord = () => {
     if (!activeCategoryId) {
       setActionError("Select a category to add records.");
+      return;
+    }
+    if (isMobileView) {
+      setMobileAddOpen(true);
+      setMobileAddData({});
+      setMobileEditId(null);
+      setMobileEditData({});
       return;
     }
     gridRef.current?.appendRow(0, true);
@@ -574,6 +995,7 @@ const Records = () => {
   }, [sortedRows, draftRow]);
 
   const showGrid = displayRows.length > 0;
+  const mobileRows = useMemo(() => sortedRows, [sortedRows]);
 
   const fieldMap = useMemo(
     () =>
@@ -584,6 +1006,13 @@ const Records = () => {
     [fields]
   );
 
+  const mobileFields = useMemo(() => {
+    const visible = fields.filter(
+      (field) => field.IsRequired || visibleColumns[field.Key] !== false
+    );
+    return visible.length > 0 ? visible : fields;
+  }, [fields, visibleColumns]);
+
   const isEmptyValue = useCallback(
     (value) =>
       value === null ||
@@ -592,6 +1021,149 @@ const Records = () => {
       (Array.isArray(value) && value.length === 0),
     []
   );
+
+  const buildPayloadFromData = useCallback(
+    (data) => {
+      const nextData = {};
+      fields.forEach((field) => {
+        const value = data?.[field.Key];
+        if (field.FieldType === "DateRange") {
+          const start = value?.StartDate || "";
+          const end = value?.EndDate || "";
+          if (!start && !end) {
+            return;
+          }
+        }
+        if (isEmptyValue(value)) {
+          return;
+        }
+        nextData[field.Key] = value;
+      });
+      return nextData;
+    },
+    [fields, isEmptyValue]
+  );
+
+  const normalizeForCompare = useCallback(
+    (field, value) => {
+      if (field.FieldType === "DateRange") {
+        const start = value?.StartDate || "";
+        const end = value?.EndDate || "";
+        return !start && !end ? null : { StartDate: start || null, EndDate: end || null };
+      }
+      return isEmptyValue(value) ? null : value;
+    },
+    [isEmptyValue]
+  );
+
+  const isMobileDirty = useCallback(
+    (record, draft) =>
+      fields.some((field) => {
+        const current = normalizeForCompare(field, record?.Data?.[field.Key]);
+        const next = normalizeForCompare(field, draft?.[field.Key]);
+        return JSON.stringify(current) !== JSON.stringify(next);
+      }),
+    [fields, normalizeForCompare]
+  );
+
+  const isMobileDraftDirty = useCallback(
+    (draft) => fields.some((field) => !isEmptyValue(draft?.[field.Key])),
+    [fields, isEmptyValue]
+  );
+
+  const onStartMobileEdit = useCallback((record) => {
+    setMobileEditId(record.Id);
+    setMobileEditData(record.Data || {});
+    setMobileAddOpen(false);
+    setMobileAddData({});
+  }, []);
+
+  const onCancelMobileEdit = useCallback(() => {
+    setMobileEditId(null);
+    setMobileEditData({});
+  }, []);
+
+  const onCancelMobileAdd = useCallback(() => {
+    setMobileAddOpen(false);
+    setMobileAddData({});
+  }, []);
+
+  useEffect(() => {
+    if (!isMobileView) {
+      return;
+    }
+    if (mobileRows.length === 0) {
+      setMobileNavId(null);
+      return;
+    }
+    if (!mobileNavId || !mobileRows.some((row) => row.Id === mobileNavId)) {
+      setMobileNavId(mobileRows[0].Id);
+    }
+  }, [isMobileView, mobileRows, mobileNavId]);
+
+  const buildRecordTitle = useCallback(
+    (record, index) => record?.Title || `Record ${index + 1}`,
+    []
+  );
+
+  const scrollToRecord = useCallback((recordId) => {
+    const node = recordRefs.current[recordId];
+    if (node?.scrollIntoView) {
+      node.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, []);
+
+  const mobileNavIndex = useMemo(
+    () => mobileRows.findIndex((row) => row.Id === mobileNavId),
+    [mobileRows, mobileNavId]
+  );
+  const mobileNavCount = mobileRows.length;
+
+  const coerceIdValue = useCallback((value) => {
+    if (value === "" || value === null || value === undefined) {
+      return null;
+    }
+    const parsed = Number(value);
+    return Number.isNaN(parsed) ? value : parsed;
+  }, []);
+
+  const getSelectValue = useCallback((field, data) => {
+    const value = data?.[field.Key];
+    if (field.IsMulti) {
+      return Array.isArray(value) ? value.map((entry) => String(entry)) : [];
+    }
+    return value === null || value === undefined ? "" : String(value);
+  }, []);
+
+  const getDateRangeValue = useCallback((data, key) => {
+    const value = data?.[key];
+    if (!value || typeof value !== "object") {
+      return { StartDate: "", EndDate: "" };
+    }
+    return {
+      StartDate: value.StartDate || "",
+      EndDate: value.EndDate || ""
+    };
+  }, []);
+
+  const onMobileNavChange = useCallback(
+    (event) => {
+      const nextId = coerceIdValue(event.target.value);
+      if (!nextId) {
+        return;
+      }
+      setMobileNavId(nextId);
+      scrollToRecord(nextId);
+    },
+    [coerceIdValue, scrollToRecord]
+  );
+
+  const updateMobileData = useCallback((setData, key, value) => {
+    setData((prev) => ({
+      ...prev,
+      [key]: value
+    }));
+  }, []);
 
   const requiredCellTheme = useMemo(() => ({ bgCell: gridTheme.accentLight }), [gridTheme]);
 
@@ -617,6 +1189,228 @@ const Records = () => {
       .filter((field) => field.IsRequired && isMissingRequired(field, data[field.Key]))
       .map((field) => field.Name);
   }, [draftRecord, fields, isMissingRequired]);
+
+  const buildMissingRequiredForData = useCallback(
+    (data) =>
+      fields
+        .filter((field) => field.IsRequired && isMissingRequired(field, data?.[field.Key]))
+        .map((field) => field.Name),
+    [fields, isMissingRequired]
+  );
+
+  const mobileAddMissingRequired = useMemo(
+    () => buildMissingRequiredForData(mobileAddData),
+    [buildMissingRequiredForData, mobileAddData]
+  );
+
+  const mobileEditMissingRequired = useMemo(
+    () => buildMissingRequiredForData(mobileEditData),
+    [buildMissingRequiredForData, mobileEditData]
+  );
+
+  const renderMobileFieldInput = useCallback(
+    (field, data, setData, idPrefix) => {
+      const fieldId = `${idPrefix}-${field.Key}`;
+      const label = (
+        <span className="form-grid-label">
+          {field.Name}
+          {field.IsRequired ? <span className="life-admin-record-required">Required</span> : null}
+        </span>
+      );
+
+      if (field.FieldType === "Boolean") {
+        const checked = Boolean(data?.[field.Key]);
+        return (
+          <div className="form-group" key={field.Key}>
+            <div className="form-switch-row form-switch-row--inline">
+              <span className="form-switch-label">{field.Name}</span>
+              <div className="switch-pill">
+                <input
+                  id={fieldId}
+                  type="checkbox"
+                  checked={checked}
+                  onChange={(event) => updateMobileData(setData, field.Key, event.target.checked)}
+                  aria-label={field.Name}
+                />
+                <label htmlFor={fieldId} className="switch-pill-track">
+                  <span className="switch-pill-icon switch-pill-icon--off">
+                    <Icon name="toggleOff" className="icon" />
+                  </span>
+                  <span className="switch-pill-icon switch-pill-icon--on">
+                    <Icon name="toggleOn" className="icon" />
+                  </span>
+                  <span className="switch-pill-text switch-pill-text--off">Off</span>
+                  <span className="switch-pill-text switch-pill-text--on">On</span>
+                </label>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      if (field.FieldType === "DateRange") {
+        const value = getDateRangeValue(data, field.Key);
+        return (
+          <div className="form-group" key={field.Key}>
+            {label}
+            <div className="form-date-range life-admin-record-date-range-form">
+              <div className="form-group">
+                <label htmlFor={`${fieldId}-start`} className="form-grid-label">Start date</label>
+                <input
+                  id={`${fieldId}-start`}
+                  type="date"
+                  className="form-input"
+                  value={value.StartDate}
+                  onChange={(event) =>
+                    updateMobileData(setData, field.Key, {
+                      ...value,
+                      StartDate: event.target.value
+                    })
+                  }
+                />
+              </div>
+              <div className="form-group">
+                <label htmlFor={`${fieldId}-end`} className="form-grid-label">End date</label>
+                <input
+                  id={`${fieldId}-end`}
+                  type="date"
+                  className="form-input"
+                  value={value.EndDate}
+                  onChange={(event) =>
+                    updateMobileData(setData, field.Key, {
+                      ...value,
+                      EndDate: event.target.value
+                    })
+                  }
+                />
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      if (field.FieldType === "Dropdown" || field.FieldType === "Person" || field.FieldType === "RecordLink") {
+        const options = (selectOptionsByField[field.Key] || []).filter((option) =>
+          field.IsMulti ? option.value !== "" : true
+        );
+        const value = getSelectValue(field, data);
+        if (field.IsMulti) {
+          return (
+            <div className="form-group" key={field.Key}>
+              <label htmlFor={fieldId}>{label}</label>
+              <MultiSelectDropdown
+                id={fieldId}
+                options={options}
+                value={value}
+                onChange={(nextValues) => {
+                  const parsed = nextValues
+                    .map((entry) => coerceIdValue(entry))
+                    .filter((entry) => entry !== null && entry !== "");
+                  updateMobileData(setData, field.Key, parsed);
+                }}
+              />
+            </div>
+          );
+        }
+        return (
+          <div className="form-group" key={field.Key}>
+            <label htmlFor={fieldId}>{label}</label>
+            <select
+              id={fieldId}
+              className="form-input"
+              multiple={field.IsMulti}
+              size={field.IsMulti ? Math.min(Math.max(options.length, 3), 6) : undefined}
+              value={value}
+              onChange={(event) => {
+                if (field.IsMulti) {
+                  const nextValues = Array.from(event.target.selectedOptions).map((option) =>
+                    coerceIdValue(option.value)
+                  );
+                  updateMobileData(setData, field.Key, nextValues.filter((entry) => entry !== null));
+                  return;
+                }
+                updateMobileData(setData, field.Key, coerceIdValue(event.target.value));
+              }}
+            >
+              {options.map((option) => (
+                <option key={option.value || "none"} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        );
+      }
+
+      if (field.FieldType === "LongText") {
+        return (
+          <div className="form-group" key={field.Key}>
+            <label htmlFor={fieldId}>{label}</label>
+            <textarea
+              id={fieldId}
+              className="form-input"
+              rows={3}
+              value={data?.[field.Key] ?? ""}
+              onChange={(event) => updateMobileData(setData, field.Key, event.target.value)}
+            />
+          </div>
+        );
+      }
+
+      if (field.FieldType === "Number" || field.FieldType === "Currency") {
+        const value = data?.[field.Key];
+        return (
+          <div className="form-group" key={field.Key}>
+            <label htmlFor={fieldId}>{label}</label>
+            <input
+              id={fieldId}
+              type="number"
+              step={field.FieldType === "Currency" ? "0.01" : "1"}
+              className="form-input"
+              value={value ?? ""}
+              onChange={(event) => {
+                const nextValue = event.target.value === "" ? null : Number(event.target.value);
+                updateMobileData(
+                  setData,
+                  field.Key,
+                  Number.isNaN(nextValue) ? null : nextValue
+                );
+              }}
+            />
+          </div>
+        );
+      }
+
+      if (field.FieldType === "Date") {
+        return (
+          <div className="form-group" key={field.Key}>
+            <label htmlFor={fieldId}>{label}</label>
+            <input
+              id={fieldId}
+              type="date"
+              className="form-input"
+              value={data?.[field.Key] ?? ""}
+              onChange={(event) => updateMobileData(setData, field.Key, event.target.value || null)}
+            />
+          </div>
+        );
+      }
+
+      return (
+        <div className="form-group" key={field.Key}>
+          <label htmlFor={fieldId}>{label}</label>
+          <input
+            id={fieldId}
+            type="text"
+            className="form-input"
+            value={data?.[field.Key] ?? ""}
+            onChange={(event) => updateMobileData(setData, field.Key, event.target.value)}
+          />
+        </div>
+      );
+    },
+    [coerceIdValue, getDateRangeValue, getSelectValue, selectOptionsByField, updateMobileData]
+  );
 
   const gridColumns = useMemo(() => {
     const rowColumn = {
@@ -1030,6 +1824,57 @@ const Records = () => {
     [fields, isEmptyValue]
   );
 
+  const onSaveMobileEdit = useCallback(
+    async (record) => {
+      const payload = buildPayloadFromData(mobileEditData);
+      if (!isRecordReady(mobileEditData)) {
+        setActionError("Fill in required fields before saving.");
+        return;
+      }
+      try {
+        setActionStatus("saving");
+        setActionError("");
+        const updated = await UpdateLifeRecord(record.Id, { Data: payload });
+        setRecords((current) =>
+          current.map((item) => (item.Id === updated.Id ? updated : item))
+        );
+        setMobileEditId(null);
+        setMobileEditData({});
+      } catch (err) {
+        setActionStatus("error");
+        setActionError(err?.message || "Failed to update record");
+      } finally {
+        setActionStatus("ready");
+      }
+    },
+    [buildPayloadFromData, isRecordReady, mobileEditData, setRecords]
+  );
+
+  const onSaveMobileAdd = useCallback(async () => {
+    if (!activeCategoryId) {
+      setActionError("Select a category to add records.");
+      return;
+    }
+    if (!isRecordReady(mobileAddData)) {
+      setActionError("Fill in required fields before saving.");
+      return;
+    }
+    try {
+      setActionStatus("saving");
+      setActionError("");
+      const payload = buildPayloadFromData(mobileAddData);
+      await CreateLifeRecord(activeCategoryId, { Data: payload });
+      setMobileAddOpen(false);
+      setMobileAddData({});
+      await reloadRecords();
+    } catch (err) {
+      setActionStatus("error");
+      setActionError(err?.message || "Failed to add record");
+    } finally {
+      setActionStatus("ready");
+    }
+  }, [activeCategoryId, buildPayloadFromData, isRecordReady, mobileAddData, reloadRecords]);
+
   const handleCellEdited = useCallback(
     async (cell, newValue) => {
       const [col, row] = cell;
@@ -1202,6 +2047,183 @@ const Records = () => {
             </div>
             {recordStatus === "loading" ? (
               <p className="form-note">Loading records.</p>
+            ) : isMobileView ? (
+              <div className="life-admin-records-mobile">
+                <div className="life-admin-records-mobile-toolbar">
+                  <div className="form-group">
+                    <label htmlFor="life-admin-records-search" className="form-grid-label">Search</label>
+                    <input
+                      id="life-admin-records-search"
+                      className="form-input"
+                      placeholder="Search"
+                      value={searchTerm}
+                      onChange={(event) => setSearchTerm(event.target.value)}
+                    />
+                  </div>
+                  {mobileRows.length > 0 ? (
+                    <div className="life-admin-records-mobile-nav">
+                      <div className="form-group">
+                        <label htmlFor="life-admin-records-jump" className="form-grid-label">Jump to record</label>
+                        <select
+                          id="life-admin-records-jump"
+                          className="form-input"
+                          value={mobileNavId ?? ""}
+                          onChange={onMobileNavChange}
+                        >
+                          {mobileRows.map((row, index) => (
+                            <option key={row.Id} value={row.Id}>
+                              {buildRecordTitle(row.Record, index)}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <span className="life-admin-records-mobile-count">
+                        {mobileNavIndex >= 0
+                          ? `Record ${mobileNavIndex + 1} of ${mobileNavCount}`
+                          : `${mobileNavCount} records`}
+                      </span>
+                    </div>
+                  ) : null}
+                </div>
+
+                {mobileAddOpen ? (
+                  <article className="life-admin-record-card is-editing">
+                    <header className="life-admin-record-card-header">
+                      <div>
+                        <h5>New record</h5>
+                        <p className="text-muted">Fill in the fields below.</p>
+                      </div>
+                    </header>
+                    <div className="life-admin-record-card-body">
+                      {mobileFields.map((field) =>
+                        renderMobileFieldInput(field, mobileAddData, setMobileAddData, "mobile-add")
+                      )}
+                    </div>
+                    {mobileAddMissingRequired.length > 0 ? (
+                      <p className="form-note">
+                        Missing required: {mobileAddMissingRequired.join(", ")}.
+                      </p>
+                    ) : null}
+                    <div className="life-admin-record-card-actions">
+                      <button type="button" className="button-secondary" onClick={onCancelMobileAdd}>
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        className="primary-button"
+                        onClick={onSaveMobileAdd}
+                        disabled={!isMobileDraftDirty(mobileAddData) || !isRecordReady(mobileAddData)}
+                      >
+                        Save record
+                      </button>
+                    </div>
+                  </article>
+                ) : null}
+
+                {mobileRows.length === 0 ? (
+                  <div className="table-empty">
+                    <p>No records yet. Add a record to get started.</p>
+                    <button type="button" className="primary-button" onClick={onAddRecord}>
+                      Add first record
+                    </button>
+                  </div>
+                ) : (
+                  <div className="life-admin-records-mobile-list">
+                    {mobileRows.map((row, index) => {
+                      const record = row.Record;
+                      const isEditing = mobileEditId === record.Id;
+                      const draft = isEditing ? mobileEditData : record.Data || {};
+                      return (
+                        <article
+                          key={record.Id}
+                          className={`life-admin-record-card${isEditing ? " is-editing" : ""}`}
+                          ref={(node) => {
+                            if (node) {
+                              recordRefs.current[record.Id] = node;
+                            }
+                          }}
+                        >
+                          <header className="life-admin-record-card-header">
+                            <div>
+                              <h5>{buildRecordTitle(record, index)}</h5>
+                              <p className="text-muted">Record {index + 1}</p>
+                            </div>
+                            <div className="life-admin-record-card-actions">
+                              {isEditing ? null : (
+                                <>
+                                  <button
+                                    type="button"
+                                    className="button-secondary"
+                                    onClick={() => onStartMobileEdit(record)}
+                                  >
+                                    Edit
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="button-secondary button-danger"
+                                    onClick={() => onDeleteRecord(record)}
+                                  >
+                                    Delete
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          </header>
+                          <div className="life-admin-record-card-body">
+                            {isEditing
+                              ? mobileFields.map((field) =>
+                                  renderMobileFieldInput(
+                                    field,
+                                    mobileEditData,
+                                    setMobileEditData,
+                                    `mobile-edit-${record.Id}`
+                                  )
+                                )
+                              : mobileFields.map((field) => (
+                                  <MobileRecordMiniRow
+                                    key={field.Key}
+                                    field={field}
+                                    value={draft?.[field.Key]}
+                                    lookupMaps={lookupMaps}
+                                    isEmptyValue={isEmptyValue}
+                                  />
+                                ))}
+                          </div>
+                          {isEditing ? (
+                            <>
+                              {mobileEditMissingRequired.length > 0 ? (
+                                <p className="form-note">
+                                  Missing required: {mobileEditMissingRequired.join(", ")}.
+                                </p>
+                              ) : null}
+                              <div className="life-admin-record-card-actions">
+                                <button
+                                  type="button"
+                                  className="button-secondary"
+                                  onClick={onCancelMobileEdit}
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  type="button"
+                                  className="primary-button"
+                                  onClick={() => onSaveMobileEdit(record)}
+                                  disabled={
+                                    !isMobileDirty(record, mobileEditData) ||
+                                    !isRecordReady(mobileEditData)
+                                  }
+                                >
+                                  Save changes
+                                </button>
+                              </div>
+                            </>
+                          ) : null}
+                        </article>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             ) : (
               <div className="glide-grid-shell life-admin-grid-shell" ref={gridShellRef}>
                 <div className="table-toolbar">
