@@ -18,6 +18,7 @@ services:
     volumes:
       - ./backend/logs:/app/logs
       - ./backend/uploads:/app/app/static/uploads
+      - ${DOCUMENT_STORAGE_HOST_PATH:-./backend/document_storage}:/app/data/documents
     networks:
       - traefik_proxy
     labels:

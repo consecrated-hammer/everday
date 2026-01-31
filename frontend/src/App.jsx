@@ -28,6 +28,7 @@ import KidsAdmin from "./pages/Kids/KidsAdmin.jsx";
 import LifeAdminLayout from "./pages/LifeAdmin/LifeAdminLayout.jsx";
 import LifeAdminRecords from "./pages/LifeAdmin/Records.jsx";
 import LifeAdminBuilder from "./pages/LifeAdmin/Builder.jsx";
+import LifeAdminLibrary from "./pages/LifeAdmin/Library.jsx";
 import Tasks from "./pages/Tasks/Tasks.jsx";
 import NotesLayout from "./pages/Notes/NotesLayout.jsx";
 import Notes from "./pages/Notes/Notes.jsx";
@@ -82,6 +83,7 @@ const App = () => (
         <Route path="/life-admin" element={<LifeAdminLayout />}>
           <Route index element={<Navigate to="/life-admin/records" replace />} />
           <Route path="records" element={<LifeAdminRecords />} />
+          <Route path="library" element={<LifeAdminLibrary />} />
           <Route path="builder" element={<LifeAdminBuilder />} />
         </Route>
         <Route path="/settings" element={<Settings />} />

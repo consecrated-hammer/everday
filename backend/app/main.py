@@ -26,9 +26,11 @@ from app.modules.kids.router import router as kids_router
 from app.modules.shopping.router import router as shopping_router
 from app.modules.integrations.alexa.router import router as alexa_router
 from app.modules.life_admin.router import router as life_admin_router
+from app.modules.life_admin.documents_router import router as life_admin_documents_router
 from app.modules.notifications.router import router as notifications_router
 from app.modules.tasks.router import router as tasks_router
 from app.modules.integrations.google.router import router as google_router
+from app.modules.integrations.gmail.router import router as gmail_router
 from app.modules.notes.routes.notes import router as notes_router
 from app.modules.health.services.reminders_service import RunDailyHealthReminders
 
@@ -179,9 +181,11 @@ app.include_router(kids_router)
 app.include_router(shopping_router)
 app.include_router(alexa_router)
 app.include_router(life_admin_router)
+app.include_router(life_admin_documents_router)
 app.include_router(notifications_router)
 app.include_router(tasks_router)
 app.include_router(google_router)
+app.include_router(gmail_router)
 app.include_router(notes_router)
 
 class SpaStaticFiles(StaticFiles):

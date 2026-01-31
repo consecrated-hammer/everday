@@ -4,6 +4,8 @@ import { createPortal } from "react-dom";
 
 import {
   CreateUser,
+  FetchGmailAuthUrl,
+  FetchGmailStatus,
   FetchGoogleAuthUrl,
   FetchGoogleStatus,
   FetchUsers,
@@ -448,6 +450,12 @@ const Settings = () => {
   const [googleStatusState, setGoogleStatusState] = useState("idle");
   const [googleStatusError, setGoogleStatusError] = useState("");
   const [googleNotice, setGoogleNotice] = useState("");
+  const [gmailAuthStatus, setGmailAuthStatus] = useState("idle");
+  const [gmailAuthError, setGmailAuthError] = useState("");
+  const [gmailStatus, setGmailStatus] = useState(null);
+  const [gmailStatusState, setGmailStatusState] = useState("idle");
+  const [gmailStatusError, setGmailStatusError] = useState("");
+  const [gmailNotice, setGmailNotice] = useState("");
   const [accessSearchTerm, setAccessSearchTerm] = useState("");
   const [accessMenu, setAccessMenu] = useState(null);
   const [selectedIntegration, setSelectedIntegration] = useState("google");
@@ -583,6 +591,22 @@ const Settings = () => {
     []
   );
 
+  const loadGmailStatus = useCallback(
+    async (validate = false) => {
+      try {
+        setGmailStatusState("loading");
+        setGmailStatusError("");
+        const response = await FetchGmailStatus(validate);
+        setGmailStatus(response || null);
+        setGmailStatusState("ready");
+      } catch (err) {
+        setGmailStatusState("error");
+        setGmailStatusError(err?.message || "Failed to load Gmail status.");
+      }
+    },
+    []
+  );
+
   const loadTaskSettings = useCallback(async () => {
     try {
       setTaskSettingsStatus("loading");
@@ -710,16 +734,21 @@ const Settings = () => {
       return;
     }
     loadGoogleStatus(true);
-  }, [activeSection, loadGoogleStatus]);
+    loadGmailStatus(true);
+  }, [activeSection, loadGoogleStatus, loadGmailStatus]);
 
   useEffect(() => {
     if (activeSection !== "integrations") {
       return;
     }
-    if (searchParams.get("connected") !== "google") {
+    const connected = searchParams.get("connected");
+    if (connected === "google") {
+      setGoogleNotice("Google connected successfully.");
+    } else if (connected === "gmail") {
+      setGmailNotice("Gmail connected successfully.");
+    } else {
       return;
     }
-    setGoogleNotice("Google connected successfully.");
     const nextParams = new URLSearchParams(searchParams);
     nextParams.delete("connected");
     setSearchParams(nextParams, { replace: true });
@@ -766,6 +795,25 @@ const Settings = () => {
       setGoogleAuthStatus("idle");
     }
   }, [googleAuthStatus, isParent]);
+
+  const onGmailAuth = useCallback(async () => {
+    if (!isParent || gmailAuthStatus === "loading") {
+      return;
+    }
+    try {
+      setGmailAuthStatus("loading");
+      setGmailAuthError("");
+      const response = await FetchGmailAuthUrl();
+      const authUrl = response?.Url;
+      if (!authUrl) {
+        throw new Error("Gmail auth URL not available.");
+      }
+      window.location.assign(authUrl);
+    } catch (err) {
+      setGmailAuthError(err?.message || "Failed to start Gmail sign in.");
+      setGmailAuthStatus("idle");
+    }
+  }, [gmailAuthStatus, isParent]);
 
   const onCreateUser = async (event) => {
     event.preventDefault();
@@ -1407,6 +1455,31 @@ const Settings = () => {
   ].filter(Boolean);
   const googleCheckedLabel = googleValidatedAt
     ? `Checked ${FormatRelativeTime(googleValidatedAt)}`
+    : "Not checked";
+  const gmailConnected = Boolean(gmailStatus?.Connected);
+  const gmailNeedsReauth = Boolean(gmailStatus?.NeedsReauth);
+  const gmailValidatedAt = gmailStatus?.ValidatedAt ? new Date(gmailStatus.ValidatedAt) : null;
+  const gmailConnectedBy = gmailStatus?.ConnectedBy;
+  const gmailAccountEmail = gmailStatus?.AccountEmail || "";
+  const gmailActionLabel = gmailConnected ? "Re-authenticate with Gmail" : "Authenticate with Gmail";
+  const gmailStatusTone =
+    gmailStatusState === "error"
+      ? "error"
+      : gmailNeedsReauth
+        ? "checking"
+        : gmailConnected
+          ? "ok"
+          : "";
+  const gmailStatusLabel =
+    gmailStatusState === "error"
+      ? "Error"
+      : gmailNeedsReauth
+        ? "Needs auth"
+        : gmailConnected
+          ? "Connected"
+          : "Disabled";
+  const gmailCheckedLabel = gmailValidatedAt
+    ? `Checked ${FormatRelativeTime(gmailValidatedAt)}`
     : "Not checked";
   const healthCheckedLabel = healthHaeCreatedAt
     ? `Checked ${FormatRelativeTime(healthHaeCreatedAt)}`
@@ -2073,6 +2146,32 @@ const Settings = () => {
                     <div className="integration-card-meta">{googleCheckedLabel}</div>
                   </div>
                   <div
+                    className={`integration-card${selectedIntegration === "gmail" ? " is-active" : ""}`}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setSelectedIntegration("gmail")}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        setSelectedIntegration("gmail");
+                      }
+                    }}
+                  >
+                    <div className="integration-card-header">
+                      <div className="integration-card-title">
+                        <span className="integration-card-icon">
+                          <Icon name="mail" className="icon" />
+                        </span>
+                        <span>Gmail Intake</span>
+                      </div>
+                      <span className="status-pill integration-status-pill">
+                        <span className={`status-dot ${gmailStatusTone ? `status-${gmailStatusTone}` : ""}`} />
+                        <span>{gmailStatusLabel}</span>
+                      </span>
+                    </div>
+                    <div className="integration-card-meta">{gmailCheckedLabel}</div>
+                  </div>
+                  <div
                     className={`integration-card${selectedIntegration === "health" ? " is-active" : ""}`}
                     role="button"
                     tabIndex={0}
@@ -2224,6 +2323,86 @@ const Settings = () => {
                           </div>
                         </div>
                       </details>
+                    </>
+                  ) : null}
+                  {selectedIntegration === "gmail" ? (
+                    <>
+                      <div className="integration-detail-topbar">
+                        <div className="integration-detail-status">
+                          <span className="status-pill integration-status-pill integration-status-pill--large">
+                            <span className={`status-dot ${gmailStatusTone ? `status-${gmailStatusTone}` : ""}`} />
+                            <span>{gmailStatusLabel}</span>
+                          </span>
+                          <span
+                            className="integration-detail-checked"
+                            title={gmailValidatedAt ? gmailValidatedAt.toLocaleString() : ""}
+                          >
+                            {gmailValidatedAt
+                              ? `Checked ${FormatRelativeTime(gmailValidatedAt)}`
+                              : "Not checked"}
+                          </span>
+                        </div>
+                        <div className="integration-detail-actions">
+                          <button
+                            type="button"
+                            className="primary-button"
+                            onClick={onGmailAuth}
+                            disabled={!isParent || gmailAuthStatus === "loading"}
+                          >
+                            {gmailAuthStatus === "loading" ? "Opening Gmail..." : gmailActionLabel}
+                          </button>
+                          <button
+                            type="button"
+                            className="button-secondary"
+                            onClick={() => loadGmailStatus(true)}
+                            disabled={gmailStatusState === "loading"}
+                          >
+                            {gmailStatusState === "loading" ? "Checking..." : "Check connection"}
+                          </button>
+                        </div>
+                      </div>
+                      {!isParent ? (
+                        <p className="integration-detail-note">
+                          Only a parent account can connect or disconnect this integration.
+                        </p>
+                      ) : null}
+                      {gmailNotice ? <p className="form-note">{gmailNotice}</p> : null}
+                      {gmailStatusError ? <p className="form-error">{gmailStatusError}</p> : null}
+                      {gmailAuthError ? <p className="form-error">{gmailAuthError}</p> : null}
+                      <div className="settings-subsection">
+                        <div className="settings-subsection-header">
+                          <h4>Configuration</h4>
+                          <p>Summary details for the active integration.</p>
+                        </div>
+                        <div className="settings-list settings-list--slim">
+                          <div className="settings-item">
+                            <div>
+                              <h4>Account</h4>
+                              <p>Gmail account used for intake.</p>
+                            </div>
+                            <p>{gmailAccountEmail || "Not connected"}</p>
+                          </div>
+                          <div className="settings-item">
+                            <div>
+                              <h4>Connected by</h4>
+                              <p>Parent account that completed the connection.</p>
+                            </div>
+                            <p>
+                              {gmailConnectedBy
+                                ? `${gmailConnectedBy.FirstName || ""} ${gmailConnectedBy.LastName || ""}`.trim() ||
+                                  gmailConnectedBy.Username
+                                : "Not connected"}
+                            </p>
+                          </div>
+                          <div className="settings-item">
+                            <div>
+                              <h4>Last sync/check</h4>
+                              <p>Most recent validation timestamp.</p>
+                            </div>
+                            <p>{gmailValidatedAt ? gmailValidatedAt.toLocaleString() : "Not checked"}</p>
+                          </div>
+                        </div>
+                      </div>
                     </>
                   ) : null}
                   {selectedIntegration === "health" ? (

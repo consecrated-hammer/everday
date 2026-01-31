@@ -18,6 +18,14 @@ const LifeAdminLayout = () => (
           Records
         </NavLink>
         <NavLink
+          to="/life-admin/library"
+          className={({ isActive }) =>
+            `life-admin-header-link${isActive ? " is-active" : ""}`
+          }
+        >
+          Library
+        </NavLink>
+        <NavLink
           to="/life-admin/builder"
           className={({ isActive }) =>
             `life-admin-header-link${isActive ? " is-active" : ""}`

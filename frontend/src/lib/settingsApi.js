@@ -40,3 +40,12 @@ export const FetchGoogleStatus = async (validate = false) => {
   const query = validate ? "?validate=1" : "";
   return RequestJson(`/integrations/google/status${query}`);
 };
+
+export const FetchGmailAuthUrl = async () => {
+  return RequestJson("/integrations/gmail/oauth/start");
+};
+
+export const FetchGmailStatus = async (validate = false) => {
+  const query = validate ? "?validate=1" : "";
+  return RequestJson(`/integrations/gmail/status${query}`);
+};

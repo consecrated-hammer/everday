@@ -1939,6 +1939,12 @@ iconify-icon {
   box-shadow: none;
 }
 
+.button-secondary.is-active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
 .button-danger {
   background: rgba(178, 59, 46, 0.08);
   color: #b23b2e;
@@ -13726,5 +13732,339 @@ body.kids-theme {
   .notes-drag-handle,
   .notes-checklist-delete {
     opacity: 1;
+  }
+}
+
+.life-admin-library-grid {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.life-admin-library-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.life-admin-library-section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.life-admin-library-section h4 {
+  margin: 0;
+  font-size: 14px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.life-admin-library-filters,
+.life-admin-library-folders {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.life-admin-filter,
+.life-admin-folder {
+  border: 1px solid transparent;
+  background: var(--surface-muted);
+  padding: 8px 12px;
+  border-radius: 10px;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  color: var(--text);
+}
+
+.life-admin-filter.is-active,
+.life-admin-folder.is-active {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: var(--accent-muted);
+  font-weight: 600;
+}
+
+.life-admin-folder-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.life-admin-folder-create {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+}
+
+.life-admin-library-main {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.life-admin-library-toolbar {
+  display: grid;
+  gap: 12px;
+}
+
+.life-admin-library-search {
+  display: grid;
+  gap: 8px;
+}
+
+.life-admin-library-chips {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+}
+
+.life-admin-triage {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 16px;
+  display: grid;
+  gap: 12px;
+}
+
+.life-admin-triage-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+}
+
+.life-admin-library-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.life-admin-doc-card {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 12px;
+  background: var(--surface);
+  display: grid;
+  gap: 10px;
+  cursor: pointer;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.life-admin-doc-card.is-active {
+  border-color: var(--accent);
+  box-shadow: 0 10px 18px rgba(43, 110, 246, 0.18);
+}
+
+.life-admin-doc-card-header {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px;
+  align-items: center;
+}
+
+.life-admin-doc-title {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.life-admin-doc-preview {
+  background: var(--surface-muted);
+  border-radius: 12px;
+  height: 140px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.life-admin-doc-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.life-admin-doc-placeholder {
+  color: var(--text-soft);
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+
+.life-admin-doc-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.life-admin-doc-stats {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--text-soft);
+}
+
+.life-admin-doc-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.life-admin-chip {
+  background: var(--chip-bg);
+  color: var(--chip-text);
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 12px;
+  border: none;
+  cursor: pointer;
+}
+
+.life-admin-detail-preview {
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--surface-muted);
+  min-height: 200px;
+}
+
+.life-admin-detail-preview img,
+.life-admin-detail-preview iframe {
+  width: 100%;
+  height: 220px;
+  border: none;
+}
+
+.life-admin-detail-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.life-admin-inline {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 10px;
+}
+
+.life-admin-link-row,
+.life-admin-reminder-row,
+.life-admin-activity-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 8px;
+  align-items: center;
+  font-size: 13px;
+}
+
+.life-admin-reminder-row {
+  grid-template-columns: auto 1fr auto;
+}
+
+.life-admin-activity-list {
+  display: grid;
+  gap: 8px;
+}
+
+.life-admin-activity-row {
+  grid-template-columns: 1fr auto;
+  color: var(--text-muted);
+}
+
+.life-admin-ai-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.life-admin-record-reminder {
+  display: grid;
+  gap: 10px;
+}
+
+.life-admin-reminder-list {
+  display: grid;
+  gap: 6px;
+}
+
+.life-admin-reminder-item {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.life-admin-detail-empty {
+  border: 1px dashed var(--border);
+  border-radius: 16px;
+  padding: 18px;
+  color: var(--text-muted);
+}
+
+.life-admin-library-modal {
+  width: min(1200px, 96vw);
+}
+
+.life-admin-library-modal-body {
+  display: grid;
+  grid-template-columns: minmax(0, 360px) minmax(0, 1fr);
+  gap: 18px;
+}
+
+.life-admin-library-modal-preview {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+}
+
+.life-admin-library-modal-actions {
+  display: grid;
+  gap: 8px;
+}
+
+.life-admin-library-modal-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.life-admin-upload input {
+  display: none;
+}
+
+.life-admin-checkbox {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+}
+
+@media (max-width: 1200px) {
+  .life-admin-library-grid {
+    grid-template-columns: 220px minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 900px) {
+  .life-admin-library-grid {
+    grid-template-columns: 1fr;
+  }
+  .life-admin-library-modal-body {
+    grid-template-columns: 1fr;
   }
 }
