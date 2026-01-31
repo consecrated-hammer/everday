@@ -1,0 +1,420 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 60;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		A1B2C3D4E5F6071829304051 /* EverdayIOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304050 /* EverdayIOSApp.swift */; };
+		A1B2C3D4E5F6071829304053 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304052 /* RootView.swift */; };
+		A1B2C3D4E5F6071829304055 /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304054 /* LoginView.swift */; };
+		A1B2C3D4E5F6071829304057 /* LoggedInView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304056 /* LoggedInView.swift */; };
+		A1B2C3D4E5F6071829304075 /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304079 /* DashboardView.swift */; };
+		A1B2C3D4E5F6071829304076 /* AccountView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304083 /* AccountView.swift */; };
+		A1B2C3D4E5F6071829304077 /* AvatarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304084 /* AvatarView.swift */; };
+		A1B2C3D4E5F6071829304078 /* PlaceholderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304085 /* PlaceholderView.swift */; };
+		A1B2C3D4E5F6071829304086 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304087 /* SettingsView.swift */; };
+		A1B2C3D4E5F6071829304088 /* HealthSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304089 /* HealthSettingsView.swift */; };
+		A1B2C3D4E5F6071829304210 /* SystemSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304211 /* SystemSettingsView.swift */; };
+		A1B2C3D4E5F6071829304102 /* ConstrainedTitleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304103 /* ConstrainedTitleView.swift */; };
+		A1B2C3D4E5F6071829304059 /* AuthStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304058 /* AuthStore.swift */; };
+		A1B2C3D4E5F6071829304104 /* EnvironmentStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304105 /* EnvironmentStore.swift */; };
+		A1B2C3D4E5F6071829304061 /* ApiClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304060 /* ApiClient.swift */; };
+		A1B2C3D4E5F6071829304063 /* AuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304062 /* AuthService.swift */; };
+		A1B2C3D4E5F6071829304065 /* TokenStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304064 /* TokenStore.swift */; };
+		A1B2C3D4E5F6071829304067 /* AuthTokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304066 /* AuthTokens.swift */; };
+		A1B2C3D4E5F6071829304069 /* ApiError.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304068 /* ApiError.swift */; };
+		A1B2C3D4E5F6071829304097 /* HealthSettingsModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304098 /* HealthSettingsModels.swift */; };
+		A1B2C3D4E5F6071829304099 /* HealthApi.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304101 /* HealthApi.swift */; };
+		A1B2C3D4E5F6071829304071 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304070 /* Assets.xcassets */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		A1B2C3D4E5F6071829304050 /* EverdayIOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EverdayIOSApp.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6071829304052 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6071829304054 /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6071829304056 /* LoggedInView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoggedInView.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6071829304079 /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6071829304083 /* AccountView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountView.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6071829304084 /* AvatarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AvatarView.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6071829304085 /* PlaceholderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceholderView.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6071829304087 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6071829304089 /* HealthSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthSettingsView.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6071829304211 /* SystemSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemSettingsView.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6071829304103 /* ConstrainedTitleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConstrainedTitleView.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6071829304058 /* AuthStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthStore.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6071829304105 /* EnvironmentStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvironmentStore.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6071829304060 /* ApiClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApiClient.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6071829304062 /* AuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthService.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6071829304064 /* TokenStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TokenStore.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6071829304066 /* AuthTokens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthTokens.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6071829304068 /* ApiError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApiError.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6071829304098 /* HealthSettingsModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthSettingsModels.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6071829304101 /* HealthApi.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthApi.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6071829304070 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		A1B2C3D4E5F6071829304072 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		A1B2C3D4E5F6071829304074 /* EverdayIOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; path = EverdayIOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A1B2C3D4E5F6071829304081 /* Dev.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Dev.xcconfig; sourceTree = "<group>"; };
+		A1B2C3D4E5F6071829304082 /* Prod.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Prod.xcconfig; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		A1B2C3D4E5F6071829304121 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		A1B2C3D4E5F6071829304090 /* EverdayIOS */ = {
+			isa = PBXGroup;
+			children = (
+				A1B2C3D4E5F6071829304072 /* Info.plist */,
+				A1B2C3D4E5F6071829304070 /* Assets.xcassets */,
+				A1B2C3D4E5F6071829304096 /* Configs */,
+				A1B2C3D4E5F6071829304092 /* Models */,
+				A1B2C3D4E5F6071829304093 /* Services */,
+				A1B2C3D4E5F6071829304094 /* Store */,
+				A1B2C3D4E5F6071829304095 /* Views */,
+				A1B2C3D4E5F6071829304050 /* EverdayIOSApp.swift */,
+			);
+			path = EverdayIOS;
+			sourceTree = "<group>";
+		};
+		A1B2C3D4E5F6071829304091 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				A1B2C3D4E5F6071829304074 /* EverdayIOS.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+			A1B2C3D4E5F6071829304092 /* Models */ = {
+				isa = PBXGroup;
+				children = (
+					A1B2C3D4E5F6071829304066 /* AuthTokens.swift */,
+					A1B2C3D4E5F6071829304068 /* ApiError.swift */,
+					A1B2C3D4E5F6071829304098 /* HealthSettingsModels.swift */,
+				);
+				path = Models;
+				sourceTree = "<group>";
+			};
+			A1B2C3D4E5F6071829304093 /* Services */ = {
+				isa = PBXGroup;
+				children = (
+					A1B2C3D4E5F6071829304060 /* ApiClient.swift */,
+					A1B2C3D4E5F6071829304062 /* AuthService.swift */,
+					A1B2C3D4E5F6071829304064 /* TokenStore.swift */,
+					A1B2C3D4E5F6071829304101 /* HealthApi.swift */,
+				);
+				path = Services;
+				sourceTree = "<group>";
+			};
+		A1B2C3D4E5F6071829304094 /* Store */ = {
+			isa = PBXGroup;
+			children = (
+				A1B2C3D4E5F6071829304058 /* AuthStore.swift */,
+				A1B2C3D4E5F6071829304105 /* EnvironmentStore.swift */,
+			);
+			path = Store;
+			sourceTree = "<group>";
+		};
+		A1B2C3D4E5F6071829304095 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				A1B2C3D4E5F6071829304052 /* RootView.swift */,
+				A1B2C3D4E5F6071829304054 /* LoginView.swift */,
+				A1B2C3D4E5F6071829304079 /* DashboardView.swift */,
+				A1B2C3D4E5F6071829304083 /* AccountView.swift */,
+				A1B2C3D4E5F6071829304084 /* AvatarView.swift */,
+				A1B2C3D4E5F6071829304085 /* PlaceholderView.swift */,
+				A1B2C3D4E5F6071829304087 /* SettingsView.swift */,
+				A1B2C3D4E5F6071829304211 /* SystemSettingsView.swift */,
+				A1B2C3D4E5F6071829304089 /* HealthSettingsView.swift */,
+				A1B2C3D4E5F6071829304103 /* ConstrainedTitleView.swift */,
+				A1B2C3D4E5F6071829304056 /* LoggedInView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		A1B2C3D4E5F6071829304096 /* Configs */ = {
+			isa = PBXGroup;
+			children = (
+				A1B2C3D4E5F6071829304081 /* Dev.xcconfig */,
+				A1B2C3D4E5F6071829304082 /* Prod.xcconfig */,
+			);
+			path = Configs;
+			sourceTree = "<group>";
+		};
+		A1B2C3D4E5F6071829304100 = {
+			isa = PBXGroup;
+			children = (
+				A1B2C3D4E5F6071829304090 /* EverdayIOS */,
+				A1B2C3D4E5F6071829304091 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		A1B2C3D4E5F6071829304110 /* EverdayIOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A1B2C3D4E5F6071829304111 /* Build configuration list for PBXNativeTarget "EverdayIOS" */;
+			buildPhases = (
+				A1B2C3D4E5F6071829304120 /* Sources */,
+				A1B2C3D4E5F6071829304121 /* Frameworks */,
+				A1B2C3D4E5F6071829304122 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = EverdayIOS;
+			productName = EverdayIOS;
+			productReference = A1B2C3D4E5F6071829304074 /* EverdayIOS.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		A1B2C3D4E5F6071829304130 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastUpgradeCheck = 2620;
+				TargetAttributes = {
+					A1B2C3D4E5F6071829304110 = {
+						CreatedOnToolsVersion = 15.0;
+					};
+				};
+			};
+			buildConfigurationList = A1B2C3D4E5F6071829304131 /* Build configuration list for PBXProject "EverdayIOS" */;
+			compatibilityVersion = "Xcode 15.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = A1B2C3D4E5F6071829304100;
+			productRefGroup = A1B2C3D4E5F6071829304091 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				A1B2C3D4E5F6071829304110 /* EverdayIOS */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		A1B2C3D4E5F6071829304122 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A1B2C3D4E5F6071829304071 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		A1B2C3D4E5F6071829304120 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A1B2C3D4E5F6071829304051 /* EverdayIOSApp.swift in Sources */,
+				A1B2C3D4E5F6071829304053 /* RootView.swift in Sources */,
+				A1B2C3D4E5F6071829304055 /* LoginView.swift in Sources */,
+				A1B2C3D4E5F6071829304075 /* DashboardView.swift in Sources */,
+				A1B2C3D4E5F6071829304076 /* AccountView.swift in Sources */,
+				A1B2C3D4E5F6071829304077 /* AvatarView.swift in Sources */,
+				A1B2C3D4E5F6071829304078 /* PlaceholderView.swift in Sources */,
+				A1B2C3D4E5F6071829304086 /* SettingsView.swift in Sources */,
+				A1B2C3D4E5F6071829304210 /* SystemSettingsView.swift in Sources */,
+				A1B2C3D4E5F6071829304088 /* HealthSettingsView.swift in Sources */,
+				A1B2C3D4E5F6071829304102 /* ConstrainedTitleView.swift in Sources */,
+				A1B2C3D4E5F6071829304057 /* LoggedInView.swift in Sources */,
+				A1B2C3D4E5F6071829304059 /* AuthStore.swift in Sources */,
+				A1B2C3D4E5F6071829304104 /* EnvironmentStore.swift in Sources */,
+				A1B2C3D4E5F6071829304061 /* ApiClient.swift in Sources */,
+				A1B2C3D4E5F6071829304063 /* AuthService.swift in Sources */,
+				A1B2C3D4E5F6071829304065 /* TokenStore.swift in Sources */,
+				A1B2C3D4E5F6071829304067 /* AuthTokens.swift in Sources */,
+				A1B2C3D4E5F6071829304069 /* ApiError.swift in Sources */,
+				A1B2C3D4E5F6071829304097 /* HealthSettingsModels.swift in Sources */,
+				A1B2C3D4E5F6071829304099 /* HealthApi.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		A1B2C3D4E5F6071829304140 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = A1B2C3D4E5F6071829304081 /* Dev.xcconfig */;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_PREVIEWS = YES;
+				INFOPLIST_FILE = EverdayIOS/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = au.batserver.everday.ios;
+				PRODUCT_NAME = EverdayIOS;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		A1B2C3D4E5F6071829304141 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = A1B2C3D4E5F6071829304082 /* Prod.xcconfig */;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				INFOPLIST_FILE = EverdayIOS/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = au.batserver.everday.ios;
+				PRODUCT_NAME = EverdayIOS;
+				SDKROOT = iphoneos;
+				SWIFT_OPTIMIZATION_LEVEL = "-Owholemodule";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		A1B2C3D4E5F6071829304142 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				DEAD_CODE_STRIPPING = YES;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		A1B2C3D4E5F6071829304143 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-Owholemodule";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		A1B2C3D4E5F6071829304111 /* Build configuration list for PBXNativeTarget "EverdayIOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A1B2C3D4E5F6071829304140 /* Debug */,
+				A1B2C3D4E5F6071829304141 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		A1B2C3D4E5F6071829304131 /* Build configuration list for PBXProject "EverdayIOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A1B2C3D4E5F6071829304142 /* Debug */,
+				A1B2C3D4E5F6071829304143 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = A1B2C3D4E5F6071829304130 /* Project object */;
+}
