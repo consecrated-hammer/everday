@@ -145,6 +145,9 @@ A task is “done” when:
 - Architecture rules: `docs/architecture.md`
 - UI rules: `docs/style_guide.md`
 
+### iOS documentation pointers
+- iOS UI rules: `apps/ios/docs/style_guide_ios.md`
+
 ### UI/UX implementation rules (must follow)
 - Follow `docs/style_guide.md` for all UI work.
 - Desktop-first with mobile-friendly critical flows.
@@ -340,3 +343,27 @@ gh pr merge --squash --delete-branch
 - **Option 1**: Multiple commits in one branch/PR for tightly coupled changes
 - **Option 2**: Separate branches and PRs for independent issues (recommended)
 - **Option 3**: Stacked PRs for complex multi-part features (use `--base` to PR into parent branch)
+
+---
+
+## 3) iOS App Instructions (specific)
+
+These instructions apply when working under `/apps/ios` and override any conflicting container-specific guidance above.
+
+### Tooling and structure
+- Use Xcode, Swift, and SwiftUI by default.
+- Prefer Swift Package Manager for dependencies. Avoid CocoaPods unless required.
+- Keep app code under `/apps/ios` with clear separation between app, features, and shared utilities.
+
+### Verification (iOS)
+- Use Xcode for local run and debug.
+- Command line fast checks:
+  - Discover schemes: `xcodebuild -list`
+  - Build: `xcodebuild build -scheme <Scheme> -destination 'platform=iOS Simulator,name=iPhone 17,OS=latest'`
+  - Test: `xcodebuild test -scheme <Scheme> -destination 'platform=iOS Simulator,name=iPhone 17,OS=latest'`
+- If SwiftLint is configured, run `swiftlint` or `swiftlint lint`.
+
+### UI/UX rules (iOS)
+- Follow `apps/ios/docs/style_guide_ios.md` for all iOS UI work.
+- Prefer system components and styles. Avoid custom controls unless required.
+- Accessibility is mandatory (Dynamic Type, VoiceOver labels, contrast).
