@@ -22,6 +22,15 @@ const BuildHeaders = () => {
   return headers;
 };
 
+const BuildAuthHeaders = () => {
+  const headers = {};
+  const tokens = GetTokens();
+  if (tokens?.AccessToken) {
+    headers.Authorization = `Bearer ${tokens.AccessToken}`;
+  }
+  return headers;
+};
+
 const HandleJson = async (response) => {
   if (!response.ok) {
     const detail = await response.text();
@@ -110,6 +119,31 @@ export const RequestWithAuth = async (path, options = {}) => {
   const retry = await fetch(`${ApiBaseUrl}${path}`, {
     ...options,
     headers: { ...BuildHeaders(), ...(options.headers || {}) }
+  });
+  return retry;
+};
+
+export const RequestRaw = async (path, options = {}) => {
+  const tokens = GetTokens();
+  if (tokens?.AccessToken && IsAccessTokenExpired()) {
+    await EnsureFreshTokens();
+  }
+  const response = await fetch(`${ApiBaseUrl}${path}`, {
+    ...options,
+    headers: { ...BuildAuthHeaders(), ...(options.headers || {}) }
+  });
+  if (response.status !== 401) {
+    return response;
+  }
+  try {
+    await TryRefresh();
+  } catch (error) {
+    ClearTokens();
+    throw error;
+  }
+  const retry = await fetch(`${ApiBaseUrl}${path}`, {
+    ...options,
+    headers: { ...BuildAuthHeaders(), ...(options.headers || {}) }
   });
   return retry;
 };

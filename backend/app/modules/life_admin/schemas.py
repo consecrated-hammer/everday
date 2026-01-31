@@ -159,5 +159,139 @@ class RecordLookupOut(BaseModel):
     Title: str
 
 
+class DocumentFolderCreate(BaseModel):
+    Name: str = Field(..., max_length=120)
+    SortOrder: int = 0
+
+
+class DocumentFolderUpdate(BaseModel):
+    Name: str = Field(..., max_length=120)
+    SortOrder: int = 0
+
+
+class DocumentFolderOut(BaseModel):
+    Id: int
+    Name: str
+    SortOrder: int
+    CreatedAt: datetime
+    UpdatedAt: datetime
+
+
+class DocumentTagOut(BaseModel):
+    Id: int
+    Name: str
+    Slug: str
+    CreatedAt: datetime
+    UpdatedAt: datetime
+
+
+class DocumentOut(BaseModel):
+    Id: int
+    Title: str | None = None
+    FolderId: int | None = None
+    FolderName: str | None = None
+    ContentType: str | None = None
+    FileSizeBytes: int | None = None
+    OriginalFileName: str | None = None
+    OcrStatus: str | None = None
+    CreatedAt: datetime
+    UpdatedAt: datetime
+    FileUrl: str | None = None
+    Tags: list[DocumentTagOut] = []
+    LinkCount: int = 0
+    ReminderCount: int = 0
+
+
+class DocumentUpdate(BaseModel):
+    Title: str | None = Field(default=None, max_length=200)
+    FolderId: int | None = None
+
+
+class DocumentTagUpdate(BaseModel):
+    TagNames: list[str]
+
+
+class DocumentBulkUpdate(BaseModel):
+    DocumentIds: list[int]
+    FolderId: int | None = None
+    TagNames: list[str] | None = None
+
+
+class DocumentLinkCreate(BaseModel):
+    LinkedEntityType: str = Field(..., max_length=40)
+    LinkedEntityId: int
+
+
+class DocumentLinkOut(BaseModel):
+    Id: int
+    DocumentId: int
+    LinkedEntityType: str
+    LinkedEntityId: int
+    CreatedByUserId: int
+    CreatedAt: datetime
+
+
+class ReminderCreate(BaseModel):
+    SourceType: str = Field(..., max_length=40)
+    SourceId: int
+    Title: str = Field(..., max_length=200)
+    DueAt: datetime
+    RepeatRule: str | None = Field(default=None, max_length=120)
+    AssigneeUserId: int | None = None
+
+
+class ReminderUpdate(BaseModel):
+    Status: str = Field(..., max_length=20)
+
+
+class ReminderOut(BaseModel):
+    Id: int
+    SourceType: str
+    SourceId: int
+    Title: str
+    DueAt: datetime
+    RepeatRule: str | None = None
+    Status: str
+    AssigneeUserId: int | None = None
+    CompletedAt: datetime | None = None
+    CreatedAt: datetime
+    UpdatedAt: datetime
+
+
+class DocumentAuditOut(BaseModel):
+    Id: int
+    DocumentId: int
+    Action: str
+    ActorUserId: int
+    Summary: str | None = None
+    BeforeJson: dict | None = None
+    AfterJson: dict | None = None
+    CreatedAt: datetime
+
+
+class DocumentAiSuggestionOut(BaseModel):
+    Id: int
+    DocumentId: int
+    Status: str
+    SuggestedFolderName: str | None = None
+    SuggestedTags: list[str] = []
+    SuggestedLinks: list[dict] = []
+    SuggestedReminder: dict | None = None
+    Confidence: str | None = None
+    CreatedAt: datetime
+    UpdatedAt: datetime
+
+
+class DocumentDetailOut(DocumentOut):
+    StoragePath: str | None = None
+    OcrText: str | None = None
+    SourceType: str | None = None
+    SourceDetail: str | None = None
+    Links: list[DocumentLinkOut] = []
+    Reminders: list[ReminderOut] = []
+    Audits: list[DocumentAuditOut] = []
+    AiSuggestion: DocumentAiSuggestionOut | None = None
+
+
 class RecordOrderUpdate(BaseModel):
     OrderedIds: list[int] = Field(default_factory=list)

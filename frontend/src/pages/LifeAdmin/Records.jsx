@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { createPortal } from "react-dom";
 
 import { CompactSelection, GridCellKind } from "@glideapps/glide-data-grid";
@@ -482,6 +483,7 @@ const MobileRecordMiniRow = ({ field, value, lookupMaps, isEmptyValue }) => {
 };
 
 const Records = () => {
+  const navigate = useNavigate();
   const { categories, dropdowns, people, status, error } = useLifeAdminCatalog();
   const [activeCategoryId, setActiveCategoryId] = useState(null);
   const { fields } = useLifeAdminFields(activeCategoryId);
@@ -970,6 +972,17 @@ const Records = () => {
       setActionStatus("error");
       setActionError(err?.message || "Failed to remove selected records");
     }
+  };
+
+  const onViewDocuments = () => {
+    if (!hasSelected) {
+      return;
+    }
+    const [first] = selectedIds;
+    if (!first) {
+      return;
+    }
+    navigate(`/life-admin/library?recordId=${first}`);
   };
 
   const draftRow = useMemo(() => {
@@ -2296,6 +2309,14 @@ const Records = () => {
                         disabled={!hasSelected || actionStatus === "saving"}
                       >
                         Remove selected records
+                      </button>
+                      <button
+                        type="button"
+                        className="toolbar-button"
+                        onClick={onViewDocuments}
+                        disabled={!hasSelected}
+                      >
+                        View documents
                       </button>
                     </div>
                     <div className="toolbar-flyout">
