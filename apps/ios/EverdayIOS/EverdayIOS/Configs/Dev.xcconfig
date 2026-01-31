@@ -1,0 +1,3 @@
+SLASH = /
+API_BASE_URL = https:$(SLASH)$(SLASH)everday-dev.batserver.au
+API_ENVIRONMENT = DEV
