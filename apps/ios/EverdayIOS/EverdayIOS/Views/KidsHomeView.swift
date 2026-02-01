@@ -1,5 +1,7 @@
 import SwiftUI
+#if canImport(SwiftUICharts)
 import SwiftUICharts
+#endif
 
 struct KidsHomeView: View {
     @EnvironmentObject var authStore: AuthStore
@@ -191,9 +193,11 @@ struct KidsHomeView: View {
         )
     }
 
+    @ViewBuilder
     private var projectionChart: some View {
+        #if canImport(SwiftUICharts)
         let chartData = lineChartData
-        return LineChart(chartData: chartData)
+        LineChart(chartData: chartData)
             .pointMarkers(chartData: chartData)
             .touchOverlay(
                 chartData: chartData,
@@ -222,6 +226,21 @@ struct KidsHomeView: View {
                     }
                 }
             }
+        #else
+        VStack(spacing: 8) {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color(.secondarySystemBackground))
+                .frame(height: 120)
+                .overlay(
+                    Text("Chart loading...")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                )
+            Text("Chart data unavailable.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        #endif
     }
 
     private var chartSeries: [KidsTotalsSeriesPoint] {
@@ -356,6 +375,7 @@ struct KidsHomeView: View {
             .ignoresSafeArea()
     }
 
+    #if canImport(SwiftUICharts)
     private var lineChartData: LineChartData {
         let series = chartSeries
         let dataPoints = series.compactMap { point -> LineChartDataPoint? in
@@ -503,6 +523,7 @@ struct KidsHomeView: View {
                 .fill(.ultraThinMaterial)
         )
     }
+    #endif
 
     @MainActor
     private func load() async {
@@ -633,12 +654,14 @@ private enum LoadState {
     case error
 }
 
+#if canImport(SwiftUICharts)
 private struct ChartValueLabel: Identifiable {
     let id = UUID()
     let index: Int
     let value: Double
     let title: String
 }
+#endif
 
 private extension Array {
     subscript(safe index: Int) -> Element? {
