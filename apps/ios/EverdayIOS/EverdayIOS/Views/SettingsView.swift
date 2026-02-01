@@ -2,21 +2,32 @@ import SwiftUI
 
 struct SettingsView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @EnvironmentObject var authStore: AuthStore
 
     var body: some View {
         let listView = List {
-            Section("Health") {
+            Section("Account") {
                 NavigationLink {
-                    HealthSettingsView()
+                    AccountView()
                 } label: {
-                    Label("Health settings", systemImage: "heart.text.square")
+                    Label("Account", systemImage: "person.crop.circle")
                 }
             }
-            Section("System") {
-                NavigationLink {
-                    SystemSettingsView()
-                } label: {
-                    Label("System settings", systemImage: "gearshape")
+
+            if !isKid {
+                Section("Health") {
+                    NavigationLink {
+                        HealthSettingsView()
+                    } label: {
+                        Label("Health settings", systemImage: "heart.text.square")
+                    }
+                }
+                Section("System") {
+                    NavigationLink {
+                        SystemSettingsView()
+                    } label: {
+                        Label("System settings", systemImage: "gearshape")
+                    }
                 }
             }
         }
@@ -39,5 +50,9 @@ struct SettingsView: View {
                 }
             }
         }
+    }
+
+    private var isKid: Bool {
+        authStore.tokens?.role == "Kid"
     }
 }

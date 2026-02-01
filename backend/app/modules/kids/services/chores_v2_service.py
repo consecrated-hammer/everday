@@ -49,10 +49,7 @@ def MonthRange(today: date) -> tuple[date, date]:
 
 
 def AllowedDateRange(today: date) -> tuple[date, date]:
-    if today.day == 1:
-        start = today - timedelta(days=1)
-    else:
-        start = date(today.year, today.month, 1)
+    start = date(1970, 1, 1)
     return start, today
 
 

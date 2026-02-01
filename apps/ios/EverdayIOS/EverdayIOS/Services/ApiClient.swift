@@ -18,7 +18,7 @@ final class ApiClient {
     }
 
     func request<T: Decodable>(path: String, method: String = "GET", body: Encodable? = nil, requiresAuth: Bool = false) async throws -> T {
-        let url = baseUrl.appendingPathComponent(path)
+        let url = buildUrl(path: path)
         var request = URLRequest(url: url)
         request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -50,6 +50,40 @@ final class ApiClient {
         return try decodeOrThrow(data, response: response)
     }
 
+    func requestVoid(path: String, method: String = "GET", body: Encodable? = nil, requiresAuth: Bool = false) async throws {
+        let url = buildUrl(path: path)
+        var request = URLRequest(url: url)
+        request.httpMethod = method
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        if let body {
+            request.httpBody = try jsonEncoder.encode(AnyEncodable(body))
+        }
+
+        if requiresAuth {
+            if let tokens = tokensProvider?(), JwtHelper.isTokenExpired(tokens.accessToken) {
+                _ = try? await refreshTokens(refreshToken: tokens.refreshToken)
+            }
+            if let token = tokensProvider?()?.accessToken {
+                request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            }
+        }
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        if let http = response as? HTTPURLResponse, http.statusCode == 401, requiresAuth {
+            if let refresh = tokensProvider?()?.refreshToken {
+                let refreshed = try await refreshTokens(refreshToken: refresh)
+                var retry = request
+                retry.setValue("Bearer \(refreshed.accessToken)", forHTTPHeaderField: "Authorization")
+                let (retryData, retryResponse) = try await URLSession.shared.data(for: retry)
+                try validateVoidResponse(retryData, response: retryResponse)
+                return
+            }
+        }
+
+        try validateVoidResponse(data, response: response)
+    }
+
     private func decodeOrThrow<T: Decodable>(_ data: Data, response: URLResponse) throws -> T {
         if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
             if let message = errorMessage(from: data) {
@@ -71,6 +105,15 @@ final class ApiClient {
         return nil
     }
 
+    private func validateVoidResponse(_ data: Data, response: URLResponse) throws {
+        if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+            if let message = errorMessage(from: data) {
+                throw ApiError(message: message)
+            }
+            throw ApiError(message: "Request failed")
+        }
+    }
+
     private func refreshTokens(refreshToken: String) async throws -> AuthTokens {
         struct RefreshRequest: Encodable {
             let RefreshToken: String
@@ -78,6 +121,21 @@ final class ApiClient {
         let refreshed: AuthTokens = try await request(path: "auth/refresh", method: "POST", body: RefreshRequest(RefreshToken: refreshToken), requiresAuth: false)
         tokensHandler?(refreshed)
         return refreshed
+    }
+
+    private func buildUrl(path: String) -> URL {
+        let parts = path.split(separator: "?", maxSplits: 1, omittingEmptySubsequences: false)
+        let rawPath = String(parts.first ?? "")
+        let trimmedPath = rawPath.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        var url = baseUrl.appendingPathComponent(trimmedPath)
+        if parts.count > 1 {
+            var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+            components?.percentEncodedQuery = String(parts[1])
+            if let updated = components?.url {
+                url = updated
+            }
+        }
+        return url
     }
 }
 
