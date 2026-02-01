@@ -22,12 +22,12 @@ struct SettingsView: View {
                         Label("Health settings", systemImage: "heart.text.square")
                     }
                 }
-                Section("System") {
-                    NavigationLink {
-                        SystemSettingsView()
-                    } label: {
-                        Label("System settings", systemImage: "gearshape")
-                    }
+            }
+            Section("System") {
+                NavigationLink {
+                    SystemSettingsView()
+                } label: {
+                    Label("System settings", systemImage: "gearshape")
                 }
             }
         }
