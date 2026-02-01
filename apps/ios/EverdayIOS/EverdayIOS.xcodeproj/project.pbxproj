@@ -11,24 +11,33 @@
 		A1B2C3D4E5F6071829304053 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304052 /* RootView.swift */; };
 		A1B2C3D4E5F6071829304055 /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304054 /* LoginView.swift */; };
 		A1B2C3D4E5F6071829304057 /* LoggedInView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304056 /* LoggedInView.swift */; };
+		A1B2C3D4E5F6071829304059 /* AuthStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304058 /* AuthStore.swift */; };
+		A1B2C3D4E5F6071829304061 /* ApiClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304060 /* ApiClient.swift */; };
+		A1B2C3D4E5F6071829304063 /* AuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304062 /* AuthService.swift */; };
+		A1B2C3D4E5F6071829304065 /* TokenStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304064 /* TokenStore.swift */; };
+		A1B2C3D4E5F6071829304067 /* AuthTokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304066 /* AuthTokens.swift */; };
+		A1B2C3D4E5F6071829304069 /* ApiError.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304068 /* ApiError.swift */; };
+		A1B2C3D4E5F6071829304071 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304070 /* Assets.xcassets */; };
 		A1B2C3D4E5F6071829304075 /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304079 /* DashboardView.swift */; };
 		A1B2C3D4E5F6071829304076 /* AccountView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304083 /* AccountView.swift */; };
 		A1B2C3D4E5F6071829304077 /* AvatarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304084 /* AvatarView.swift */; };
 		A1B2C3D4E5F6071829304078 /* PlaceholderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304085 /* PlaceholderView.swift */; };
 		A1B2C3D4E5F6071829304086 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304087 /* SettingsView.swift */; };
 		A1B2C3D4E5F6071829304088 /* HealthSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304089 /* HealthSettingsView.swift */; };
-		A1B2C3D4E5F6071829304210 /* SystemSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304211 /* SystemSettingsView.swift */; };
-		A1B2C3D4E5F6071829304102 /* ConstrainedTitleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304103 /* ConstrainedTitleView.swift */; };
-		A1B2C3D4E5F6071829304059 /* AuthStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304058 /* AuthStore.swift */; };
-		A1B2C3D4E5F6071829304104 /* EnvironmentStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304105 /* EnvironmentStore.swift */; };
-		A1B2C3D4E5F6071829304061 /* ApiClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304060 /* ApiClient.swift */; };
-		A1B2C3D4E5F6071829304063 /* AuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304062 /* AuthService.swift */; };
-		A1B2C3D4E5F6071829304065 /* TokenStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304064 /* TokenStore.swift */; };
-		A1B2C3D4E5F6071829304067 /* AuthTokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304066 /* AuthTokens.swift */; };
-		A1B2C3D4E5F6071829304069 /* ApiError.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304068 /* ApiError.swift */; };
 		A1B2C3D4E5F6071829304097 /* HealthSettingsModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304098 /* HealthSettingsModels.swift */; };
 		A1B2C3D4E5F6071829304099 /* HealthApi.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304101 /* HealthApi.swift */; };
-		A1B2C3D4E5F6071829304071 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304070 /* Assets.xcassets */; };
+		A1B2C3D4E5F6071829304102 /* ConstrainedTitleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304103 /* ConstrainedTitleView.swift */; };
+		A1B2C3D4E5F6071829304104 /* EnvironmentStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304105 /* EnvironmentStore.swift */; };
+		A1B2C3D4E5F6071829304210 /* SystemSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304211 /* SystemSettingsView.swift */; };
+		A1B2C3D4E5F6071829304310 /* KidsApi.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304311 /* KidsApi.swift */; };
+		A1B2C3D4E5F6071829304312 /* KidsModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304313 /* KidsModels.swift */; };
+		A1B2C3D4E5F6071829304314 /* KidsFormatters.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304315 /* KidsFormatters.swift */; };
+		A1B2C3D4E5F6071829304316 /* KidsTotals.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304317 /* KidsTotals.swift */; };
+		A1B2C3D4E5F6071829304318 /* KidsEmoji.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304319 /* KidsEmoji.swift */; };
+		A1B2C3D4E5F6071829304320 /* KidsHomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304321 /* KidsHomeView.swift */; };
+		A1B2C3D4E5F6071829304322 /* KidsHistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304323 /* KidsHistoryView.swift */; };
+		A1B2C3D4E5F6071829304324 /* KidsRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304325 /* KidsRootView.swift */; };
+		A1B2C3D4E5F6071829304402 /* SwiftUICharts in Frameworks */ = {isa = PBXBuildFile; productRef = A1B2C3D4E5F6071829304401 /* SwiftUICharts */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -36,28 +45,36 @@
 		A1B2C3D4E5F6071829304052 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F6071829304054 /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F6071829304056 /* LoggedInView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoggedInView.swift; sourceTree = "<group>"; };
-		A1B2C3D4E5F6071829304079 /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
-		A1B2C3D4E5F6071829304083 /* AccountView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountView.swift; sourceTree = "<group>"; };
-		A1B2C3D4E5F6071829304084 /* AvatarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AvatarView.swift; sourceTree = "<group>"; };
-		A1B2C3D4E5F6071829304085 /* PlaceholderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceholderView.swift; sourceTree = "<group>"; };
-		A1B2C3D4E5F6071829304087 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
-		A1B2C3D4E5F6071829304089 /* HealthSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthSettingsView.swift; sourceTree = "<group>"; };
-		A1B2C3D4E5F6071829304211 /* SystemSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemSettingsView.swift; sourceTree = "<group>"; };
-		A1B2C3D4E5F6071829304103 /* ConstrainedTitleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConstrainedTitleView.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F6071829304058 /* AuthStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthStore.swift; sourceTree = "<group>"; };
-		A1B2C3D4E5F6071829304105 /* EnvironmentStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvironmentStore.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F6071829304060 /* ApiClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApiClient.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F6071829304062 /* AuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthService.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F6071829304064 /* TokenStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TokenStore.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F6071829304066 /* AuthTokens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthTokens.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F6071829304068 /* ApiError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApiError.swift; sourceTree = "<group>"; };
-		A1B2C3D4E5F6071829304098 /* HealthSettingsModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthSettingsModels.swift; sourceTree = "<group>"; };
-		A1B2C3D4E5F6071829304101 /* HealthApi.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthApi.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F6071829304070 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A1B2C3D4E5F6071829304072 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A1B2C3D4E5F6071829304074 /* EverdayIOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; path = EverdayIOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A1B2C3D4E5F6071829304079 /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F6071829304081 /* Dev.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Dev.xcconfig; sourceTree = "<group>"; };
 		A1B2C3D4E5F6071829304082 /* Prod.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Prod.xcconfig; sourceTree = "<group>"; };
+		A1B2C3D4E5F6071829304083 /* AccountView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountView.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6071829304084 /* AvatarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AvatarView.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6071829304085 /* PlaceholderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceholderView.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6071829304087 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6071829304089 /* HealthSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthSettingsView.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6071829304098 /* HealthSettingsModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthSettingsModels.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6071829304101 /* HealthApi.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthApi.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6071829304103 /* ConstrainedTitleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConstrainedTitleView.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6071829304105 /* EnvironmentStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvironmentStore.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6071829304211 /* SystemSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemSettingsView.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6071829304311 /* KidsApi.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KidsApi.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6071829304313 /* KidsModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KidsModels.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6071829304315 /* KidsFormatters.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KidsFormatters.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6071829304317 /* KidsTotals.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KidsTotals.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6071829304319 /* KidsEmoji.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KidsEmoji.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6071829304321 /* KidsHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KidsHomeView.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6071829304323 /* KidsHistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KidsHistoryView.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6071829304325 /* KidsRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KidsRootView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -65,6 +82,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A1B2C3D4E5F6071829304402 /* SwiftUICharts in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -94,27 +112,31 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
-			A1B2C3D4E5F6071829304092 /* Models */ = {
-				isa = PBXGroup;
-				children = (
-					A1B2C3D4E5F6071829304066 /* AuthTokens.swift */,
-					A1B2C3D4E5F6071829304068 /* ApiError.swift */,
-					A1B2C3D4E5F6071829304098 /* HealthSettingsModels.swift */,
-				);
-				path = Models;
-				sourceTree = "<group>";
-			};
-			A1B2C3D4E5F6071829304093 /* Services */ = {
-				isa = PBXGroup;
-				children = (
-					A1B2C3D4E5F6071829304060 /* ApiClient.swift */,
-					A1B2C3D4E5F6071829304062 /* AuthService.swift */,
-					A1B2C3D4E5F6071829304064 /* TokenStore.swift */,
-					A1B2C3D4E5F6071829304101 /* HealthApi.swift */,
-				);
-				path = Services;
-				sourceTree = "<group>";
-			};
+		A1B2C3D4E5F6071829304092 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				A1B2C3D4E5F6071829304066 /* AuthTokens.swift */,
+				A1B2C3D4E5F6071829304068 /* ApiError.swift */,
+				A1B2C3D4E5F6071829304098 /* HealthSettingsModels.swift */,
+				A1B2C3D4E5F6071829304313 /* KidsModels.swift */,
+				A1B2C3D4E5F6071829304315 /* KidsFormatters.swift */,
+				A1B2C3D4E5F6071829304317 /* KidsTotals.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		A1B2C3D4E5F6071829304093 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				A1B2C3D4E5F6071829304060 /* ApiClient.swift */,
+				A1B2C3D4E5F6071829304062 /* AuthService.swift */,
+				A1B2C3D4E5F6071829304064 /* TokenStore.swift */,
+				A1B2C3D4E5F6071829304101 /* HealthApi.swift */,
+				A1B2C3D4E5F6071829304311 /* KidsApi.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
 		A1B2C3D4E5F6071829304094 /* Store */ = {
 			isa = PBXGroup;
 			children = (
@@ -132,6 +154,10 @@
 				A1B2C3D4E5F6071829304079 /* DashboardView.swift */,
 				A1B2C3D4E5F6071829304083 /* AccountView.swift */,
 				A1B2C3D4E5F6071829304084 /* AvatarView.swift */,
+				A1B2C3D4E5F6071829304319 /* KidsEmoji.swift */,
+				A1B2C3D4E5F6071829304325 /* KidsRootView.swift */,
+				A1B2C3D4E5F6071829304321 /* KidsHomeView.swift */,
+				A1B2C3D4E5F6071829304323 /* KidsHistoryView.swift */,
 				A1B2C3D4E5F6071829304085 /* PlaceholderView.swift */,
 				A1B2C3D4E5F6071829304087 /* SettingsView.swift */,
 				A1B2C3D4E5F6071829304211 /* SystemSettingsView.swift */,
@@ -174,6 +200,9 @@
 			);
 			dependencies = (
 			);
+			packageProductDependencies = (
+				A1B2C3D4E5F6071829304401 /* SwiftUICharts */,
+			);
 			name = EverdayIOS;
 			productName = EverdayIOS;
 			productReference = A1B2C3D4E5F6071829304074 /* EverdayIOS.app */;
@@ -202,6 +231,9 @@
 				Base,
 			);
 			mainGroup = A1B2C3D4E5F6071829304100;
+			packageReferences = (
+				A1B2C3D4E5F6071829304400 /* SwiftUICharts */,
+			);
 			productRefGroup = A1B2C3D4E5F6071829304091 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -248,6 +280,14 @@
 				A1B2C3D4E5F6071829304069 /* ApiError.swift in Sources */,
 				A1B2C3D4E5F6071829304097 /* HealthSettingsModels.swift in Sources */,
 				A1B2C3D4E5F6071829304099 /* HealthApi.swift in Sources */,
+				A1B2C3D4E5F6071829304310 /* KidsApi.swift in Sources */,
+				A1B2C3D4E5F6071829304312 /* KidsModels.swift in Sources */,
+				A1B2C3D4E5F6071829304314 /* KidsFormatters.swift in Sources */,
+				A1B2C3D4E5F6071829304316 /* KidsTotals.swift in Sources */,
+				A1B2C3D4E5F6071829304318 /* KidsEmoji.swift in Sources */,
+				A1B2C3D4E5F6071829304320 /* KidsHomeView.swift in Sources */,
+				A1B2C3D4E5F6071829304322 /* KidsHistoryView.swift in Sources */,
+				A1B2C3D4E5F6071829304324 /* KidsRootView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -263,10 +303,12 @@
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_WEAK = YES;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = 8G8SGDTGM9;
 				ENABLE_PREVIEWS = YES;
 				INFOPLIST_FILE = EverdayIOS/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				INFOPLIST_KEY_CFBundleDisplayName = "Everday Life Admin";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
+				IPHONEOS_DEPLOYMENT_TARGET = 18.6;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -288,9 +330,11 @@
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_WEAK = YES;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = 8G8SGDTGM9;
 				INFOPLIST_FILE = EverdayIOS/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				INFOPLIST_KEY_CFBundleDisplayName = "Everday Life Admin";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
+				IPHONEOS_DEPLOYMENT_TARGET = 18.6;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -394,6 +438,25 @@
 			name = Release;
 		};
 /* End XCBuildConfiguration section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		A1B2C3D4E5F6071829304400 /* SwiftUICharts */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/willdale/SwiftUICharts";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.10.4;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		A1B2C3D4E5F6071829304401 /* SwiftUICharts */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A1B2C3D4E5F6071829304400 /* SwiftUICharts */;
+			productName = SwiftUICharts;
+		};
+/* End XCSwiftPackageProductDependency section */
 
 /* Begin XCConfigurationList section */
 		A1B2C3D4E5F6071829304111 /* Build configuration list for PBXNativeTarget "EverdayIOS" */ = {
