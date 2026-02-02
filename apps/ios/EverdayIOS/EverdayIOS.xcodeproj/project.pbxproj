@@ -200,10 +200,10 @@
 			);
 			dependencies = (
 			);
+			name = EverdayIOS;
 			packageProductDependencies = (
 				A1B2C3D4E5F6071829304401 /* SwiftUICharts */,
 			);
-			name = EverdayIOS;
 			productName = EverdayIOS;
 			productReference = A1B2C3D4E5F6071829304074 /* EverdayIOS.app */;
 			productType = "com.apple.product-type.application";
@@ -232,7 +232,7 @@
 			);
 			mainGroup = A1B2C3D4E5F6071829304100;
 			packageReferences = (
-				A1B2C3D4E5F6071829304400 /* SwiftUICharts */,
+				A1B2C3D4E5F6071829304400 /* XCRemoteSwiftPackageReference "SwiftUICharts" */,
 			);
 			productRefGroup = A1B2C3D4E5F6071829304091 /* Products */;
 			projectDirPath = "";
@@ -313,6 +313,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
+				MARKETING_VERSION = 1;
 				PRODUCT_BUNDLE_IDENTIFIER = au.batserver.everday.ios;
 				PRODUCT_NAME = EverdayIOS;
 				SDKROOT = iphoneos;
@@ -339,6 +340,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
+				MARKETING_VERSION = 1;
 				PRODUCT_BUNDLE_IDENTIFIER = au.batserver.everday.ios;
 				PRODUCT_NAME = EverdayIOS;
 				SDKROOT = iphoneos;
@@ -439,25 +441,6 @@
 		};
 /* End XCBuildConfiguration section */
 
-/* Begin XCRemoteSwiftPackageReference section */
-		A1B2C3D4E5F6071829304400 /* SwiftUICharts */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/willdale/SwiftUICharts";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 2.10.4;
-			};
-		};
-/* End XCRemoteSwiftPackageReference section */
-
-/* Begin XCSwiftPackageProductDependency section */
-		A1B2C3D4E5F6071829304401 /* SwiftUICharts */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = A1B2C3D4E5F6071829304400 /* SwiftUICharts */;
-			productName = SwiftUICharts;
-		};
-/* End XCSwiftPackageProductDependency section */
-
 /* Begin XCConfigurationList section */
 		A1B2C3D4E5F6071829304111 /* Build configuration list for PBXNativeTarget "EverdayIOS" */ = {
 			isa = XCConfigurationList;
@@ -478,6 +461,25 @@
 			defaultConfigurationName = Debug;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		A1B2C3D4E5F6071829304400 /* XCRemoteSwiftPackageReference "SwiftUICharts" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/willdale/SwiftUICharts";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.10.4;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		A1B2C3D4E5F6071829304401 /* SwiftUICharts */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A1B2C3D4E5F6071829304400 /* XCRemoteSwiftPackageReference "SwiftUICharts" */;
+			productName = SwiftUICharts;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = A1B2C3D4E5F6071829304130 /* Project object */;
 }

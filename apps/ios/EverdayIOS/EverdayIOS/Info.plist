@@ -22,6 +22,16 @@
     <string>1</string>
     <key>LSRequiresIPhoneOS</key>
     <true/>
+    <key>NSCameraUsageDescription</key>
+    <string>Everday uses the camera to capture meals and health photos.</string>
+    <key>NSPhotoLibraryUsageDescription</key>
+    <string>Everday accesses your photo library to attach health photos.</string>
+    <key>NSPhotoLibraryAddUsageDescription</key>
+    <string>Everday saves health photos to your library when you choose to.</string>
+    <key>NSHealthShareUsageDescription</key>
+    <string>Everday reads your Health data to show your profile, goals, and workout insights.</string>
+    <key>NSHealthUpdateUsageDescription</key>
+    <string>Everday writes Health data to update the workouts and targets you choose.</string>
     <key>UILaunchScreen</key>
     <dict/>
     <key>UIRequiredDeviceCapabilities</key>
