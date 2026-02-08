@@ -17,7 +17,7 @@ struct DashboardView: View {
                     title: "Kids Admin",
                     subtitle: "Manage schedules, tasks, and permissions",
                     systemImage: "person.2.fill",
-                    destination: PlaceholderView(title: "Kids Admin")
+                    destination: KidsAdminView()
                 )
 
                 DashboardCard(

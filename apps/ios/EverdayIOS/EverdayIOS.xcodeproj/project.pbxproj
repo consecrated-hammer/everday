@@ -37,6 +37,9 @@
 		A1B2C3D4E5F6071829304320 /* KidsHomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304321 /* KidsHomeView.swift */; };
 		A1B2C3D4E5F6071829304322 /* KidsHistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304323 /* KidsHistoryView.swift */; };
 		A1B2C3D4E5F6071829304324 /* KidsRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304325 /* KidsRootView.swift */; };
+		34A6C5AC95B7E892E904BF19 /* KidsAdminView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21DB24DF171C3DA9F2ECB03D /* KidsAdminView.swift */; };
+		B92E9FB0AC3C18C83B88B785 /* KidsAdminModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6CCF0C88810CBB7790CB143A /* KidsAdminModels.swift */; };
+		C6EB036294E71BB8385953CF /* KidsAdminApi.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF83E6574FA7588C1B9F2A14 /* KidsAdminApi.swift */; };
 		A1B2C3D4E5F6071829304402 /* SwiftUICharts in Frameworks */ = {isa = PBXBuildFile; productRef = A1B2C3D4E5F6071829304401 /* SwiftUICharts */; };
 /* End PBXBuildFile section */
 
@@ -75,6 +78,9 @@
 		A1B2C3D4E5F6071829304321 /* KidsHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KidsHomeView.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F6071829304323 /* KidsHistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KidsHistoryView.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F6071829304325 /* KidsRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KidsRootView.swift; sourceTree = "<group>"; };
+		21DB24DF171C3DA9F2ECB03D /* KidsAdminView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KidsAdminView.swift; sourceTree = "<group>"; };
+		6CCF0C88810CBB7790CB143A /* KidsAdminModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KidsAdminModels.swift; sourceTree = "<group>"; };
+		FF83E6574FA7588C1B9F2A14 /* KidsAdminApi.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KidsAdminApi.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -118,6 +124,7 @@
 				A1B2C3D4E5F6071829304066 /* AuthTokens.swift */,
 				A1B2C3D4E5F6071829304068 /* ApiError.swift */,
 				A1B2C3D4E5F6071829304098 /* HealthSettingsModels.swift */,
+				6CCF0C88810CBB7790CB143A /* KidsAdminModels.swift */,
 				A1B2C3D4E5F6071829304313 /* KidsModels.swift */,
 				A1B2C3D4E5F6071829304315 /* KidsFormatters.swift */,
 				A1B2C3D4E5F6071829304317 /* KidsTotals.swift */,
@@ -132,6 +139,7 @@
 				A1B2C3D4E5F6071829304062 /* AuthService.swift */,
 				A1B2C3D4E5F6071829304064 /* TokenStore.swift */,
 				A1B2C3D4E5F6071829304101 /* HealthApi.swift */,
+				FF83E6574FA7588C1B9F2A14 /* KidsAdminApi.swift */,
 				A1B2C3D4E5F6071829304311 /* KidsApi.swift */,
 			);
 			path = Services;
@@ -158,6 +166,7 @@
 				A1B2C3D4E5F6071829304325 /* KidsRootView.swift */,
 				A1B2C3D4E5F6071829304321 /* KidsHomeView.swift */,
 				A1B2C3D4E5F6071829304323 /* KidsHistoryView.swift */,
+				21DB24DF171C3DA9F2ECB03D /* KidsAdminView.swift */,
 				A1B2C3D4E5F6071829304085 /* PlaceholderView.swift */,
 				A1B2C3D4E5F6071829304087 /* SettingsView.swift */,
 				A1B2C3D4E5F6071829304211 /* SystemSettingsView.swift */,
@@ -288,6 +297,9 @@
 				A1B2C3D4E5F6071829304320 /* KidsHomeView.swift in Sources */,
 				A1B2C3D4E5F6071829304322 /* KidsHistoryView.swift in Sources */,
 				A1B2C3D4E5F6071829304324 /* KidsRootView.swift in Sources */,
+				34A6C5AC95B7E892E904BF19 /* KidsAdminView.swift in Sources */,
+				B92E9FB0AC3C18C83B88B785 /* KidsAdminModels.swift in Sources */,
+				C6EB036294E71BB8385953CF /* KidsAdminApi.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
