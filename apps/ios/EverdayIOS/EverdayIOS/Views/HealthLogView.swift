@@ -1,0 +1,268 @@
+import SwiftUI
+
+struct HealthLogView: View {
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @State private var logDate = Date()
+    @State private var status: LoadState = .idle
+    @State private var errorMessage = ""
+    @State private var logResponse: HealthDailyLogResponse?
+    @State private var foods: [HealthFood] = []
+    @State private var templates: [HealthMealTemplateWithItems] = []
+    @State private var shareUsers: [SettingsUser] = []
+    @State private var activeMealType: HealthMealType = .Breakfast
+    @State private var editingEntry: HealthMealEntryWithFood?
+    @State private var showEntrySheet = false
+    @State private var entryToDelete: HealthMealEntryWithFood?
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                dateCard
+                summaryCard
+
+                ForEach(mealOrder, id: \.self) { meal in
+                    mealSection(meal)
+                }
+
+                if status == .loading {
+                    HealthEmptyState(message: "Loading log...")
+                }
+                if !errorMessage.isEmpty {
+                    HealthErrorBanner(message: errorMessage)
+                }
+            }
+            .padding(20)
+            .frame(maxWidth: 860)
+            .frame(maxWidth: .infinity)
+        }
+        .sheet(isPresented: $showEntrySheet) {
+            HealthMealEntrySheet(
+                logDate: logDateKey,
+                dailyLogId: logResponse?.DailyLog?.DailyLogId,
+                initialMealType: activeMealType,
+                existingEntry: editingEntry,
+                foods: foods,
+                templates: templates,
+                shareUsers: shareUsers,
+                nextSortOrder: nextSortOrder,
+                onSaved: { Task { await load() } }
+            )
+        }
+        .alert("Delete entry", isPresented: Binding(
+            get: { entryToDelete != nil },
+            set: { if !$0 { entryToDelete = nil } }
+        )) {
+            Button("Delete", role: .destructive) {
+                if let entry = entryToDelete {
+                    Task { await deleteEntry(entry) }
+                }
+            }
+            Button("Cancel", role: .cancel) { entryToDelete = nil }
+        } message: {
+            Text("This will remove the entry from the log.")
+        }
+        .task(id: logDateKey) {
+            await load()
+        }
+    }
+
+    private var dateCard: some View {
+        HealthSectionCard {
+            HealthSectionHeader(title: "Log date", subtitle: "Select a day to review or add entries.")
+            HStack(spacing: 12) {
+                Button {
+                    shiftDate(days: -1)
+                } label: {
+                    Image(systemName: "chevron.left")
+                }
+                .buttonStyle(.bordered)
+
+                DatePicker("", selection: $logDate, in: ...Date(), displayedComponents: .date)
+                    .labelsHidden()
+
+                Button {
+                    shiftDate(days: 1)
+                } label: {
+                    Image(systemName: "chevron.right")
+                }
+                .buttonStyle(.bordered)
+                .disabled(isNextDisabled)
+            }
+        }
+    }
+
+    private var summaryCard: some View {
+        HealthSectionCard {
+            HealthSectionHeader(title: "Day total", subtitle: "Calories and key macros.")
+            if let totals = logResponse?.Totals {
+                let columns = Array(repeating: GridItem(.flexible(), spacing: 12), count: horizontalSizeClass == .regular ? 3 : 2)
+                LazyVGrid(columns: columns, spacing: 12) {
+                    HealthMetricTile(title: "Calories", value: HealthFormatters.formatCalories(totals.TotalCalories), detail: nil)
+                    HealthMetricTile(title: "Protein", value: HealthFormatters.formatGrams(totals.TotalProtein), detail: nil)
+                    HealthMetricTile(title: "Carbs", value: HealthFormatters.formatGrams(totals.TotalCarbs), detail: nil)
+                    HealthMetricTile(title: "Fat", value: HealthFormatters.formatGrams(totals.TotalFat), detail: nil)
+                }
+            } else {
+                HealthEmptyState(message: "No totals yet.")
+            }
+        }
+    }
+
+    private func mealSection(_ meal: HealthMealType) -> some View {
+        let entries = groupedEntries[meal] ?? []
+        return HealthSectionCard {
+            HealthSectionHeader(
+                title: meal.label,
+                subtitle: entries.isEmpty ? "No entries yet." : "\(entries.count) items",
+                trailing: AnyView(
+                    Button("Add") {
+                        activeMealType = meal
+                        editingEntry = nil
+                        showEntrySheet = true
+                    }
+                    .buttonStyle(.borderedProminent)
+                )
+            )
+
+            if entries.isEmpty {
+                HealthEmptyState(message: "Nothing logged yet.")
+            } else {
+                VStack(alignment: .leading, spacing: 12) {
+                    ForEach(entries) { entry in
+                        HealthEntryRow(entry: entry) {
+                            editingEntry = entry
+                            activeMealType = entry.MealType
+                            showEntrySheet = true
+                        } onDelete: {
+                            entryToDelete = entry
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private var mealOrder: [HealthMealType] {
+        [.Breakfast, .Snack1, .Lunch, .Snack2, .Dinner, .Snack3]
+    }
+
+    private var groupedEntries: [HealthMealType: [HealthMealEntryWithFood]] {
+        let entries = logResponse?.Entries ?? []
+        let sorted = entries.sorted { $0.SortOrder < $1.SortOrder }
+        return Dictionary(grouping: sorted, by: { $0.MealType })
+    }
+
+    private var logDateKey: String {
+        HealthFormatters.dateKey(from: logDate)
+    }
+
+    private var isNextDisabled: Bool {
+        let todayKey = HealthFormatters.dateKey(from: Date())
+        return logDateKey >= todayKey
+    }
+
+    private var nextSortOrder: Int {
+        let entries = logResponse?.Entries ?? []
+        let maxValue = entries.map { $0.SortOrder }.max() ?? 0
+        return maxValue + 1
+    }
+
+    private func shiftDate(days: Int) {
+        if let updated = Calendar.current.date(byAdding: .day, value: days, to: logDate) {
+            if updated <= Date() {
+                logDate = updated
+            }
+        }
+    }
+
+    private func load() async {
+        status = .loading
+        errorMessage = ""
+        do {
+            async let logResult = HealthApi.fetchDailyLog(date: logDateKey)
+            if foods.isEmpty {
+                foods = try await HealthApi.fetchFoods()
+            }
+            if templates.isEmpty {
+                let response = try await HealthApi.fetchMealTemplates()
+                templates = response.Templates
+            }
+            if shareUsers.isEmpty {
+                do {
+                    shareUsers = try await SettingsApi.fetchUsers()
+                } catch {
+                    shareUsers = []
+                }
+            }
+            logResponse = try await logResult
+            status = .ready
+        } catch {
+            status = .error
+            errorMessage = (error as? ApiError)?.message ?? "Unable to load log."
+        }
+    }
+
+    private func deleteEntry(_ entry: HealthMealEntryWithFood) async {
+        entryToDelete = nil
+        do {
+            status = .loading
+            _ = try await HealthApi.deleteMealEntry(mealEntryId: entry.MealEntryId)
+            await load()
+        } catch {
+            status = .error
+            errorMessage = (error as? ApiError)?.message ?? "Unable to delete entry."
+        }
+    }
+}
+
+private struct HealthEntryRow: View {
+    let entry: HealthMealEntryWithFood
+    let onEdit: () -> Void
+    let onDelete: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(entry.TemplateName ?? entry.FoodName)
+                    .font(.subheadline.weight(.semibold))
+                Text(detailLine)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            VStack(alignment: .trailing, spacing: 6) {
+                Text(HealthFormatters.formatCalories(entry.CaloriesPerServing * entry.Quantity))
+                    .font(.subheadline.weight(.semibold))
+                HStack(spacing: 8) {
+                    Button(action: onEdit) {
+                        Image(systemName: "pencil")
+                    }
+                    .buttonStyle(.borderless)
+
+                    Button(role: .destructive, action: onDelete) {
+                        Image(systemName: "trash")
+                    }
+                    .buttonStyle(.borderless)
+                }
+            }
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color(.secondarySystemBackground))
+        )
+    }
+
+    private var detailLine: String {
+        let quantity = HealthFormatters.formatNumber(entry.Quantity, decimals: 2)
+        let unit = entry.PortionLabel ?? "serving"
+        return "\(quantity) \(unit)"
+    }
+}
+
+private enum LoadState {
+    case idle
+    case loading
+    case ready
+    case error
+}
