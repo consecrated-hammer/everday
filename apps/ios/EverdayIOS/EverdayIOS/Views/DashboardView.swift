@@ -10,7 +10,7 @@ struct DashboardView: View {
                     title: "Health",
                     subtitle: "Track your health profile and insights",
                     systemImage: "heart.text.square",
-                    destination: PlaceholderView(title: "Health")
+                    destination: HealthRootView()
                 )
 
                 DashboardCard(

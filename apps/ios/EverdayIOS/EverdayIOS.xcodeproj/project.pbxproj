@@ -26,6 +26,19 @@
 		A1B2C3D4E5F6071829304088 /* HealthSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304089 /* HealthSettingsView.swift */; };
 		A1B2C3D4E5F6071829304097 /* HealthSettingsModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304098 /* HealthSettingsModels.swift */; };
 		A1B2C3D4E5F6071829304099 /* HealthApi.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304101 /* HealthApi.swift */; };
+		FCADDF1AAB9C4711874B637E /* HealthModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8A24724FAA2416989D67406 /* HealthModels.swift */; };
+		30C53000FAA64D2699B1546A /* HealthFormatters.swift in Sources */ = {isa = PBXBuildFile; fileRef = CBE00ACBEB7549F494D1C33A /* HealthFormatters.swift */; };
+		9877D46608604EE8A1B6F6EE /* HealthComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 794B2086C7294218A7B5B107 /* HealthComponents.swift */; };
+		C18BFFF1D45C49A7ABE58DDD /* HealthRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48A430A6948847418C1002C4 /* HealthRootView.swift */; };
+		AB0FDC48E7134280869C9018 /* HealthTodayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7680208FE6C74354BB992C67 /* HealthTodayView.swift */; };
+		F8304E9F396841FFBE56FAB5 /* HealthLogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB163B73959E49AAADD8949C /* HealthLogView.swift */; };
+		402ABF2E95C9468990409BBF /* HealthFoodsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42971FAC33D64D41B6184CE7 /* HealthFoodsView.swift */; };
+		9769E849BAC749D5839C74B5 /* HealthInsightsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 193FCE5CB87349DC8869E1F6 /* HealthInsightsView.swift */; };
+		BCAF0092D22A499A96C528B0 /* HealthHistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44A1BE1D693841AAA1EB59C4 /* HealthHistoryView.swift */; };
+		2D2D41DC33C2452E8BB7C5A2 /* HealthMealEntrySheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE9F2D258F6B422B9117BC3A /* HealthMealEntrySheet.swift */; };
+		34ECFA1B29714BE6A945D9ED /* HealthHistoryDayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 048982A30E6A4243A6B49055 /* HealthHistoryDayView.swift */; };
+		F5D3362BE72A4433B255A4D0 /* SettingsModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61CAB6AE73C543D8A41CD804 /* SettingsModels.swift */; };
+		81B748F7538B4748875208B6 /* SettingsApi.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D5A0B7D83E6423CA26F158A /* SettingsApi.swift */; };
 		A1B2C3D4E5F6071829304102 /* ConstrainedTitleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304103 /* ConstrainedTitleView.swift */; };
 		A1B2C3D4E5F6071829304104 /* EnvironmentStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304105 /* EnvironmentStore.swift */; };
 		A1B2C3D4E5F6071829304210 /* SystemSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304211 /* SystemSettingsView.swift */; };
@@ -66,6 +79,19 @@
 		A1B2C3D4E5F6071829304087 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F6071829304089 /* HealthSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthSettingsView.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F6071829304098 /* HealthSettingsModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthSettingsModels.swift; sourceTree = "<group>"; };
+		C8A24724FAA2416989D67406 /* HealthModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthModels.swift; sourceTree = "<group>"; };
+		CBE00ACBEB7549F494D1C33A /* HealthFormatters.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthFormatters.swift; sourceTree = "<group>"; };
+		61CAB6AE73C543D8A41CD804 /* SettingsModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsModels.swift; sourceTree = "<group>"; };
+		794B2086C7294218A7B5B107 /* HealthComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthComponents.swift; sourceTree = "<group>"; };
+		48A430A6948847418C1002C4 /* HealthRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthRootView.swift; sourceTree = "<group>"; };
+		7680208FE6C74354BB992C67 /* HealthTodayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthTodayView.swift; sourceTree = "<group>"; };
+		BB163B73959E49AAADD8949C /* HealthLogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthLogView.swift; sourceTree = "<group>"; };
+		42971FAC33D64D41B6184CE7 /* HealthFoodsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthFoodsView.swift; sourceTree = "<group>"; };
+		193FCE5CB87349DC8869E1F6 /* HealthInsightsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthInsightsView.swift; sourceTree = "<group>"; };
+		44A1BE1D693841AAA1EB59C4 /* HealthHistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthHistoryView.swift; sourceTree = "<group>"; };
+		CE9F2D258F6B422B9117BC3A /* HealthMealEntrySheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthMealEntrySheet.swift; sourceTree = "<group>"; };
+		048982A30E6A4243A6B49055 /* HealthHistoryDayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthHistoryDayView.swift; sourceTree = "<group>"; };
+		2D5A0B7D83E6423CA26F158A /* SettingsApi.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsApi.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F6071829304101 /* HealthApi.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthApi.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F6071829304103 /* ConstrainedTitleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConstrainedTitleView.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F6071829304105 /* EnvironmentStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvironmentStore.swift; sourceTree = "<group>"; };
@@ -124,6 +150,9 @@
 				A1B2C3D4E5F6071829304066 /* AuthTokens.swift */,
 				A1B2C3D4E5F6071829304068 /* ApiError.swift */,
 				A1B2C3D4E5F6071829304098 /* HealthSettingsModels.swift */,
+				C8A24724FAA2416989D67406 /* HealthModels.swift */,
+				CBE00ACBEB7549F494D1C33A /* HealthFormatters.swift */,
+				61CAB6AE73C543D8A41CD804 /* SettingsModels.swift */,
 				6CCF0C88810CBB7790CB143A /* KidsAdminModels.swift */,
 				A1B2C3D4E5F6071829304313 /* KidsModels.swift */,
 				A1B2C3D4E5F6071829304315 /* KidsFormatters.swift */,
@@ -139,6 +168,7 @@
 				A1B2C3D4E5F6071829304062 /* AuthService.swift */,
 				A1B2C3D4E5F6071829304064 /* TokenStore.swift */,
 				A1B2C3D4E5F6071829304101 /* HealthApi.swift */,
+				2D5A0B7D83E6423CA26F158A /* SettingsApi.swift */,
 				FF83E6574FA7588C1B9F2A14 /* KidsAdminApi.swift */,
 				A1B2C3D4E5F6071829304311 /* KidsApi.swift */,
 			);
@@ -171,6 +201,15 @@
 				A1B2C3D4E5F6071829304087 /* SettingsView.swift */,
 				A1B2C3D4E5F6071829304211 /* SystemSettingsView.swift */,
 				A1B2C3D4E5F6071829304089 /* HealthSettingsView.swift */,
+				48A430A6948847418C1002C4 /* HealthRootView.swift */,
+				7680208FE6C74354BB992C67 /* HealthTodayView.swift */,
+				BB163B73959E49AAADD8949C /* HealthLogView.swift */,
+				42971FAC33D64D41B6184CE7 /* HealthFoodsView.swift */,
+				193FCE5CB87349DC8869E1F6 /* HealthInsightsView.swift */,
+				44A1BE1D693841AAA1EB59C4 /* HealthHistoryView.swift */,
+				048982A30E6A4243A6B49055 /* HealthHistoryDayView.swift */,
+				CE9F2D258F6B422B9117BC3A /* HealthMealEntrySheet.swift */,
+				794B2086C7294218A7B5B107 /* HealthComponents.swift */,
 				A1B2C3D4E5F6071829304103 /* ConstrainedTitleView.swift */,
 				A1B2C3D4E5F6071829304056 /* LoggedInView.swift */,
 			);
@@ -278,6 +317,15 @@
 				A1B2C3D4E5F6071829304086 /* SettingsView.swift in Sources */,
 				A1B2C3D4E5F6071829304210 /* SystemSettingsView.swift in Sources */,
 				A1B2C3D4E5F6071829304088 /* HealthSettingsView.swift in Sources */,
+				C18BFFF1D45C49A7ABE58DDD /* HealthRootView.swift in Sources */,
+				AB0FDC48E7134280869C9018 /* HealthTodayView.swift in Sources */,
+				F8304E9F396841FFBE56FAB5 /* HealthLogView.swift in Sources */,
+				402ABF2E95C9468990409BBF /* HealthFoodsView.swift in Sources */,
+				9769E849BAC749D5839C74B5 /* HealthInsightsView.swift in Sources */,
+				BCAF0092D22A499A96C528B0 /* HealthHistoryView.swift in Sources */,
+				34ECFA1B29714BE6A945D9ED /* HealthHistoryDayView.swift in Sources */,
+				2D2D41DC33C2452E8BB7C5A2 /* HealthMealEntrySheet.swift in Sources */,
+				9877D46608604EE8A1B6F6EE /* HealthComponents.swift in Sources */,
 				A1B2C3D4E5F6071829304102 /* ConstrainedTitleView.swift in Sources */,
 				A1B2C3D4E5F6071829304057 /* LoggedInView.swift in Sources */,
 				A1B2C3D4E5F6071829304059 /* AuthStore.swift in Sources */,
@@ -288,7 +336,11 @@
 				A1B2C3D4E5F6071829304067 /* AuthTokens.swift in Sources */,
 				A1B2C3D4E5F6071829304069 /* ApiError.swift in Sources */,
 				A1B2C3D4E5F6071829304097 /* HealthSettingsModels.swift in Sources */,
+				FCADDF1AAB9C4711874B637E /* HealthModels.swift in Sources */,
+				30C53000FAA64D2699B1546A /* HealthFormatters.swift in Sources */,
+				F5D3362BE72A4433B255A4D0 /* SettingsModels.swift in Sources */,
 				A1B2C3D4E5F6071829304099 /* HealthApi.swift in Sources */,
+				81B748F7538B4748875208B6 /* SettingsApi.swift in Sources */,
 				A1B2C3D4E5F6071829304310 /* KidsApi.swift in Sources */,
 				A1B2C3D4E5F6071829304312 /* KidsModels.swift in Sources */,
 				A1B2C3D4E5F6071829304314 /* KidsFormatters.swift in Sources */,
