@@ -11,7 +11,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.modules.auth.deps import NowUtc
-from app.modules.life_admin.document_ai_service import DocumentAiResult
+from app.modules.life_admin.document_ai_service import AnalyzeDocument, DocumentAiResult
 from app.modules.life_admin.models import (
     Document,
     DocumentAiSuggestion,
@@ -624,6 +624,26 @@ def UpdateOcrResults(
     record.UpdatedAt = NowUtc()
     db.add(record)
     db.commit()
+
+
+def RunAiAnalysis(db: Session, *, document_id: int) -> None:
+    record = db.query(Document).filter(Document.Id == document_id).first()
+    if not record:
+        return
+    try:
+        result = AnalyzeDocument(
+            storage_path=record.StoragePath,
+            content_type=record.ContentType,
+            filename=record.OriginalFileName,
+        )
+    except Exception:
+        UpdateOcrResults(db, document_id=document_id, ocr_text="", status="Failed")
+        return
+    status_value = "Complete"
+    if not result.RawJson and not result.OcrText:
+        status_value = "Skipped"
+    UpdateOcrResults(db, document_id=document_id, ocr_text=result.OcrText, status=status_value)
+    UpsertAiSuggestion(db, document_id=document_id, result=result)
 
 
 def UpsertAiSuggestion(

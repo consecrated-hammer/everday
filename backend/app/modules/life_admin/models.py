@@ -3,6 +3,7 @@ from datetime import datetime
 from sqlalchemy import (
     Boolean,
     Column,
+    Date,
     DateTime,
     Integer,
     String,
@@ -255,5 +256,27 @@ class DocumentAiSuggestion(Base):
     SuggestedReminderJson = Column(Text)
     Confidence = Column(String(20))
     RawJson = Column(Text)
+    CreatedAt = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    UpdatedAt = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+
+
+class GmailIntakeRun(Base):
+    __tablename__ = "gmail_intake_runs"
+    __table_args__ = (
+        Index("ix_life_admin_gmail_intake_runs_owner_started", "OwnerUserId", "StartedAt"),
+        {"schema": "life_admin"},
+    )
+
+    Id = Column(Integer, primary_key=True, index=True)
+    OwnerUserId = Column(Integer, nullable=False, index=True)
+    RunDate = Column(Date, nullable=False, index=True)
+    StartedAt = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    FinishedAt = Column(DateTime(timezone=True))
+    Result = Column(String(20), nullable=False, default="Running")
+    MessagesProcessed = Column(Integer, nullable=False, default=0)
+    DocumentsCreated = Column(Integer, nullable=False, default=0)
+    AttachmentErrors = Column(Integer, nullable=False, default=0)
+    ErrorMessage = Column(String(500))
+    TriggeredByUserId = Column(Integer)
     CreatedAt = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
     UpdatedAt = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
