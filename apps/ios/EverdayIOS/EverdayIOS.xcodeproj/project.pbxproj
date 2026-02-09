@@ -23,6 +23,10 @@
 		A1B2C3D4E5F6071829304077 /* AvatarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304084 /* AvatarView.swift */; };
 		A1B2C3D4E5F6071829304078 /* PlaceholderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304085 /* PlaceholderView.swift */; };
 		A1B2C3D4E5F6071829304086 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304087 /* SettingsView.swift */; };
+		09AD406B2A0C473FAC729C49 /* SettingsAppearanceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C63A64CFC70B435887494EB5 /* SettingsAppearanceView.swift */; };
+		856BC9C71A1F4164A7963273 /* SettingsTasksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DD27596F9894B8492ACCFA3 /* SettingsTasksView.swift */; };
+		3289FC281B0749F6A3121D04 /* SettingsIntegrationsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE35CCE320C34A7FA27355AA /* SettingsIntegrationsView.swift */; };
+		AD5669E1B0C344BFADA577B8 /* SettingsUsersView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D50EA68E6E57482F88CD1F65 /* SettingsUsersView.swift */; };
 		A1B2C3D4E5F6071829304088 /* HealthSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304089 /* HealthSettingsView.swift */; };
 		A1B2C3D4E5F6071829304097 /* HealthSettingsModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304098 /* HealthSettingsModels.swift */; };
 		A1B2C3D4E5F6071829304099 /* HealthApi.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304101 /* HealthApi.swift */; };
@@ -53,6 +57,39 @@
 		34A6C5AC95B7E892E904BF19 /* KidsAdminView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21DB24DF171C3DA9F2ECB03D /* KidsAdminView.swift */; };
 		B92E9FB0AC3C18C83B88B785 /* KidsAdminModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6CCF0C88810CBB7790CB143A /* KidsAdminModels.swift */; };
 		C6EB036294E71BB8385953CF /* KidsAdminApi.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF83E6574FA7588C1B9F2A14 /* KidsAdminApi.swift */; };
+		6888D4BA4C8E41CBB46897A6 /* NotificationsModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 700CD6673F0F40129BC0EC7D /* NotificationsModels.swift */; };
+		4F30A3B412F84E468AFCD9F8 /* NotificationsFormatters.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73F779D1716D499A999748B2 /* NotificationsFormatters.swift */; };
+		41279E6446D04990A2822645 /* NotificationsApi.swift in Sources */ = {isa = PBXBuildFile; fileRef = 118BD4295C6E40158DA022DD /* NotificationsApi.swift */; };
+		8F043F466DA348678300D039 /* NotificationsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6423FDB1FB8C4F639ADD3D4F /* NotificationsView.swift */; };
+		1A4058E89FB848F88C23D922 /* TasksModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = D01E1478F47145A090982DC0 /* TasksModels.swift */; };
+		D7620FEB1AF84B269EEC0CAE /* TasksFormatters.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A7A5A943EC4481A8D600123 /* TasksFormatters.swift */; };
+		5F2F89B9325542D4BC6AE28B /* TasksApi.swift in Sources */ = {isa = PBXBuildFile; fileRef = 420C313E70A142F68E71D056 /* TasksApi.swift */; };
+		D299F5C2AA2A44A98DE31276 /* TasksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC5A5091BB6841AD8F98CF20 /* TasksView.swift */; };
+		F31FDEEF31D144F0AA109E57 /* NotesModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18667992083D490DBE57FA98 /* NotesModels.swift */; };
+		C528523255874C35BAAED114 /* NotesFormatters.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8760C581D3F4C638E88F03B /* NotesFormatters.swift */; };
+		4838F48D18DE409087C66F5D /* NotesApi.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9086C4BD1BC04764A23D6AD7 /* NotesApi.swift */; };
+		A2FD707A015A454AB992B28E /* NotesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E05F0D824504D65AC33D3B3 /* NotesView.swift */; };
+		BB40531A15874CF5AAC95570 /* ShoppingModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BEEEABC20694AB7A0C72002 /* ShoppingModels.swift */; };
+		084228AC801D405BB0776551 /* ShoppingFormatters.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22C4922A42B64052906E0078 /* ShoppingFormatters.swift */; };
+		E1F0A679BCDF4B40B2588969 /* ShoppingApi.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4DC6CE94E764B27960000E7 /* ShoppingApi.swift */; };
+		FFC30A0DD3C444E0AB9E57B6 /* ShoppingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E5D10EC57FD4029A896F625 /* ShoppingView.swift */; };
+		15FA34C7DE254516AD90DA32 /* BudgetModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B00EC75D387459386D19A57 /* BudgetModels.swift */; };
+		2D2F51ECE1A34CDFAE5E2173 /* BudgetFormatters.swift in Sources */ = {isa = PBXBuildFile; fileRef = 313B4E0D38704F64BF961D22 /* BudgetFormatters.swift */; };
+		17C0DE385DCC478280A2F24B /* BudgetApi.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F23A6AD86BB4DA2AE72B440 /* BudgetApi.swift */; };
+		B571FE0166F149A1873EE306 /* BudgetComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7CA19EC3F89C4AACBAE1094E /* BudgetComponents.swift */; };
+		DE685BA5D85146CB9A41B4C5 /* BudgetRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69974E90CB3E4A6982E54155 /* BudgetRootView.swift */; };
+		6D0E41EA46AA4207B993E454 /* BudgetIncomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFA08D05AE0947228A571115 /* BudgetIncomeView.swift */; };
+		DC2B3A40BB0C45F398F13729 /* BudgetExpensesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 359FB8B2C0C74AD4ACDB3695 /* BudgetExpensesView.swift */; };
+		4851DFB9BF96455ABBD3816A /* BudgetAllocationsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49E72252A0BC4F1C889513EC /* BudgetAllocationsView.swift */; };
+		4340155AFEAC4CE184EE8D64 /* LifeAdminModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 552DBC1590A947C588403D9A /* LifeAdminModels.swift */; };
+		1370A200A7C046C0AC1572FF /* LifeAdminFormatters.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF79DC8F70EE4BCAA01414AA /* LifeAdminFormatters.swift */; };
+		5E4D1E962DCE44F8AE9673E2 /* LifeAdminApi.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22DC89C1F9444C7E8ECDFBD4 /* LifeAdminApi.swift */; };
+		254AE0FB2960437990E02651 /* LifeAdminComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61647B5AAF5C4484B7803CF3 /* LifeAdminComponents.swift */; };
+		73B876169BD54C77A3D937BA /* LifeAdminRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9EE162BADD0A47898C4E0C7C /* LifeAdminRootView.swift */; };
+		81C65F159FB140E59CBA35E0 /* LifeAdminRecordsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 001B876F897B4098800F2DE4 /* LifeAdminRecordsView.swift */; };
+		B465D84B265D458D8A2B393E /* LifeAdminLibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7F644CE36514115B8E09CFE /* LifeAdminLibraryView.swift */; };
+		458B937F60044D2AA03596B3 /* LifeAdminBuilderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9B73DAAAA2D487E81627809 /* LifeAdminBuilderView.swift */; };
+		0444EBDFEB2E4253BD01C123 /* ResetPasswordView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CE5AD4D6E0D4E0F903830E8 /* ResetPasswordView.swift */; };
 		A1B2C3D4E5F6071829304402 /* SwiftUICharts in Frameworks */ = {isa = PBXBuildFile; productRef = A1B2C3D4E5F6071829304401 /* SwiftUICharts */; };
 /* End PBXBuildFile section */
 
@@ -77,6 +114,10 @@
 		A1B2C3D4E5F6071829304084 /* AvatarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AvatarView.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F6071829304085 /* PlaceholderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceholderView.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F6071829304087 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		C63A64CFC70B435887494EB5 /* SettingsAppearanceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsAppearanceView.swift; sourceTree = "<group>"; };
+		0DD27596F9894B8492ACCFA3 /* SettingsTasksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsTasksView.swift; sourceTree = "<group>"; };
+		BE35CCE320C34A7FA27355AA /* SettingsIntegrationsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsIntegrationsView.swift; sourceTree = "<group>"; };
+		D50EA68E6E57482F88CD1F65 /* SettingsUsersView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsUsersView.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F6071829304089 /* HealthSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthSettingsView.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F6071829304098 /* HealthSettingsModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthSettingsModels.swift; sourceTree = "<group>"; };
 		C8A24724FAA2416989D67406 /* HealthModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthModels.swift; sourceTree = "<group>"; };
@@ -107,6 +148,39 @@
 		21DB24DF171C3DA9F2ECB03D /* KidsAdminView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KidsAdminView.swift; sourceTree = "<group>"; };
 		6CCF0C88810CBB7790CB143A /* KidsAdminModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KidsAdminModels.swift; sourceTree = "<group>"; };
 		FF83E6574FA7588C1B9F2A14 /* KidsAdminApi.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KidsAdminApi.swift; sourceTree = "<group>"; };
+		700CD6673F0F40129BC0EC7D /* NotificationsModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationsModels.swift; sourceTree = "<group>"; };
+		73F779D1716D499A999748B2 /* NotificationsFormatters.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationsFormatters.swift; sourceTree = "<group>"; };
+		118BD4295C6E40158DA022DD /* NotificationsApi.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationsApi.swift; sourceTree = "<group>"; };
+		6423FDB1FB8C4F639ADD3D4F /* NotificationsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationsView.swift; sourceTree = "<group>"; };
+		D01E1478F47145A090982DC0 /* TasksModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TasksModels.swift; sourceTree = "<group>"; };
+		1A7A5A943EC4481A8D600123 /* TasksFormatters.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TasksFormatters.swift; sourceTree = "<group>"; };
+		420C313E70A142F68E71D056 /* TasksApi.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TasksApi.swift; sourceTree = "<group>"; };
+		CC5A5091BB6841AD8F98CF20 /* TasksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TasksView.swift; sourceTree = "<group>"; };
+		18667992083D490DBE57FA98 /* NotesModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotesModels.swift; sourceTree = "<group>"; };
+		C8760C581D3F4C638E88F03B /* NotesFormatters.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotesFormatters.swift; sourceTree = "<group>"; };
+		9086C4BD1BC04764A23D6AD7 /* NotesApi.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotesApi.swift; sourceTree = "<group>"; };
+		3E05F0D824504D65AC33D3B3 /* NotesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotesView.swift; sourceTree = "<group>"; };
+		4BEEEABC20694AB7A0C72002 /* ShoppingModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShoppingModels.swift; sourceTree = "<group>"; };
+		22C4922A42B64052906E0078 /* ShoppingFormatters.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShoppingFormatters.swift; sourceTree = "<group>"; };
+		F4DC6CE94E764B27960000E7 /* ShoppingApi.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShoppingApi.swift; sourceTree = "<group>"; };
+		0E5D10EC57FD4029A896F625 /* ShoppingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShoppingView.swift; sourceTree = "<group>"; };
+		4B00EC75D387459386D19A57 /* BudgetModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BudgetModels.swift; sourceTree = "<group>"; };
+		313B4E0D38704F64BF961D22 /* BudgetFormatters.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BudgetFormatters.swift; sourceTree = "<group>"; };
+		4F23A6AD86BB4DA2AE72B440 /* BudgetApi.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BudgetApi.swift; sourceTree = "<group>"; };
+		7CA19EC3F89C4AACBAE1094E /* BudgetComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BudgetComponents.swift; sourceTree = "<group>"; };
+		69974E90CB3E4A6982E54155 /* BudgetRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BudgetRootView.swift; sourceTree = "<group>"; };
+		FFA08D05AE0947228A571115 /* BudgetIncomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BudgetIncomeView.swift; sourceTree = "<group>"; };
+		359FB8B2C0C74AD4ACDB3695 /* BudgetExpensesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BudgetExpensesView.swift; sourceTree = "<group>"; };
+		49E72252A0BC4F1C889513EC /* BudgetAllocationsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BudgetAllocationsView.swift; sourceTree = "<group>"; };
+		552DBC1590A947C588403D9A /* LifeAdminModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LifeAdminModels.swift; sourceTree = "<group>"; };
+		FF79DC8F70EE4BCAA01414AA /* LifeAdminFormatters.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LifeAdminFormatters.swift; sourceTree = "<group>"; };
+		22DC89C1F9444C7E8ECDFBD4 /* LifeAdminApi.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LifeAdminApi.swift; sourceTree = "<group>"; };
+		61647B5AAF5C4484B7803CF3 /* LifeAdminComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LifeAdminComponents.swift; sourceTree = "<group>"; };
+		9EE162BADD0A47898C4E0C7C /* LifeAdminRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LifeAdminRootView.swift; sourceTree = "<group>"; };
+		001B876F897B4098800F2DE4 /* LifeAdminRecordsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LifeAdminRecordsView.swift; sourceTree = "<group>"; };
+		D7F644CE36514115B8E09CFE /* LifeAdminLibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LifeAdminLibraryView.swift; sourceTree = "<group>"; };
+		A9B73DAAAA2D487E81627809 /* LifeAdminBuilderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LifeAdminBuilderView.swift; sourceTree = "<group>"; };
+		8CE5AD4D6E0D4E0F903830E8 /* ResetPasswordView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResetPasswordView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -157,6 +231,18 @@
 				A1B2C3D4E5F6071829304313 /* KidsModels.swift */,
 				A1B2C3D4E5F6071829304315 /* KidsFormatters.swift */,
 				A1B2C3D4E5F6071829304317 /* KidsTotals.swift */,
+				700CD6673F0F40129BC0EC7D /* NotificationsModels.swift */,
+				73F779D1716D499A999748B2 /* NotificationsFormatters.swift */,
+				D01E1478F47145A090982DC0 /* TasksModels.swift */,
+				1A7A5A943EC4481A8D600123 /* TasksFormatters.swift */,
+				18667992083D490DBE57FA98 /* NotesModels.swift */,
+				C8760C581D3F4C638E88F03B /* NotesFormatters.swift */,
+				4BEEEABC20694AB7A0C72002 /* ShoppingModels.swift */,
+				22C4922A42B64052906E0078 /* ShoppingFormatters.swift */,
+				4B00EC75D387459386D19A57 /* BudgetModels.swift */,
+				313B4E0D38704F64BF961D22 /* BudgetFormatters.swift */,
+				552DBC1590A947C588403D9A /* LifeAdminModels.swift */,
+				FF79DC8F70EE4BCAA01414AA /* LifeAdminFormatters.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -171,6 +257,12 @@
 				2D5A0B7D83E6423CA26F158A /* SettingsApi.swift */,
 				FF83E6574FA7588C1B9F2A14 /* KidsAdminApi.swift */,
 				A1B2C3D4E5F6071829304311 /* KidsApi.swift */,
+				118BD4295C6E40158DA022DD /* NotificationsApi.swift */,
+				420C313E70A142F68E71D056 /* TasksApi.swift */,
+				9086C4BD1BC04764A23D6AD7 /* NotesApi.swift */,
+				F4DC6CE94E764B27960000E7 /* ShoppingApi.swift */,
+				4F23A6AD86BB4DA2AE72B440 /* BudgetApi.swift */,
+				22DC89C1F9444C7E8ECDFBD4 /* LifeAdminApi.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -189,6 +281,7 @@
 			children = (
 				A1B2C3D4E5F6071829304052 /* RootView.swift */,
 				A1B2C3D4E5F6071829304054 /* LoginView.swift */,
+				8CE5AD4D6E0D4E0F903830E8 /* ResetPasswordView.swift */,
 				A1B2C3D4E5F6071829304079 /* DashboardView.swift */,
 				A1B2C3D4E5F6071829304083 /* AccountView.swift */,
 				A1B2C3D4E5F6071829304084 /* AvatarView.swift */,
@@ -197,8 +290,26 @@
 				A1B2C3D4E5F6071829304321 /* KidsHomeView.swift */,
 				A1B2C3D4E5F6071829304323 /* KidsHistoryView.swift */,
 				21DB24DF171C3DA9F2ECB03D /* KidsAdminView.swift */,
+				6423FDB1FB8C4F639ADD3D4F /* NotificationsView.swift */,
+				CC5A5091BB6841AD8F98CF20 /* TasksView.swift */,
+				3E05F0D824504D65AC33D3B3 /* NotesView.swift */,
+				0E5D10EC57FD4029A896F625 /* ShoppingView.swift */,
+				69974E90CB3E4A6982E54155 /* BudgetRootView.swift */,
+				49E72252A0BC4F1C889513EC /* BudgetAllocationsView.swift */,
+				359FB8B2C0C74AD4ACDB3695 /* BudgetExpensesView.swift */,
+				FFA08D05AE0947228A571115 /* BudgetIncomeView.swift */,
+				7CA19EC3F89C4AACBAE1094E /* BudgetComponents.swift */,
+				9EE162BADD0A47898C4E0C7C /* LifeAdminRootView.swift */,
+				001B876F897B4098800F2DE4 /* LifeAdminRecordsView.swift */,
+				D7F644CE36514115B8E09CFE /* LifeAdminLibraryView.swift */,
+				A9B73DAAAA2D487E81627809 /* LifeAdminBuilderView.swift */,
+				61647B5AAF5C4484B7803CF3 /* LifeAdminComponents.swift */,
 				A1B2C3D4E5F6071829304085 /* PlaceholderView.swift */,
 				A1B2C3D4E5F6071829304087 /* SettingsView.swift */,
+				C63A64CFC70B435887494EB5 /* SettingsAppearanceView.swift */,
+				0DD27596F9894B8492ACCFA3 /* SettingsTasksView.swift */,
+				BE35CCE320C34A7FA27355AA /* SettingsIntegrationsView.swift */,
+				D50EA68E6E57482F88CD1F65 /* SettingsUsersView.swift */,
 				A1B2C3D4E5F6071829304211 /* SystemSettingsView.swift */,
 				A1B2C3D4E5F6071829304089 /* HealthSettingsView.swift */,
 				48A430A6948847418C1002C4 /* HealthRootView.swift */,
@@ -310,11 +421,16 @@
 				A1B2C3D4E5F6071829304051 /* EverdayIOSApp.swift in Sources */,
 				A1B2C3D4E5F6071829304053 /* RootView.swift in Sources */,
 				A1B2C3D4E5F6071829304055 /* LoginView.swift in Sources */,
+				0444EBDFEB2E4253BD01C123 /* ResetPasswordView.swift in Sources */,
 				A1B2C3D4E5F6071829304075 /* DashboardView.swift in Sources */,
 				A1B2C3D4E5F6071829304076 /* AccountView.swift in Sources */,
 				A1B2C3D4E5F6071829304077 /* AvatarView.swift in Sources */,
 				A1B2C3D4E5F6071829304078 /* PlaceholderView.swift in Sources */,
 				A1B2C3D4E5F6071829304086 /* SettingsView.swift in Sources */,
+				09AD406B2A0C473FAC729C49 /* SettingsAppearanceView.swift in Sources */,
+				856BC9C71A1F4164A7963273 /* SettingsTasksView.swift in Sources */,
+				3289FC281B0749F6A3121D04 /* SettingsIntegrationsView.swift in Sources */,
+				AD5669E1B0C344BFADA577B8 /* SettingsUsersView.swift in Sources */,
 				A1B2C3D4E5F6071829304210 /* SystemSettingsView.swift in Sources */,
 				A1B2C3D4E5F6071829304088 /* HealthSettingsView.swift in Sources */,
 				C18BFFF1D45C49A7ABE58DDD /* HealthRootView.swift in Sources */,
@@ -341,6 +457,38 @@
 				F5D3362BE72A4433B255A4D0 /* SettingsModels.swift in Sources */,
 				A1B2C3D4E5F6071829304099 /* HealthApi.swift in Sources */,
 				81B748F7538B4748875208B6 /* SettingsApi.swift in Sources */,
+				6888D4BA4C8E41CBB46897A6 /* NotificationsModels.swift in Sources */,
+				4F30A3B412F84E468AFCD9F8 /* NotificationsFormatters.swift in Sources */,
+				41279E6446D04990A2822645 /* NotificationsApi.swift in Sources */,
+				8F043F466DA348678300D039 /* NotificationsView.swift in Sources */,
+				1A4058E89FB848F88C23D922 /* TasksModels.swift in Sources */,
+				D7620FEB1AF84B269EEC0CAE /* TasksFormatters.swift in Sources */,
+				5F2F89B9325542D4BC6AE28B /* TasksApi.swift in Sources */,
+				D299F5C2AA2A44A98DE31276 /* TasksView.swift in Sources */,
+				F31FDEEF31D144F0AA109E57 /* NotesModels.swift in Sources */,
+				C528523255874C35BAAED114 /* NotesFormatters.swift in Sources */,
+				4838F48D18DE409087C66F5D /* NotesApi.swift in Sources */,
+				A2FD707A015A454AB992B28E /* NotesView.swift in Sources */,
+				BB40531A15874CF5AAC95570 /* ShoppingModels.swift in Sources */,
+				084228AC801D405BB0776551 /* ShoppingFormatters.swift in Sources */,
+				E1F0A679BCDF4B40B2588969 /* ShoppingApi.swift in Sources */,
+				FFC30A0DD3C444E0AB9E57B6 /* ShoppingView.swift in Sources */,
+				15FA34C7DE254516AD90DA32 /* BudgetModels.swift in Sources */,
+				2D2F51ECE1A34CDFAE5E2173 /* BudgetFormatters.swift in Sources */,
+				17C0DE385DCC478280A2F24B /* BudgetApi.swift in Sources */,
+				B571FE0166F149A1873EE306 /* BudgetComponents.swift in Sources */,
+				DE685BA5D85146CB9A41B4C5 /* BudgetRootView.swift in Sources */,
+				4851DFB9BF96455ABBD3816A /* BudgetAllocationsView.swift in Sources */,
+				DC2B3A40BB0C45F398F13729 /* BudgetExpensesView.swift in Sources */,
+				6D0E41EA46AA4207B993E454 /* BudgetIncomeView.swift in Sources */,
+				4340155AFEAC4CE184EE8D64 /* LifeAdminModels.swift in Sources */,
+				1370A200A7C046C0AC1572FF /* LifeAdminFormatters.swift in Sources */,
+				5E4D1E962DCE44F8AE9673E2 /* LifeAdminApi.swift in Sources */,
+				254AE0FB2960437990E02651 /* LifeAdminComponents.swift in Sources */,
+				73B876169BD54C77A3D937BA /* LifeAdminRootView.swift in Sources */,
+				81C65F159FB140E59CBA35E0 /* LifeAdminRecordsView.swift in Sources */,
+				B465D84B265D458D8A2B393E /* LifeAdminLibraryView.swift in Sources */,
+				458B937F60044D2AA03596B3 /* LifeAdminBuilderView.swift in Sources */,
 				A1B2C3D4E5F6071829304310 /* KidsApi.swift in Sources */,
 				A1B2C3D4E5F6071829304312 /* KidsModels.swift in Sources */,
 				A1B2C3D4E5F6071829304314 /* KidsFormatters.swift in Sources */,

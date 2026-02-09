@@ -14,6 +14,20 @@ struct DashboardView: View {
                 )
 
                 DashboardCard(
+                    title: "Budget",
+                    subtitle: "Plan income, expenses, and allocations",
+                    systemImage: "chart.pie.fill",
+                    destination: BudgetRootView()
+                )
+
+                DashboardCard(
+                    title: "Life Admin",
+                    subtitle: "Manage records, library, and builder",
+                    systemImage: "folder.fill",
+                    destination: LifeAdminRootView()
+                )
+
+                DashboardCard(
                     title: "Kids Admin",
                     subtitle: "Manage schedules, tasks, and permissions",
                     systemImage: "person.2.fill",
@@ -21,10 +35,31 @@ struct DashboardView: View {
                 )
 
                 DashboardCard(
+                    title: "Shopping",
+                    subtitle: "Manage shared grocery lists",
+                    systemImage: "cart.fill",
+                    destination: ShoppingView()
+                )
+
+                DashboardCard(
+                    title: "Tasks",
+                    subtitle: "Track personal and shared tasks",
+                    systemImage: "checklist",
+                    destination: TasksView()
+                )
+
+                DashboardCard(
+                    title: "Notes",
+                    subtitle: "Capture personal and shared notes",
+                    systemImage: "note.text",
+                    destination: NotesView()
+                )
+
+                DashboardCard(
                     title: "Notifications",
                     subtitle: "Review reminders and updates",
                     systemImage: "bell.badge",
-                    destination: PlaceholderView(title: "Notifications")
+                    destination: NotificationsView()
                 )
             }
             .padding(20)

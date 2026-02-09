@@ -7,6 +7,7 @@ struct RootView: View {
     @State private var settingsPath = NavigationPath()
     @State private var dashboardResetToken = UUID()
     @State private var settingsResetToken = UUID()
+    @AppStorage("everday.appearance.theme") private var appearanceTheme = "system"
 
     var body: some View {
         Group {
@@ -60,6 +61,18 @@ struct RootView: View {
             }
         }
         .animation(.default, value: authStore.isAuthenticated)
+        .preferredColorScheme(resolvedColorScheme)
+    }
+
+    private var resolvedColorScheme: ColorScheme? {
+        switch appearanceTheme {
+        case "light":
+            return .light
+        case "dark":
+            return .dark
+        default:
+            return nil
+        }
     }
 }
 

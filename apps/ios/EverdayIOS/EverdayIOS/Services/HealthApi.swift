@@ -25,6 +25,10 @@ enum HealthApi {
         try await ApiClient.shared.request(path: "health/settings/ai-recommendations", method: "POST", requiresAuth: true)
     }
 
+    static func rotateHaeApiKey() async throws -> HaeApiKeyResponse {
+        try await ApiClient.shared.request(path: "health/settings/hae-key/rotate", method: "POST", requiresAuth: true)
+    }
+
     static func fetchDailyLog(date: String) async throws -> HealthDailyLogResponse {
         try await ApiClient.shared.request(path: "health/daily-logs/\(date)", requiresAuth: true)
     }

@@ -111,6 +111,14 @@ struct LoginView: View {
                 .buttonStyle(.borderedProminent)
                 .disabled(!canSubmit)
 
+                NavigationLink {
+                    ResetPasswordView()
+                } label: {
+                    Text("Forgot password?")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+
                 Spacer()
             }
             .padding(24)
