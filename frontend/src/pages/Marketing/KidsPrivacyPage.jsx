@@ -46,7 +46,7 @@ const KidsPrivacyPage = () => (
       <div className="kids-marketing-card">
         <p>
           Parents can request updates or deletion for household data through support. Contact:
-          <a href="mailto:support@everday.app"> support@everday.app</a>.
+          <a href="mailto:everdayfamily.support@gmail.com"> everdayfamily.support@gmail.com</a>.
         </p>
         <p className="kids-marketing-muted">Last updated: February 11, 2026.</p>
       </div>

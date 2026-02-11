@@ -10,7 +10,7 @@ const KidsSupportPage = () => (
         will help you sort it out.
       </p>
       <div className="kids-marketing-actions">
-        <a className="primary-button" href="mailto:support@everday.app">
+        <a className="primary-button" href="mailto:everdayfamily.support@gmail.com">
           Email support
         </a>
         <Link className="button-secondary" to="/kids-app">
@@ -24,7 +24,7 @@ const KidsSupportPage = () => (
       <div className="kids-marketing-card">
         <p>
           Email:
-          <a href="mailto:support@everday.app"> support@everday.app</a>
+          <a href="mailto:everdayfamily.support@gmail.com"> everdayfamily.support@gmail.com</a>
         </p>
         <p>Response time: usually within 2 business days.</p>
       </div>
