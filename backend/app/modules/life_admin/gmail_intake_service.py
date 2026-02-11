@@ -144,7 +144,9 @@ def RunGmailIntake(
                     documents_created += 1
                     created_ids.append(document.Id)
                 except Exception as exc:  # noqa: BLE001
-                    attachment_errors.append(str(exc))
+                    # Avoid exposing internal error details to API consumers.
+                    # Log or inspect `exc` server-side if needed.
+                    attachment_errors.append("Failed to process attachment")
                     continue
 
             if processed_label_id:
