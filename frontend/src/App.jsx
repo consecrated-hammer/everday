@@ -32,6 +32,9 @@ import LifeAdminLibrary from "./pages/LifeAdmin/Library.jsx";
 import Tasks from "./pages/Tasks/Tasks.jsx";
 import NotesLayout from "./pages/Notes/NotesLayout.jsx";
 import Notes from "./pages/Notes/Notes.jsx";
+import KidsProductPage from "./pages/Marketing/KidsProductPage.jsx";
+import KidsPrivacyPage from "./pages/Marketing/KidsPrivacyPage.jsx";
+import KidsSupportPage from "./pages/Marketing/KidsSupportPage.jsx";
 
 const HealthHistoryRedirect = () => {
   const { date } = useParams();
@@ -45,6 +48,9 @@ const App = () => (
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/reset" element={<ResetPassword />} />
+        <Route path="/kids-app" element={<KidsProductPage />} />
+        <Route path="/kids-app/privacy" element={<KidsPrivacyPage />} />
+        <Route path="/kids-app/support" element={<KidsSupportPage />} />
       <Route
         element={
           <RequireAuth>

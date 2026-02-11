@@ -15,6 +15,23 @@ class LocalTimeFormatter(logging.Formatter):
     converter = time.localtime
 
 
+class UvicornAccessPathFilter(logging.Filter):
+    def __init__(self, ignore_paths: set[str]) -> None:
+        super().__init__()
+        self._ignore_paths = ignore_paths
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if not self._ignore_paths:
+            return True
+        try:
+            if record.args and len(record.args) >= 3:
+                path = record.args[2]
+                return path not in self._ignore_paths
+        except Exception:
+            return True
+        return True
+
+
 def setup_logging() -> None:
     log_level = os.getenv("LOG_LEVEL", "INFO").upper()
     log_file_path = os.getenv("LOG_FILE_PATH", "/app/logs/backend.log")
@@ -22,6 +39,12 @@ def setup_logging() -> None:
     max_bytes = int(os.getenv("LOG_MAX_BYTES", "5000000"))
     backup_count = int(os.getenv("LOG_BACKUP_COUNT", "5"))
     json_enabled = _get_bool(os.getenv("LOG_JSON_ENABLED", "false"))
+    uvicorn_ignore_paths_raw = os.getenv("UVICORN_ACCESS_IGNORE_PATHS", "")
+    uvicorn_ignore_paths = {
+        value.strip()
+        for value in uvicorn_ignore_paths_raw.split(",")
+        if value.strip()
+    }
 
     os.makedirs(os.path.dirname(log_file_path), exist_ok=True)
     os.makedirs(os.path.dirname(frontend_log_file_path), exist_ok=True)
@@ -94,6 +117,8 @@ def setup_logging() -> None:
     uvicorn_access.handlers.clear()
     uvicorn_access.propagate = False
     uvicorn_access.setLevel(log_level)
+    uvicorn_access.filters.clear()
+    uvicorn_access.addFilter(UvicornAccessPathFilter(uvicorn_ignore_paths))
     uvicorn_access.addHandler(console_handler)
     uvicorn_access.addHandler(backend_file_handler)
 

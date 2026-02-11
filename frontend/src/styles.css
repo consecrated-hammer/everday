@@ -14068,3 +14068,120 @@ body.kids-theme {
     grid-template-columns: 1fr;
   }
 }
+
+.kids-marketing-page {
+  width: min(960px, 100%);
+  margin: 0 auto;
+  padding: 28px 20px 56px;
+  display: grid;
+  gap: 20px;
+}
+
+.kids-marketing-hero {
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: linear-gradient(160deg, rgba(91, 201, 198, 0.16), rgba(43, 110, 246, 0.12));
+  padding: 24px;
+  display: grid;
+  gap: 12px;
+}
+
+.kids-marketing-hero--compact {
+  background: linear-gradient(160deg, rgba(91, 201, 198, 0.12), rgba(43, 110, 246, 0.08));
+}
+
+.kids-marketing-eyebrow {
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  font-weight: 700;
+}
+
+.kids-marketing-hero h1 {
+  margin: 0;
+  font-size: clamp(30px, 4vw, 44px);
+  line-height: 1.1;
+}
+
+.kids-marketing-lede {
+  margin: 0;
+  color: var(--text-muted);
+  max-width: 70ch;
+}
+
+.kids-marketing-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.kids-marketing-section {
+  display: grid;
+  gap: 10px;
+}
+
+.kids-marketing-section h2 {
+  margin: 0;
+  font-size: 24px;
+}
+
+.kids-marketing-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.kids-marketing-card {
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface-strong);
+  padding: 16px;
+  display: grid;
+  gap: 10px;
+}
+
+.kids-marketing-card h3 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.kids-marketing-card p {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.kids-marketing-list {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 8px;
+  color: var(--text-muted);
+}
+
+.kids-marketing-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+.kids-marketing-links--stacked {
+  gap: 8px;
+  align-items: flex-start;
+  justify-items: start;
+  display: grid;
+}
+
+.kids-marketing-muted {
+  font-size: 13px;
+  color: var(--text-soft);
+}
+
+@media (max-width: 800px) {
+  .kids-marketing-grid {
+    grid-template-columns: 1fr;
+  }
+}
