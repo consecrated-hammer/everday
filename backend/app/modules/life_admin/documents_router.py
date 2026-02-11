@@ -7,12 +7,10 @@ from sqlalchemy.orm import Session
 
 from app.db import GetDb, SessionLocal
 from app.modules.auth.deps import RequireModuleRole, UserContext
-from app.modules.life_admin.document_ai_service import AnalyzeDocument
-from app.modules.life_admin.document_storage import ResolveDocumentPath, SaveUploadFile, SaveBytes
+from app.modules.life_admin import gmail_intake_service
+from app.modules.life_admin.document_storage import ResolveDocumentPath, SaveUploadFile
 from app.modules.life_admin import documents_service
 from app.modules.life_admin.models import Document, DocumentAiSuggestion, DocumentFolder, LifeReminder, LifeRecord
-from app.modules.integrations.gmail import service as gmail_service
-from app.modules.integrations.gmail.models import GmailIntegration
 from app.modules.life_admin.schemas import (
     DocumentAiSuggestionOut,
     DocumentAuditOut,
@@ -149,23 +147,6 @@ def _document_out(record, *, folder_name: str | None, tags: list[DocumentTagOut]
     )
 
 
-def _resolve_folder_id(db: Session, owner_user_id: int, name: str | None) -> int | None:
-    if not name:
-        return None
-    folder = (
-        db.query(DocumentFolder)
-        .filter(
-            DocumentFolder.OwnerUserId == owner_user_id,
-            func.lower(DocumentFolder.Name) == name.strip().lower(),
-        )
-        .first()
-    )
-    if folder:
-        return folder.Id
-    created = documents_service.CreateFolder(db, owner_user_id=owner_user_id, name=name.strip())
-    return created.Id
-
-
 @router.get("/document-folders", response_model=list[DocumentFolderOut])
 def ListDocumentFolders(
     db: Session = Depends(GetDb),
@@ -299,25 +280,7 @@ def _run_ai_analysis(document_id: int) -> None:
         return
     db = SessionLocal()
     try:
-        record = db.query(Document).filter(Document.Id == document_id).first()
-        if not record:
-            return
-        try:
-            result = AnalyzeDocument(
-                storage_path=record.StoragePath,
-                content_type=record.ContentType,
-                filename=record.OriginalFileName,
-            )
-        except Exception:
-            documents_service.UpdateOcrResults(db, document_id=document_id, ocr_text="", status="Failed")
-            return
-        status_value = "Complete"
-        if not result.RawJson and not result.OcrText:
-            status_value = "Skipped"
-        documents_service.UpdateOcrResults(
-            db, document_id=document_id, ocr_text=result.OcrText, status=status_value
-        )
-        documents_service.UpsertAiSuggestion(db, document_id=document_id, result=result)
+        documents_service.RunAiAnalysis(db, document_id=document_id)
     finally:
         db.close()
 
@@ -489,117 +452,22 @@ def RunGmailIntake(
     db: Session = Depends(GetDb),
     user: UserContext = Depends(RequireModuleRole("life_admin", write=True)),
 ) -> dict:
-    record = db.query(GmailIntegration).first()
-    if not record:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Gmail integration not connected. Authenticate first.",
-        )
-    config = gmail_service.LoadGmailConfig()
-    if not record.RefreshToken:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Missing Gmail refresh token.")
     try:
-        token = gmail_service.RefreshAccessToken(config, record.RefreshToken)
+        result, document_ids = gmail_intake_service.RunGmailIntake(
+            db,
+            owner_user_id=user.Id,
+            max_messages=max_messages,
+            triggered_by_user_id=user.Id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except Exception as exc:  # noqa: BLE001
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Gmail token refresh failed") from exc
-    user_id = record.AccountEmail or config.UserId or "me"
-    inbox_label_id = gmail_service.ResolveLabelId(token, user_id, config.InboxLabel)
-    processed_label_id = gmail_service.ResolveLabelId(token, user_id, config.ProcessedLabel)
-    if config.InboxLabel and not inbox_label_id:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Gmail inbox label not found")
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Gmail intake failed") from exc
 
-    message_ids = gmail_service.ListMessages(
-        token,
-        user_id,
-        inbox_label_id,
-        max_results=max_messages,
-        query=config.IntakeQuery,
-    )
-    processed_messages = 0
-    documents_created = 0
-    attachment_errors: list[str] = []
+    for document_id in document_ids:
+        background_tasks.add_task(_run_ai_analysis, document_id)
 
-    for message_id in message_ids:
-        message = gmail_service.FetchMessage(token, user_id, message_id)
-        subject = gmail_service.ExtractSubject(message)
-        snippet = gmail_service.ExtractSnippet(message)
-        hints = gmail_service.ParseHints(f"{subject}\n{snippet}")
-        folder_id = _resolve_folder_id(db, user.Id, hints.get("folder"))
-        tags = hints.get("tags") or []
-        links = hints.get("links") or []
-
-        attachments = gmail_service.ExtractAttachments(message)
-        for attachment in attachments:
-            attachment_id = attachment.get("attachmentId")
-            filename = attachment.get("filename")
-            mime_type = attachment.get("mimeType")
-            if not attachment_id:
-                continue
-            try:
-                data = gmail_service.FetchAttachment(token, user_id, message_id, attachment_id)
-                stored = SaveBytes(
-                    data=data,
-                    owner_user_id=user.Id,
-                    filename=filename,
-                    content_type=mime_type,
-                )
-                record = documents_service.CreateDocument(
-                    db,
-                    owner_user_id=user.Id,
-                    created_by_user_id=user.Id,
-                    title=filename or subject or "Email attachment",
-                    folder_id=folder_id,
-                    storage_path=stored.StoragePath,
-                    file_size_bytes=stored.FileSizeBytes,
-                    content_type=stored.ContentType,
-                    original_filename=stored.OriginalFileName,
-                    file_hash=stored.Hash,
-                    source_type="email",
-                    source_detail=f"{message_id}:{attachment_id}",
-                )
-                if tags:
-                    documents_service.SetDocumentTags(
-                        db, owner_user_id=user.Id, document_id=record.Id, tag_names=tags
-                    )
-                for link_id in links:
-                    try:
-                        documents_service.AddDocumentLink(
-                            db,
-                            owner_user_id=user.Id,
-                            document_id=record.Id,
-                            linked_entity_type=documents_service.LINK_TYPE_LIFE_RECORD,
-                            linked_entity_id=link_id,
-                            created_by_user_id=user.Id,
-                        )
-                    except ValueError:
-                        continue
-                documents_service.LogDocumentAudit(
-                    db,
-                    document_id=record.Id,
-                    actor_user_id=user.Id,
-                    action="created",
-                    summary="Document ingested from Gmail",
-                )
-                background_tasks.add_task(_run_ai_analysis, record.Id)
-                documents_created += 1
-            except Exception as exc:  # noqa: BLE001
-                attachment_errors.append(str(exc))
-                continue
-        if processed_label_id:
-            gmail_service.ModifyMessageLabels(
-                token,
-                user_id,
-                message_id,
-                add_label_ids=[processed_label_id],
-                remove_label_ids=[inbox_label_id] if inbox_label_id else None,
-            )
-        processed_messages += 1
-
-    return {
-        "MessagesProcessed": processed_messages,
-        "DocumentsCreated": documents_created,
-        "AttachmentErrors": attachment_errors,
-    }
+    return result
 
 
 @router.post("/documents/{document_id}/tags", response_model=list[DocumentTagOut])

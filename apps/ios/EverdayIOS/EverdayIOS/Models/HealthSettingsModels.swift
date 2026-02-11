@@ -53,6 +53,9 @@ struct HealthUserSettings: Decodable {
     let WeightRemindersEnabled: Bool?
     let WeightReminderTime: String?
     let ReminderTimeZone: String?
+    let HaeApiKeyConfigured: Bool?
+    let HaeApiKeyLast4: String?
+    let HaeApiKeyCreatedAt: String?
 }
 
 struct HealthGoalSummary: Decodable {
@@ -140,4 +143,10 @@ struct GoalRecommendationRequest: Encodable {
         try container.encodeIfPresent(EndDateOverride, forKey: .EndDateOverride)
         try container.encodeIfPresent(DailyCalorieTargetOverride, forKey: .DailyCalorieTargetOverride)
     }
+}
+
+struct HaeApiKeyResponse: Decodable {
+    let ApiKey: String
+    let Last4: String
+    let CreatedAt: String
 }

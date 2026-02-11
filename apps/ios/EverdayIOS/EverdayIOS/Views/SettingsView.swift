@@ -6,6 +6,14 @@ struct SettingsView: View {
 
     var body: some View {
         let listView = List {
+            Section("Appearance") {
+                NavigationLink {
+                    SettingsAppearanceView()
+                } label: {
+                    Label("Appearance", systemImage: "paintpalette")
+                }
+            }
+
             Section("Account") {
                 NavigationLink {
                     AccountView()
@@ -20,6 +28,34 @@ struct SettingsView: View {
                         HealthSettingsView()
                     } label: {
                         Label("Health settings", systemImage: "heart.text.square")
+                    }
+                }
+            }
+
+            if !isKid {
+                Section("Tasks") {
+                    NavigationLink {
+                        SettingsTasksView()
+                    } label: {
+                        Label("Task settings", systemImage: "checklist")
+                    }
+                }
+            }
+
+            if isParent {
+                Section("Integrations") {
+                    NavigationLink {
+                        SettingsIntegrationsView()
+                    } label: {
+                        Label("Integrations", systemImage: "bolt.horizontal")
+                    }
+                }
+
+                Section("Users") {
+                    NavigationLink {
+                        SettingsUsersView()
+                    } label: {
+                        Label("User access", systemImage: "person.3")
                     }
                 }
             }
@@ -54,5 +90,9 @@ struct SettingsView: View {
 
     private var isKid: Bool {
         authStore.tokens?.role == "Kid"
+    }
+
+    private var isParent: Bool {
+        authStore.tokens?.role == "Parent"
     }
 }

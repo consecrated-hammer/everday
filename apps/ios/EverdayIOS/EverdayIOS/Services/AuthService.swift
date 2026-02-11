@@ -19,4 +19,29 @@ final class AuthService {
         tokensHandler?(tokens)
         return tokens
     }
+
+    func requestPasswordReset(identifier: String) async throws {
+        struct ForgotRequest: Encodable {
+            let Identifier: String
+        }
+        try await client.requestVoid(
+            path: "auth/forgot",
+            method: "POST",
+            body: ForgotRequest(Identifier: identifier),
+            requiresAuth: false
+        )
+    }
+
+    func resetPassword(token: String, newPassword: String) async throws {
+        struct ResetRequest: Encodable {
+            let Token: String
+            let NewPassword: String
+        }
+        try await client.requestVoid(
+            path: "auth/reset-password",
+            method: "POST",
+            body: ResetRequest(Token: token, NewPassword: newPassword),
+            requiresAuth: false
+        )
+    }
 }

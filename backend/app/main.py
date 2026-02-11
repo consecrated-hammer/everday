@@ -31,8 +31,11 @@ from app.modules.notifications.router import router as notifications_router
 from app.modules.tasks.router import router as tasks_router
 from app.modules.integrations.google.router import router as google_router
 from app.modules.integrations.gmail.router import router as gmail_router
+from app.modules.integrations.gmail.models import GmailIntegration
 from app.modules.notes.routes.notes import router as notes_router
 from app.modules.health.services.reminders_service import RunDailyHealthReminders
+from app.modules.life_admin import gmail_intake_service
+from app.modules.life_admin import documents_service
 
 setup_logging()
 warnings.filterwarnings(
@@ -45,8 +48,11 @@ app = FastAPI(title="Everday API")
 logger = logging.getLogger("app.request")
 startup_logger = logging.getLogger("app.startup")
 reminders_logger = logging.getLogger("app.reminders")
+gmail_intake_logger = logging.getLogger("app.gmail_intake")
 _reminders_task: asyncio.Task | None = None
 _reminders_stop_event = asyncio.Event()
+_gmail_intake_task: asyncio.Task | None = None
+_gmail_intake_stop_event = asyncio.Event()
 
 allowed_origins = os.getenv("ALLOWED_ORIGINS", "").strip()
 if not allowed_origins:
@@ -217,6 +223,10 @@ async def startup_tasks() -> None:
     if _reminders_task is None or _reminders_task.done():
         _reminders_stop_event.clear()
         _reminders_task = asyncio.create_task(_health_reminders_loop())
+    global _gmail_intake_task
+    if _gmail_intake_task is None or _gmail_intake_task.done():
+        _gmail_intake_stop_event.clear()
+        _gmail_intake_task = asyncio.create_task(_gmail_intake_loop())
 
 
 @app.on_event("shutdown")
@@ -225,6 +235,10 @@ async def shutdown_tasks() -> None:
     _reminders_stop_event.set()
     if _reminders_task and not _reminders_task.done():
         _reminders_task.cancel()
+    global _gmail_intake_task
+    _gmail_intake_stop_event.set()
+    if _gmail_intake_task and not _gmail_intake_task.done():
+        _gmail_intake_task.cancel()
 
 
 def _env_int(name: str, default: int) -> int:
@@ -290,6 +304,66 @@ async def _health_reminders_loop() -> None:
         sleep_for = max(1, interval_seconds - elapsed_seconds)
         try:
             await asyncio.wait_for(_reminders_stop_event.wait(), timeout=sleep_for)
+        except asyncio.TimeoutError:
+            continue
+
+
+async def _gmail_intake_loop() -> None:
+    enabled = _env_bool("GMAIL_INTAKE_SCHEDULER_ENABLED", False)
+    if not enabled:
+        gmail_intake_logger.info("gmail intake scheduler disabled via env")
+        return
+
+    interval_seconds = max(60, _env_int("GMAIL_INTAKE_INTERVAL_SECONDS", 600))
+    owner_user_id = _env_int("GMAIL_INTAKE_OWNER_USER_ID", 0)
+    max_messages = max(1, _env_int("GMAIL_INTAKE_MAX_MESSAGES", 10))
+    gmail_intake_logger.info(
+        "gmail intake scheduler started (interval=%ss, owner_user_id=%s, max_messages=%s)",
+        interval_seconds,
+        owner_user_id,
+        max_messages,
+    )
+
+    while not _gmail_intake_stop_event.is_set():
+        started = time.perf_counter()
+        try:
+            db_module._ensure_engine()
+            db = db_module.SessionLocal()
+            try:
+                resolved_owner = owner_user_id
+                if resolved_owner <= 0:
+                    record = db.query(GmailIntegration).first()
+                    resolved_owner = record.ConnectedByUserId if record else 0
+                if resolved_owner <= 0:
+                    gmail_intake_logger.warning("gmail intake skipped: owner user not resolved")
+                elif not gmail_intake_service.CanStartIntake(
+                    db, owner_user_id=resolved_owner, min_seconds=interval_seconds
+                ):
+                    gmail_intake_logger.info("gmail intake skipped: previous run still running")
+                else:
+                    result, document_ids = gmail_intake_service.RunGmailIntake(
+                        db,
+                        owner_user_id=resolved_owner,
+                        max_messages=max_messages,
+                        triggered_by_user_id=resolved_owner,
+                    )
+                    for document_id in document_ids:
+                        documents_service.RunAiAnalysis(db, document_id=document_id)
+                    gmail_intake_logger.info(
+                        "gmail intake run complete messages=%s documents=%s errors=%s",
+                        result.get("MessagesProcessed", 0),
+                        result.get("DocumentsCreated", 0),
+                        len(result.get("AttachmentErrors") or []),
+                    )
+            finally:
+                db.close()
+        except Exception:  # noqa: BLE001
+            gmail_intake_logger.exception("gmail intake scheduler run failed")
+
+        elapsed_seconds = int(time.perf_counter() - started)
+        sleep_for = max(1, interval_seconds - elapsed_seconds)
+        try:
+            await asyncio.wait_for(_gmail_intake_stop_event.wait(), timeout=sleep_for)
         except asyncio.TimeoutError:
             continue
 
