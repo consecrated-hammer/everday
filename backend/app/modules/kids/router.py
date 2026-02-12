@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.core.migrations import RunMigrations
 from app.db import BuildAdminConnectionUrl, GetDb
-from app.modules.auth.deps import UserContext
+from app.modules.auth.deps import RequireAuthenticated, UserContext
 from app.modules.auth.models import User
 from app.modules.kids.models import (
     Chore,
@@ -20,6 +20,8 @@ from app.modules.kids.models import (
     KidLink,
     LedgerEntry,
     PocketMoneyRule,
+    ReminderRun,
+    ReminderSettings,
 )
 from app.modules.kids.schemas import (
     ChoreAssignmentRequest,
@@ -36,6 +38,10 @@ from app.modules.kids.schemas import (
     KidsMonthOverviewResponse,
     KidsMonthSummaryResponse,
     KidsOverviewResponse,
+    KidsReminderRunRequest,
+    KidsReminderRunResponse,
+    KidsReminderSettingsOut,
+    KidsReminderSettingsUpdate,
     KidsSummaryResponse,
     KidLinkCreate,
     KidLinkOut,
@@ -46,6 +52,11 @@ from app.modules.kids.schemas import (
     PocketMoneyRuleOut,
     PocketMoneyRuleUpsert,
     KidsDayDetailResponse,
+)
+from app.modules.kids.services.reminders_service import (
+    EnsureReminderSettings,
+    RunDailyKidsReminders,
+    UpdateReminderSettings,
 )
 from app.modules.kids.services.chores_v2_service import (
     AllowedDateRange,
@@ -79,7 +90,13 @@ _KIDS_TABLES = [
     ChoreEntryAudit,
     LedgerEntry,
     PocketMoneyRule,
+    ReminderSettings,
+    ReminderRun,
 ]
+
+
+def _IsAdmin(user: UserContext) -> bool:
+    return user.Role in {"Admin", "Parent"}
 
 
 def _handle_db_error(exc: Exception) -> None:
@@ -232,6 +249,16 @@ def _BuildChoreEntryOut(entry: ChoreEntry, chore: Chore) -> ChoreEntryOut:
         ReviewedAt=entry.ReviewedAt,
         CreatedAt=entry.CreatedAt,
         UpdatedAt=entry.UpdatedAt,
+    )
+
+
+def _BuildReminderSettingsOut(record: ReminderSettings) -> KidsReminderSettingsOut:
+    return KidsReminderSettingsOut(
+        DailyJobsRemindersEnabled=bool(record.DailyJobsRemindersEnabled),
+        DailyJobsReminderTime=record.DailyJobsReminderTime or "19:00",
+        HabitsRemindersEnabled=bool(record.HabitsRemindersEnabled),
+        HabitsReminderTime=record.HabitsReminderTime or "19:00",
+        ReminderTimeZone=record.ReminderTimeZone or "Australia/Adelaide",
     )
 
 
@@ -411,6 +438,33 @@ def GetAssignedChores(
     try:
         chores = _LoadAssignedChoresForDate(db, user.Id, TodayAdelaide())
         return [_BuildChoreOut(chore) for chore in chores]
+    except ProgrammingError as exc:
+        _handle_db_error(exc)
+
+
+@router.get("/me/reminder-settings", response_model=KidsReminderSettingsOut)
+def GetReminderSettings(
+    db: Session = Depends(GetDb),
+    user: UserContext = Depends(RequireKidsMember()),
+) -> KidsReminderSettingsOut:
+    try:
+        settings = EnsureReminderSettings(db, user.Id)
+        return _BuildReminderSettingsOut(settings)
+    except ProgrammingError as exc:
+        _handle_db_error(exc)
+
+
+@router.put("/me/reminder-settings", response_model=KidsReminderSettingsOut)
+def UpdateReminderSettingsRoute(
+    payload: KidsReminderSettingsUpdate,
+    db: Session = Depends(GetDb),
+    user: UserContext = Depends(RequireKidsMember()),
+) -> KidsReminderSettingsOut:
+    try:
+        updated = UpdateReminderSettings(db, user.Id, payload.model_dump(exclude_unset=True))
+        return _BuildReminderSettingsOut(updated)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except ProgrammingError as exc:
         _handle_db_error(exc)
 
@@ -750,6 +804,28 @@ def GetChoreEntryAudit(
             )
             for audit in audits
         ]
+    except ProgrammingError as exc:
+        _handle_db_error(exc)
+
+
+@router.post("/reminders/run-daily", response_model=KidsReminderRunResponse)
+def RunKidsRemindersRoute(
+    payload: KidsReminderRunRequest | None = None,
+    db: Session = Depends(GetDb),
+    user: UserContext = Depends(RequireAuthenticated),
+) -> KidsReminderRunResponse:
+    if not _IsAdmin(user):
+        raise HTTPException(status_code=403, detail="Access denied")
+    try:
+        result = RunDailyKidsReminders(
+            db,
+            actor_user_id=user.Id,
+            run_date=payload.RunDate if payload else None,
+            run_time=payload.RunTime if payload else None,
+        )
+        return KidsReminderRunResponse(**result)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except ProgrammingError as exc:
         _handle_db_error(exc)
 

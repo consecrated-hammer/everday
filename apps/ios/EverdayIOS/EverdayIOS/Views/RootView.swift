@@ -21,19 +21,26 @@ struct RootView: View {
                         TabView(selection: $selection) {
                             NavigationStack(path: $dashboardPath) {
                                 DashboardView()
-                                    .toolbar {
-                                        ToolbarItem(placement: .topBarTrailing) {
-                                            NavigationLink {
-                                                SettingsView()
-                                            } label: {
-                                                Image(systemName: "gearshape")
-                                            }
-                                            .accessibilityLabel("Settings")
-                                        }
-                                    }
                                     .navigationDestination(for: DashboardRoute.self) { route in
                                         route.destination
                                     }
+                            }
+                            .toolbar {
+                                ToolbarItemGroup(placement: .topBarTrailing) {
+                                    Button {
+                                        navigateToNotifications()
+                                    } label: {
+                                        NotificationBellIcon(unreadCount: pushCoordinator.unreadCount)
+                                    }
+                                    .accessibilityLabel("Notifications")
+
+                                    NavigationLink {
+                                        SettingsView()
+                                    } label: {
+                                        Image(systemName: "gearshape")
+                                    }
+                                    .accessibilityLabel("Settings")
+                                }
                             }
                             .id(dashboardResetToken)
                             .tag(AppTab.dashboard)
@@ -41,6 +48,17 @@ struct RootView: View {
 
                             NavigationStack(path: $settingsPath) {
                                 SettingsView()
+                            }
+                            .toolbar {
+                                ToolbarItem(placement: .topBarTrailing) {
+                                    Button {
+                                        selection = .dashboard
+                                        navigateToNotifications()
+                                    } label: {
+                                        NotificationBellIcon(unreadCount: pushCoordinator.unreadCount)
+                                    }
+                                    .accessibilityLabel("Notifications")
+                                }
                             }
                             .id(settingsResetToken)
                             .tag(AppTab.settings)
@@ -103,6 +121,12 @@ struct RootView: View {
         case .external(let url):
             openURL(url)
         }
+    }
+
+    private func navigateToNotifications() {
+        dashboardPath = NavigationPath()
+        dashboardResetToken = UUID()
+        dashboardPath.append(DashboardRoute.notifications)
     }
 
     private func ResolveDeepLink(_ rawLink: String) -> ResolvedDeepLink {
@@ -271,5 +295,33 @@ private struct TabBarButton: View {
             .animation(.snappy, value: isSelected)
         }
         .accessibilityLabel(title)
+    }
+}
+
+private struct NotificationBellIcon: View {
+    let unreadCount: Int
+
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            Image(systemName: "bell")
+            if unreadCount > 0 {
+                Text(BadgeText(unreadCount))
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 1)
+                    .background(Color.red)
+                    .clipShape(Capsule())
+                    .offset(x: 10, y: -8)
+                    .accessibilityLabel("\(unreadCount) unread notifications")
+            }
+        }
+    }
+
+    private func BadgeText(_ count: Int) -> String {
+        if count > 99 {
+            return "99+"
+        }
+        return "\(count)"
     }
 }

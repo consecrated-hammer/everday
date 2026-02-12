@@ -235,3 +235,31 @@ class KidsDayDetailResponse(BaseModel):
     Habits: list[ChoreOut]
     BonusTasks: list[ChoreOut]
     Entries: list[ChoreEntryOut]
+
+
+class KidsReminderSettingsOut(BaseModel):
+    DailyJobsRemindersEnabled: bool = True
+    DailyJobsReminderTime: str = "19:00"
+    HabitsRemindersEnabled: bool = True
+    HabitsReminderTime: str = "19:00"
+    ReminderTimeZone: str = "Australia/Adelaide"
+
+
+class KidsReminderSettingsUpdate(BaseModel):
+    DailyJobsRemindersEnabled: bool | None = None
+    DailyJobsReminderTime: str | None = Field(default=None, pattern=r"^\d{2}:\d{2}$")
+    HabitsRemindersEnabled: bool | None = None
+    HabitsReminderTime: str | None = Field(default=None, pattern=r"^\d{2}:\d{2}$")
+
+
+class KidsReminderRunRequest(BaseModel):
+    RunDate: date | None = None
+    RunTime: str | None = Field(default=None, pattern=r"^\d{2}:\d{2}$")
+
+
+class KidsReminderRunResponse(BaseModel):
+    EligibleKids: int
+    ProcessedKids: int
+    NotificationsSent: int
+    Skipped: int
+    Errors: int

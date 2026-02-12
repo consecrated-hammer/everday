@@ -88,3 +88,18 @@ struct KidsChoreEntryCreate: Encodable {
     let EntryDate: String
     let Notes: String?
 }
+
+struct KidsReminderSettings: Decodable {
+    let DailyJobsRemindersEnabled: Bool
+    let DailyJobsReminderTime: String
+    let HabitsRemindersEnabled: Bool
+    let HabitsReminderTime: String
+    let ReminderTimeZone: String
+}
+
+struct KidsReminderSettingsUpdate: Encodable {
+    let DailyJobsRemindersEnabled: Bool?
+    let DailyJobsReminderTime: String?
+    let HabitsRemindersEnabled: Bool?
+    let HabitsReminderTime: String?
+}

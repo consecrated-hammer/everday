@@ -59,6 +59,7 @@ final class PushNotificationCoordinator: NSObject, ObservableObject {
     static let shared = PushNotificationCoordinator()
 
     @Published private(set) var pendingLinkUrl: String?
+    @Published private(set) var unreadCount: Int = 0
 
     private let deviceTokenDefaultsKey = "everday.push.deviceToken"
     private var currentDeviceToken: String?
@@ -79,6 +80,7 @@ final class PushNotificationCoordinator: NSObject, ObservableObject {
         if !isAuthenticated {
             lastRegisteredFingerprint = ""
             pendingLinkUrl = nil
+            unreadCount = 0
             return
         }
         await requestAuthorizationAndRegister()
@@ -172,6 +174,7 @@ final class PushNotificationCoordinator: NSObject, ObservableObject {
 
     func applyBadgeCount(_ unreadCount: Int) async {
         let count = max(0, unreadCount)
+        self.unreadCount = count
         if #available(iOS 16.0, *) {
             try? await UNUserNotificationCenter.current().setBadgeCount(count)
         } else {
@@ -227,7 +230,7 @@ final class PushNotificationCoordinator: NSObject, ObservableObject {
     }
 }
 
-extension PushNotificationCoordinator: UNUserNotificationCenterDelegate {
+extension PushNotificationCoordinator: @preconcurrency UNUserNotificationCenterDelegate {
     func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         willPresent notification: UNNotification,
