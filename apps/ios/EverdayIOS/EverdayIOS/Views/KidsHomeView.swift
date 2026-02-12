@@ -56,6 +56,23 @@ struct KidsHomeView: View {
         .background(Color(.systemGroupedBackground))
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                NavigationLink {
+                    NotificationsView()
+                } label: {
+                    Image(systemName: "bell")
+                }
+                .accessibilityLabel("Notifications")
+
+                NavigationLink {
+                    SettingsView()
+                } label: {
+                    Image(systemName: "gearshape")
+                }
+                .accessibilityLabel("Settings")
+            }
+        }
         .task {
             if status == .idle {
                 await load()

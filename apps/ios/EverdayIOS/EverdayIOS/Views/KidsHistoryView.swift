@@ -32,6 +32,22 @@ struct KidsHistoryView: View {
         .navigationTitle("History")
         .navigationBarTitleDisplayMode(horizontalSizeClass == .regular ? .inline : .large)
         .toolbar {
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                NavigationLink {
+                    NotificationsView()
+                } label: {
+                    Image(systemName: "bell")
+                }
+                .accessibilityLabel("Notifications")
+
+                NavigationLink {
+                    SettingsView()
+                } label: {
+                    Image(systemName: "gearshape")
+                }
+                .accessibilityLabel("Settings")
+            }
+
             if horizontalSizeClass == .regular {
                 ToolbarItem(placement: .principal) {
                     ConstrainedTitleView(title: "History")

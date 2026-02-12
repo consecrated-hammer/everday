@@ -3,30 +3,12 @@ import UIKit
 import UserNotifications
 
 struct KidsRootView: View {
-    @EnvironmentObject var pushCoordinator: PushNotificationCoordinator
     @State private var selection: KidsTab = .home
 
     var body: some View {
         TabView(selection: $selection) {
             NavigationStack {
                 KidsHomeView()
-            }
-            .toolbar {
-                ToolbarItemGroup(placement: .topBarTrailing) {
-                    NavigationLink {
-                        NotificationsView()
-                    } label: {
-                        KidsNotificationBellIcon(unreadCount: pushCoordinator.unreadCount)
-                    }
-                    .accessibilityLabel("Notifications")
-
-                    NavigationLink {
-                        SettingsView()
-                    } label: {
-                        Image(systemName: "gearshape")
-                    }
-                    .accessibilityLabel("Settings")
-                }
             }
             .tag(KidsTab.home)
             .tabItem {
@@ -35,23 +17,6 @@ struct KidsRootView: View {
 
             NavigationStack {
                 KidsHistoryView()
-            }
-            .toolbar {
-                ToolbarItemGroup(placement: .topBarTrailing) {
-                    NavigationLink {
-                        NotificationsView()
-                    } label: {
-                        KidsNotificationBellIcon(unreadCount: pushCoordinator.unreadCount)
-                    }
-                    .accessibilityLabel("Notifications")
-
-                    NavigationLink {
-                        SettingsView()
-                    } label: {
-                        Image(systemName: "gearshape")
-                    }
-                    .accessibilityLabel("Settings")
-                }
             }
             .tag(KidsTab.history)
             .tabItem {
@@ -64,27 +29,6 @@ struct KidsRootView: View {
 private enum KidsTab {
     case home
     case history
-}
-
-private struct KidsNotificationBellIcon: View {
-    let unreadCount: Int
-
-    var body: some View {
-        ZStack(alignment: .topTrailing) {
-            Image(systemName: "bell")
-            if unreadCount > 0 {
-                Text(unreadCount > 99 ? "99+" : "\(unreadCount)")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 5)
-                    .padding(.vertical, 1)
-                    .background(Color.red)
-                    .clipShape(Capsule())
-                    .offset(x: 10, y: -8)
-                    .accessibilityLabel("\(unreadCount) unread notifications")
-            }
-        }
-    }
 }
 
 struct KidsReminderSettingsView: View {
