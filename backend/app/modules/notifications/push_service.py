@@ -313,6 +313,12 @@ def SendPushForNotification(
                     delivered += 1
                     device.LastDeliveredAt = now
                     device.LastError = None
+                    logger.info(
+                        "APNS sent user_id=%s notification_id=%s device_id=%s",
+                        notification.UserId,
+                        notification.Id,
+                        device.Id,
+                    )
                 else:
                     device.LastError = reason
                     if _ShouldDeactivateToken(response.status_code, reason):

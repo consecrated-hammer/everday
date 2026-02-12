@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, Column, DateTime, Index, Integer, String, Text
+from sqlalchemy import Boolean, Column, DateTime, Index, Integer, String, Text, Unicode
 
 from app.db import Base
 
@@ -22,10 +22,10 @@ class Notification(Base):
     UserId = Column(Integer, nullable=False, index=True)
     CreatedByUserId = Column(Integer, nullable=False, index=True)
     Type = Column(String(50), nullable=False, default="General")
-    Title = Column(String(160), nullable=False)
-    Body = Column(String(400))
+    Title = Column(Unicode(160), nullable=False)
+    Body = Column(Unicode(400))
     LinkUrl = Column(String(400))
-    ActionLabel = Column(String(80))
+    ActionLabel = Column(Unicode(80))
     ActionType = Column(String(40))
     ActionPayloadJson = Column(Text)
     SourceModule = Column(String(80))

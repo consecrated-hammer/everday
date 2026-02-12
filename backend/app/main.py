@@ -302,14 +302,17 @@ async def _health_reminders_loop() -> None:
             db = db_module.SessionLocal()
             try:
                 result = RunDailyHealthReminders(db, admin_user_id=admin_user_id)
-                reminders_logger.info(
-                    "health reminders run complete eligible=%s processed=%s sent=%s skipped=%s errors=%s",
-                    result.get("EligibleUsers", 0),
-                    result.get("ProcessedUsers", 0),
-                    result.get("NotificationsSent", 0),
-                    result.get("Skipped", 0),
-                    result.get("Errors", 0),
-                )
+                sent = result.get("NotificationsSent", 0)
+                errors = result.get("Errors", 0)
+                if sent or errors:
+                    reminders_logger.info(
+                        "health reminders run complete eligible=%s processed=%s sent=%s skipped=%s errors=%s",
+                        result.get("EligibleUsers", 0),
+                        result.get("ProcessedUsers", 0),
+                        sent,
+                        result.get("Skipped", 0),
+                        errors,
+                    )
             finally:
                 db.close()
         except Exception:  # noqa: BLE001
@@ -336,47 +339,32 @@ async def _kids_reminders_loop() -> None:
         interval_seconds,
         admin_user_id,
     )
-    startup_logger.info(
-        "kids reminders scheduler loop started (interval=%ss, admin_user_id=%s)",
-        interval_seconds,
-        admin_user_id,
-    )
 
     while not _kids_reminders_stop_event.is_set():
         started = time.perf_counter()
-        kids_reminders_logger.info("kids reminders scheduler tick started")
-        startup_logger.info("kids reminders scheduler tick started")
         try:
             db_module._ensure_engine()
             db = db_module.SessionLocal()
             try:
                 result = RunDailyKidsReminders(db, actor_user_id=admin_user_id)
-                kids_reminders_logger.info(
-                    "kids reminders run complete eligible=%s processed=%s sent=%s skipped=%s errors=%s",
-                    result.get("EligibleKids", 0),
-                    result.get("ProcessedKids", 0),
-                    result.get("NotificationsSent", 0),
-                    result.get("Skipped", 0),
-                    result.get("Errors", 0),
-                )
-                startup_logger.info(
-                    "kids reminders run complete eligible=%s processed=%s sent=%s skipped=%s errors=%s",
-                    result.get("EligibleKids", 0),
-                    result.get("ProcessedKids", 0),
-                    result.get("NotificationsSent", 0),
-                    result.get("Skipped", 0),
-                    result.get("Errors", 0),
-                )
+                sent = result.get("NotificationsSent", 0)
+                errors = result.get("Errors", 0)
+                if sent or errors:
+                    kids_reminders_logger.info(
+                        "kids reminders run complete eligible=%s processed=%s sent=%s skipped=%s errors=%s",
+                        result.get("EligibleKids", 0),
+                        result.get("ProcessedKids", 0),
+                        sent,
+                        result.get("Skipped", 0),
+                        errors,
+                    )
             finally:
                 db.close()
         except Exception:  # noqa: BLE001
             kids_reminders_logger.exception("kids reminders scheduler run failed")
-            startup_logger.exception("kids reminders scheduler run failed")
 
         elapsed_seconds = int(time.perf_counter() - started)
         sleep_for = max(1, interval_seconds - elapsed_seconds)
-        kids_reminders_logger.info("kids reminders scheduler sleeping for %ss", sleep_for)
-        startup_logger.info("kids reminders scheduler sleeping for %ss", sleep_for)
         try:
             await asyncio.wait_for(_kids_reminders_stop_event.wait(), timeout=sleep_for)
         except asyncio.TimeoutError:
