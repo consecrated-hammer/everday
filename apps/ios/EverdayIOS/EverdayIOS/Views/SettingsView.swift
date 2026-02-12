@@ -34,6 +34,14 @@ struct SettingsView: View {
                 }
             }
 
+            if isKid {
+                NavigationLink {
+                    KidsReminderSettingsView()
+                } label: {
+                    Label("Notifications", systemImage: "bell.badge")
+                }
+            }
+
             if isParent {
                 NavigationLink {
                     SettingsIntegrationsView()
