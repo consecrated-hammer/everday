@@ -31,6 +31,24 @@ private enum KidsTab {
     case history
 }
 
+struct KidsNotificationBellIcon: View {
+    let unreadCount: Int
+
+    private var hasUnread: Bool {
+        unreadCount > 0
+    }
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(hasUnread ? Color.red.opacity(0.2) : Color.orange.opacity(0.2))
+                .frame(width: 28, height: 28)
+            Image(systemName: hasUnread ? "bell.badge.fill" : "bell.fill")
+                .foregroundStyle(hasUnread ? .red : .orange)
+        }
+    }
+}
+
 struct KidsReminderSettingsView: View {
     @Environment(\.openURL) private var openURL
 

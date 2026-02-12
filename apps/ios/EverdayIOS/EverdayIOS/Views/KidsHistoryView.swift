@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct KidsHistoryView: View {
+    @EnvironmentObject var pushCoordinator: PushNotificationCoordinator
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var status: LoadState = .idle
     @State private var errorMessage = ""
@@ -36,7 +37,7 @@ struct KidsHistoryView: View {
                 NavigationLink {
                     NotificationsView()
                 } label: {
-                    Image(systemName: "bell")
+                    KidsNotificationBellIcon(unreadCount: pushCoordinator.unreadCount)
                 }
                 .accessibilityLabel("Notifications")
 

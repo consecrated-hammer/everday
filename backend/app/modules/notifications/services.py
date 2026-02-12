@@ -14,6 +14,7 @@ from app.modules.notifications.push_service import (
 )
 from app.modules.notifications.schemas import NotificationTargetScope
 from app.modules.notifications.utils.rbac import IsAdmin
+from app.modules.notifications.utils.text import NormalizeNotificationTitle
 
 logger = logging.getLogger("notifications")
 
@@ -341,7 +342,7 @@ def BuildNotificationPayload(record: Notification) -> dict:
         "UserId": record.UserId,
         "CreatedByUserId": record.CreatedByUserId,
         "Type": record.Type,
-        "Title": record.Title,
+        "Title": NormalizeNotificationTitle(record.Title, record.Type),
         "Body": record.Body,
         "LinkUrl": record.LinkUrl,
         "ActionLabel": record.ActionLabel,

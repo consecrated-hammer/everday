@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.modules.auth.deps import NowUtc
 from app.modules.notifications.models import Notification, NotificationDeviceRegistration
+from app.modules.notifications.utils.text import NormalizeNotificationTitle
 
 logger = logging.getLogger("notifications.push")
 
@@ -221,7 +222,9 @@ def UnregisterNotificationDevice(
 
 
 def _BuildPayload(notification: Notification, badge_count: int) -> dict:
-    alert: dict[str, str] = {"title": notification.Title}
+    alert: dict[str, str] = {
+        "title": NormalizeNotificationTitle(notification.Title, notification.Type) or notification.Title
+    }
     if notification.Body:
         alert["body"] = notification.Body
 
