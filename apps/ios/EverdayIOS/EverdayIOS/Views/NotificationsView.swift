@@ -2,7 +2,7 @@ import SwiftUI
 
 struct NotificationsView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-    @Environment(\.openURL) private var openURL
+    @EnvironmentObject var pushCoordinator: PushNotificationCoordinator
 
     @State private var notifications: [NotificationItem] = []
     @State private var unreadCount = 0
@@ -145,11 +145,7 @@ struct NotificationsView: View {
     }
 
     private func handleOpen(_ notification: NotificationItem) {
-        guard let url = NotificationsFormatters.resolvedUrl(notification.LinkUrl) else {
-            errorMessage = "Link not available."
-            return
-        }
-        openURL(url)
+        pushCoordinator.queueNavigationLink(notification.LinkUrl)
         if !notification.IsRead {
             Task { await markRead(notification) }
         }
@@ -167,6 +163,7 @@ struct NotificationsView: View {
             )
             notifications = response.Notifications
             unreadCount = response.UnreadCount
+            await pushCoordinator.applyBadgeCount(response.UnreadCount)
             status = .ready
         } catch {
             status = .error
@@ -223,6 +220,7 @@ struct NotificationsView: View {
             )
             notifications = response.Notifications
             unreadCount = response.UnreadCount
+            await pushCoordinator.applyBadgeCount(response.UnreadCount)
             status = .ready
         } catch {
             status = .error

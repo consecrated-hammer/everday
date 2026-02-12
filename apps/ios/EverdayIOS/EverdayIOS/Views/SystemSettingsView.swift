@@ -100,8 +100,11 @@ struct SystemSettingsView: View {
         .alert("Switch environment?", isPresented: $showEnvironmentAlert) {
             Button("Switch", role: .destructive) {
                 if let pendingEnvironment {
-                    environmentStore.set(pendingEnvironment)
-                    authStore.logout()
+                    let targetEnvironment = pendingEnvironment
+                    Task {
+                        await authStore.logout()
+                        environmentStore.set(targetEnvironment)
+                    }
                 }
                 pendingEnvironment = nil
             }

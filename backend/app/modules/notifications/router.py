@@ -8,9 +8,14 @@ from app.db import GetDb
 from app.modules.auth.deps import RequireAuthenticated, UserContext
 from app.modules.auth.models import User
 from app.modules.notifications.schemas import (
+    NotificationBadgeCountResponse,
     NotificationBulkUpdateResponse,
     NotificationCreate,
     NotificationCreateResponse,
+    NotificationDeviceRegistrationOut,
+    NotificationDeviceUnregisterRequest,
+    NotificationDeviceUnregisterResponse,
+    NotificationDeviceRegisterRequest,
     NotificationListResponse,
     NotificationOut,
 )
@@ -22,7 +27,9 @@ from app.modules.notifications.services import (
     ListNotifications,
     MarkAllRead,
     MarkNotificationRead,
+    RegisterUserNotificationDevice,
     ResolveTargetUserIds,
+    UnregisterUserNotificationDevice,
 )
 
 router = APIRouter(prefix="/api/notifications", tags=["notifications"])
@@ -56,6 +63,18 @@ def _BuildNotificationOut(record, name_map: dict[int, str]) -> NotificationOut:
     payload = BuildNotificationPayload(record)
     payload["CreatedByName"] = name_map.get(record.CreatedByUserId)
     return NotificationOut(**payload)
+
+
+def _BuildDeviceOut(record) -> NotificationDeviceRegistrationOut:
+    return NotificationDeviceRegistrationOut(
+        Id=record.Id,
+        Platform=record.Platform,
+        DeviceId=record.DeviceId,
+        PushEnvironment=record.PushEnvironment,
+        IsActive=record.IsActive,
+        LastSeenAt=record.LastSeenAt,
+        UpdatedAt=record.UpdatedAt,
+    )
 
 
 @router.get("", response_model=NotificationListResponse)
@@ -126,6 +145,63 @@ def CreateNotificationItems(
         else:
             status_code = status.HTTP_400_BAD_REQUEST
         raise HTTPException(status_code=status_code, detail=detail) from exc
+    except ProgrammingError as exc:
+        _handle_db_error(exc)
+
+
+@router.get("/badge-count", response_model=NotificationBadgeCountResponse)
+def GetBadgeCount(
+    db: Session = Depends(GetDb),
+    user: UserContext = Depends(RequireAuthenticated),
+) -> NotificationBadgeCountResponse:
+    try:
+        unread_count = CountUnread(db, user_id=user.Id)
+        return NotificationBadgeCountResponse(UnreadCount=unread_count)
+    except ProgrammingError as exc:
+        _handle_db_error(exc)
+
+
+@router.post("/devices/register", response_model=NotificationDeviceRegistrationOut)
+def RegisterDevice(
+    payload: NotificationDeviceRegisterRequest,
+    db: Session = Depends(GetDb),
+    user: UserContext = Depends(RequireAuthenticated),
+) -> NotificationDeviceRegistrationOut:
+    try:
+        record = RegisterUserNotificationDevice(
+            db,
+            user_id=user.Id,
+            platform=payload.Platform.value,
+            device_token=payload.DeviceToken,
+            device_id=payload.DeviceId,
+            push_environment=payload.PushEnvironment.value,
+            app_version=payload.AppVersion,
+            build_number=payload.BuildNumber,
+        )
+        return _BuildDeviceOut(record)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except ProgrammingError as exc:
+        _handle_db_error(exc)
+
+
+@router.post("/devices/unregister", response_model=NotificationDeviceUnregisterResponse)
+def UnregisterDevice(
+    payload: NotificationDeviceUnregisterRequest,
+    db: Session = Depends(GetDb),
+    user: UserContext = Depends(RequireAuthenticated),
+) -> NotificationDeviceUnregisterResponse:
+    try:
+        updated = UnregisterUserNotificationDevice(
+            db,
+            user_id=user.Id,
+            platform=payload.Platform.value,
+            device_token=payload.DeviceToken,
+            device_id=payload.DeviceId,
+        )
+        return NotificationDeviceUnregisterResponse(UpdatedCount=updated)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except ProgrammingError as exc:
         _handle_db_error(exc)
 

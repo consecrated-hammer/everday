@@ -13,7 +13,7 @@ struct LoggedInView: View {
                     .foregroundStyle(.secondary)
 
                 Button("Sign out") {
-                    authStore.logout()
+                    Task { await authStore.logout() }
                 }
                 .buttonStyle(.bordered)
 

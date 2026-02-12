@@ -48,9 +48,7 @@ final class EnvironmentStore: ObservableObject {
     }
 
     private static func defaultEnvironment() -> AppEnvironment {
-        let raw = (Bundle.main.object(forInfoDictionaryKey: "API_ENVIRONMENT") as? String ?? "")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .uppercased()
-        return AppEnvironment(rawValue: raw) ?? .dev
+        // Always default users to production unless they explicitly switch in Settings.
+        return .prod
     }
 }

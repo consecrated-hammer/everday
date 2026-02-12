@@ -12,6 +12,15 @@ class NotificationTargetScope(str, Enum):
     AllUsers = "AllUsers"
 
 
+class NotificationDevicePlatform(str, Enum):
+    Ios = "ios"
+
+
+class NotificationPushEnvironment(str, Enum):
+    Development = "development"
+    Production = "production"
+
+
 class NotificationCreate(BaseModel):
     Title: str = Field(min_length=1, max_length=160)
     Body: str | None = Field(default=None, max_length=400)
@@ -61,3 +70,36 @@ class NotificationBulkUpdateResponse(BaseModel):
 
 class NotificationCreateResponse(BaseModel):
     Notifications: list[NotificationOut]
+
+
+class NotificationBadgeCountResponse(BaseModel):
+    UnreadCount: int
+
+
+class NotificationDeviceRegisterRequest(BaseModel):
+    Platform: NotificationDevicePlatform = NotificationDevicePlatform.Ios
+    DeviceToken: str = Field(min_length=10, max_length=255)
+    DeviceId: str | None = Field(default=None, max_length=128)
+    PushEnvironment: NotificationPushEnvironment = NotificationPushEnvironment.Production
+    AppVersion: str | None = Field(default=None, max_length=32)
+    BuildNumber: str | None = Field(default=None, max_length=32)
+
+
+class NotificationDeviceRegistrationOut(BaseModel):
+    Id: int
+    Platform: NotificationDevicePlatform
+    DeviceId: str | None = None
+    PushEnvironment: NotificationPushEnvironment
+    IsActive: bool
+    LastSeenAt: datetime
+    UpdatedAt: datetime
+
+
+class NotificationDeviceUnregisterRequest(BaseModel):
+    Platform: NotificationDevicePlatform = NotificationDevicePlatform.Ios
+    DeviceToken: str | None = Field(default=None, max_length=255)
+    DeviceId: str | None = Field(default=None, max_length=128)
+
+
+class NotificationDeviceUnregisterResponse(BaseModel):
+    UpdatedCount: int

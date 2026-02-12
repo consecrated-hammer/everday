@@ -23,6 +23,9 @@ final class AuthStore: ObservableObject {
                 self?.save(tokens)
             }
         }
+        Task {
+            await PushNotificationCoordinator.shared.handleAuthStateChanged(isAuthenticated: self.isAuthenticated)
+        }
     }
 
     var isAuthenticated: Bool {
@@ -44,13 +47,19 @@ final class AuthStore: ObservableObject {
         save(result)
     }
 
-    func logout() {
+    func logout() async {
+        await PushNotificationCoordinator.shared.unregisterCurrentDevice()
+        await PushNotificationCoordinator.shared.clearBadge()
         tokens = nil
         tokenStore.clearTokens()
+        await PushNotificationCoordinator.shared.handleAuthStateChanged(isAuthenticated: false)
     }
 
     private func save(_ tokens: AuthTokens) {
         self.tokens = tokens
         tokenStore.saveTokens(tokens)
+        Task {
+            await PushNotificationCoordinator.shared.handleAuthStateChanged(isAuthenticated: true)
+        }
     }
 }

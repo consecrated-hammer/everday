@@ -125,7 +125,9 @@ struct LoginView: View {
             .navigationTitle("")
             .navigationBarHidden(true)
             .safeAreaInset(edge: .bottom) {
-                FooterEnvironmentView()
+                FooterEnvironmentView {
+                    clearCredentialsForEnvironmentChange()
+                }
             }
 
             ZStack {
@@ -164,12 +166,21 @@ struct LoginView: View {
         }
         return "Login failed"
     }
+
+    private func clearCredentialsForEnvironmentChange() {
+        username = ""
+        password = ""
+        errorMessage = ""
+        isPasswordVisible = false
+        focusedField = nil
+    }
 }
 
 private struct FooterEnvironmentView: View {
     @EnvironmentObject var environmentStore: EnvironmentStore
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var showDetails = false
+    let onEnvironmentChanged: () -> Void
 
     var body: some View {
         Button {
@@ -183,10 +194,10 @@ private struct FooterEnvironmentView: View {
         .padding(.bottom, 8)
         .accessibilityLabel(accessibilityText)
         .popover(isPresented: popoverBinding) {
-            EnvironmentInfoSheet(environment: environmentStore.current)
+            EnvironmentInfoSheet(onEnvironmentChanged: onEnvironmentChanged)
         }
         .sheet(isPresented: sheetBinding) {
-            EnvironmentInfoSheet(environment: environmentStore.current)
+            EnvironmentInfoSheet(onEnvironmentChanged: onEnvironmentChanged)
         }
     }
 
@@ -210,32 +221,49 @@ private struct FooterEnvironmentView: View {
 }
 
 private struct EnvironmentInfoSheet: View {
-    let environment: AppEnvironment
+    @EnvironmentObject var environmentStore: EnvironmentStore
     @Environment(\.dismiss) private var dismiss
+    @State private var pendingEnvironment: AppEnvironment?
+    @State private var showSwitchAlert = false
+    let onEnvironmentChanged: () -> Void
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 16) {
-                Text("Environment: \(environment.displayName)")
-                    .font(.headline)
-                    .multilineTextAlignment(.center)
-                if let url = URL(string: environment.baseUrl) {
-                    HStack(spacing: 4) {
-                        Text("URL:")
-                            .foregroundStyle(.primary)
-                        Link(environment.baseUrl, destination: url)
-                    }
-                    .font(.subheadline)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                } else {
-                    Text("URL: \(environment.baseUrl)")
+            List {
+                Section("Current environment") {
+                    Text(environmentStore.current.displayName)
+                        .font(.headline)
+                    if let url = URL(string: environmentStore.current.baseUrl) {
+                        HStack(spacing: 4) {
+                            Text("URL:")
+                                .foregroundStyle(.primary)
+                            Link(environmentStore.current.baseUrl, destination: url)
+                        }
                         .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
+                    } else {
+                        Text("URL: \(environmentStore.current.baseUrl)")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
                 }
-                Spacer()
+
+                Section("Switch environment") {
+                    environmentOptionButton(
+                        title: "PROD",
+                        subtitle: "Recommended for normal use",
+                        target: .prod
+                    )
+                    environmentOptionButton(
+                        title: "DEV",
+                        subtitle: "Advanced option for testing",
+                        target: .dev,
+                        deEmphasized: true
+                    )
+                    Text("Changing environment clears typed login details.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
             }
-            .padding(24)
             .navigationTitle("Info")
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
@@ -244,7 +272,52 @@ private struct EnvironmentInfoSheet: View {
                     }
                 }
             }
+            .alert("Switch environment?", isPresented: $showSwitchAlert) {
+                Button("Switch", role: .destructive) {
+                    guard let target = pendingEnvironment else { return }
+                    environmentStore.set(target)
+                    onEnvironmentChanged()
+                    pendingEnvironment = nil
+                }
+                Button("Cancel", role: .cancel) {
+                    pendingEnvironment = nil
+                }
+            } message: {
+                Text("Switch to \(pendingEnvironment?.displayName ?? "")? You will need to re-enter login details.")
+            }
         }
+    }
+
+    @ViewBuilder
+    private func environmentOptionButton(
+        title: String,
+        subtitle: String,
+        target: AppEnvironment,
+        deEmphasized: Bool = false
+    ) -> some View {
+        Button {
+            guard target != environmentStore.current else { return }
+            pendingEnvironment = target
+            showSwitchAlert = true
+        } label: {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(deEmphasized ? .secondary : .primary)
+                    Text(subtitle)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                if target == environmentStore.current {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 }
 

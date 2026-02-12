@@ -14,6 +14,13 @@ struct HealthLogView: View {
     @State private var showEntrySheet = false
     @State private var entryToDelete: HealthMealEntryWithFood?
 
+    @State private var mealActionLoading = false
+    @State private var mealActionError = ""
+    @State private var saveMealOpen = false
+    @State private var saveMealMealType: HealthMealType = .Breakfast
+    @State private var saveMealName = ""
+    @State private var saveMealServings = "1"
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
@@ -29,6 +36,9 @@ struct HealthLogView: View {
                 }
                 if !errorMessage.isEmpty {
                     HealthErrorBanner(message: errorMessage)
+                }
+                if !mealActionError.isEmpty {
+                    HealthErrorBanner(message: mealActionError)
                 }
             }
             .padding(20)
@@ -60,6 +70,17 @@ struct HealthLogView: View {
             Button("Cancel", role: .cancel) { entryToDelete = nil }
         } message: {
             Text("This will remove the entry from the log.")
+        }
+        .alert("Save as meal", isPresented: $saveMealOpen) {
+            TextField("Meal name", text: $saveMealName)
+            TextField("Servings", text: $saveMealServings)
+                .keyboardType(.decimalPad)
+            Button(mealActionLoading ? "Saving..." : "Save") {
+                Task { await saveMealTemplate() }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Create a reusable meal template from \(saveMealMealType.label.lowercased()).")
         }
         .task(id: logDateKey) {
             await load()
@@ -135,6 +156,28 @@ struct HealthLogView: View {
                             showEntrySheet = true
                         } onDelete: {
                             entryToDelete = entry
+                        }
+                    }
+
+                    HStack(spacing: 10) {
+                        Button("Save as meal") {
+                            beginSaveMeal(for: meal)
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(mealActionLoading)
+
+                        if !shareUsers.isEmpty {
+                            Menu {
+                                ForEach(shareUsers) { user in
+                                    Button(user.displayName) {
+                                        Task { await shareSlotEntries(entries, targetUserId: user.Id) }
+                                    }
+                                }
+                            } label: {
+                                Label("Share this meal", systemImage: "square.and.arrow.up")
+                            }
+                            .buttonStyle(.bordered)
+                            .disabled(mealActionLoading)
                         }
                     }
                 }
@@ -213,6 +256,138 @@ struct HealthLogView: View {
             errorMessage = (error as? ApiError)?.message ?? "Unable to delete entry."
         }
     }
+
+    private func beginSaveMeal(for meal: HealthMealType) {
+        saveMealMealType = meal
+        saveMealName = "\(meal.label) \(HealthFormatters.formatShortDate(logDateKey))"
+        saveMealServings = "1"
+        mealActionError = ""
+        saveMealOpen = true
+    }
+
+    private func saveMealTemplate() async {
+        let name = saveMealName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else {
+            mealActionError = "Meal name is required."
+            return
+        }
+        guard let servings = Double(saveMealServings), servings > 0 else {
+            mealActionError = "Servings must be greater than zero."
+            return
+        }
+
+        let entries = groupedEntries[saveMealMealType] ?? []
+        let items = buildTemplateItems(from: entries, mealType: saveMealMealType)
+        guard !items.isEmpty else {
+            mealActionError = "Add at least one item before saving this meal."
+            return
+        }
+
+        mealActionLoading = true
+        mealActionError = ""
+        do {
+            let created = try await HealthApi.createMealTemplate(
+                HealthCreateMealTemplateRequest(
+                    TemplateName: name,
+                    Servings: servings,
+                    IsFavourite: false,
+                    Items: items
+                )
+            )
+            templates.append(created)
+            mealActionLoading = false
+            saveMealOpen = false
+        } catch {
+            mealActionLoading = false
+            mealActionError = (error as? ApiError)?.message ?? "Unable to save meal template."
+        }
+    }
+
+    private func buildTemplateItems(from entries: [HealthMealEntryWithFood], mealType: HealthMealType) -> [HealthMealTemplateItemInput] {
+        var drafts: [MealTemplateItemDraft] = []
+
+        for entry in entries {
+            if let foodId = entry.FoodId {
+                drafts.append(
+                    MealTemplateItemDraft(
+                        FoodId: foodId,
+                        MealType: mealType,
+                        Quantity: entry.Quantity,
+                        EntryQuantity: entry.DisplayQuantity,
+                        EntryUnit: entry.PortionLabel,
+                        EntryNotes: entry.EntryNotes
+                    )
+                )
+                continue
+            }
+
+            guard let templateId = entry.MealTemplateId,
+                  let sourceTemplate = templates.first(where: { $0.Template.MealTemplateId == templateId }) else {
+                continue
+            }
+
+            let multiplier = max(entry.Quantity, 0)
+            for item in sourceTemplate.Items {
+                drafts.append(
+                    MealTemplateItemDraft(
+                        FoodId: item.FoodId,
+                        MealType: mealType,
+                        Quantity: item.Quantity * multiplier,
+                        EntryQuantity: item.EntryQuantity.map { $0 * multiplier },
+                        EntryUnit: item.EntryUnit,
+                        EntryNotes: item.EntryNotes
+                    )
+                )
+            }
+        }
+
+        return drafts.enumerated().compactMap { index, draft in
+            guard draft.Quantity > 0 else { return nil }
+            return HealthMealTemplateItemInput(
+                FoodId: draft.FoodId,
+                MealType: draft.MealType,
+                Quantity: draft.Quantity,
+                EntryQuantity: draft.EntryQuantity,
+                EntryUnit: draft.EntryUnit,
+                EntryNotes: draft.EntryNotes,
+                SortOrder: index
+            )
+        }
+    }
+
+    private func shareSlotEntries(_ entries: [HealthMealEntryWithFood], targetUserId: Int) async {
+        guard !entries.isEmpty else {
+            mealActionError = "No items to share yet."
+            return
+        }
+
+        mealActionLoading = true
+        mealActionError = ""
+        do {
+            for entry in entries {
+                _ = try await HealthApi.shareMealEntry(
+                    HealthShareMealEntryRequest(
+                        LogDate: logDateKey,
+                        TargetUserId: targetUserId,
+                        MealType: entry.MealType,
+                        FoodId: entry.FoodId,
+                        MealTemplateId: entry.MealTemplateId,
+                        Quantity: entry.Quantity,
+                        PortionOptionId: entry.PortionOptionId,
+                        PortionLabel: entry.PortionLabel ?? "serving",
+                        PortionBaseUnit: entry.PortionBaseUnit ?? "each",
+                        PortionBaseAmount: entry.PortionBaseAmount ?? 1,
+                        EntryNotes: entry.EntryNotes,
+                        ScheduleSlotId: nil
+                    )
+                )
+            }
+            mealActionLoading = false
+        } catch {
+            mealActionLoading = false
+            mealActionError = (error as? ApiError)?.message ?? "Unable to share meal entries."
+        }
+    }
 }
 
 private struct HealthEntryRow: View {
@@ -258,6 +433,15 @@ private struct HealthEntryRow: View {
         let unit = entry.PortionLabel ?? "serving"
         return "\(quantity) \(unit)"
     }
+}
+
+private struct MealTemplateItemDraft {
+    let FoodId: String
+    let MealType: HealthMealType
+    let Quantity: Double
+    let EntryQuantity: Double?
+    let EntryUnit: String?
+    let EntryNotes: String?
 }
 
 private enum LoadState {

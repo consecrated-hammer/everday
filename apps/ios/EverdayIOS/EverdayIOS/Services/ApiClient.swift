@@ -14,7 +14,7 @@ final class ApiClient {
         let raw = environment.baseUrl
         let withScheme = raw.hasPrefix("http") ? raw : "https://\(raw)"
         let normalized = withScheme.hasSuffix("/api") ? withScheme : "\(withScheme)/api"
-        return URL(string: normalized) ?? URL(string: "https://everday-dev.batserver.au/api")!
+        return URL(string: normalized) ?? URL(string: "https://everday.batserver.au/api")!
     }
 
     func request<T: Decodable>(path: String, method: String = "GET", body: Encodable? = nil, requiresAuth: Bool = false) async throws -> T {
