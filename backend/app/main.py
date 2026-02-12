@@ -336,6 +336,7 @@ async def _kids_reminders_loop() -> None:
 
     while not _kids_reminders_stop_event.is_set():
         started = time.perf_counter()
+        kids_reminders_logger.info("kids reminders scheduler tick started")
         try:
             db_module._ensure_engine()
             db = db_module.SessionLocal()
@@ -356,6 +357,7 @@ async def _kids_reminders_loop() -> None:
 
         elapsed_seconds = int(time.perf_counter() - started)
         sleep_for = max(1, interval_seconds - elapsed_seconds)
+        kids_reminders_logger.info("kids reminders scheduler sleeping for %ss", sleep_for)
         try:
             await asyncio.wait_for(_kids_reminders_stop_event.wait(), timeout=sleep_for)
         except asyncio.TimeoutError:
