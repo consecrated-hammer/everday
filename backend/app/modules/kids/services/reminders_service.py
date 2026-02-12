@@ -21,7 +21,8 @@ from app.modules.kids.services.chores_v2_service import (
 )
 from app.modules.notifications.services import CreateNotification
 
-logger = logging.getLogger(__name__)
+# Use the scheduler logger namespace so reminder evaluation logs are easy to find in backend.log.
+logger = logging.getLogger("app.kids_reminders")
 
 DEFAULT_REMINDER_TIME = "19:00"
 DEFAULT_REMINDER_TIMEZONE = "Australia/Adelaide"
@@ -258,12 +259,19 @@ def RunDailyKidsReminders(
         raise ValueError("Run time must be in HH:MM format.")
 
     kids = db.query(User).filter(User.Role == "Kid").all()
+    logger.info(
+        "kids reminders evaluation start run_date=%s effective_time=%s total_kids=%s",
+        today.isoformat(),
+        effective_time,
+        len(kids),
+    )
 
     eligible_kids = 0
     processed_kids = 0
     notifications_sent = 0
     skipped = 0
     errors = 0
+    matched_time_kids = 0
 
     for kid in kids:
         settings = EnsureReminderSettings(db, kid.Id)
@@ -271,6 +279,7 @@ def RunDailyKidsReminders(
 
         kid_eligible = False
         kid_processed = False
+        kid_time_matched = False
 
         jobs = [
             (
@@ -286,22 +295,61 @@ def RunDailyKidsReminders(
                 settings.HabitsReminderTime,
             ),
         ]
+        logger.info(
+            "kids reminders evaluating kid_user_id=%s daily_enabled=%s daily_time=%s habits_enabled=%s habits_time=%s",
+            kid.Id,
+            bool(settings.DailyJobsRemindersEnabled),
+            settings.DailyJobsReminderTime,
+            bool(settings.HabitsRemindersEnabled),
+            settings.HabitsReminderTime,
+        )
 
         try:
             for reminder_type, chore_type, enabled, reminder_time in jobs:
                 if not enabled:
                     continue
-                if not _TimeMatches(effective_time, reminder_time):
+                time_matches = _TimeMatches(effective_time, reminder_time)
+                logger.info(
+                    "kids reminders time check kid_user_id=%s reminder_type=%s effective_time=%s reminder_time=%s match=%s",
+                    kid.Id,
+                    reminder_type,
+                    effective_time,
+                    reminder_time,
+                    time_matches,
+                )
+                if not time_matches:
                     continue
                 kid_eligible = True
                 kid_processed = True
+                kid_time_matched = True
+                logger.info(
+                    "kids reminders eligible kid_user_id=%s reminder_type=%s run_date=%s effective_time=%s configured_time=%s",
+                    kid.Id,
+                    reminder_type,
+                    today.isoformat(),
+                    effective_time,
+                    reminder_time,
+                )
 
                 if _AlreadyRan(db, kid.Id, today, effective_time, reminder_type):
+                    logger.info(
+                        "kids reminders eligible skipped (already-ran) kid_user_id=%s reminder_type=%s run_date=%s effective_time=%s",
+                        kid.Id,
+                        reminder_type,
+                        today.isoformat(),
+                        effective_time,
+                    )
                     skipped += 1
                     continue
 
                 active_ids = _LoadActiveChoreIdsForType(db, kid.Id, today, chore_type)
                 if not active_ids:
+                    logger.info(
+                        "kids reminders eligible skipped (no-active-chores) kid_user_id=%s reminder_type=%s run_date=%s",
+                        kid.Id,
+                        reminder_type,
+                        today.isoformat(),
+                    )
                     _RecordRun(
                         db,
                         kid_user_id=kid.Id,
@@ -316,6 +364,12 @@ def RunDailyKidsReminders(
 
                 remaining_count = len([chore_id for chore_id in active_ids if chore_id not in completed_ids])
                 if remaining_count <= 0:
+                    logger.info(
+                        "kids reminders eligible skipped (nothing-remaining) kid_user_id=%s reminder_type=%s run_date=%s",
+                        kid.Id,
+                        reminder_type,
+                        today.isoformat(),
+                    )
                     _RecordRun(
                         db,
                         kid_user_id=kid.Id,
@@ -336,6 +390,13 @@ def RunDailyKidsReminders(
                     remaining_count=remaining_count,
                     run_date=today,
                     run_time=effective_time,
+                )
+                logger.info(
+                    "kids reminders eligible sent kid_user_id=%s reminder_type=%s run_date=%s remaining_count=%s",
+                    kid.Id,
+                    reminder_type,
+                    today.isoformat(),
+                    remaining_count,
                 )
                 _RecordRun(
                     db,
@@ -366,6 +427,21 @@ def RunDailyKidsReminders(
             eligible_kids += 1
         if kid_processed:
             processed_kids += 1
+        if kid_time_matched:
+            matched_time_kids += 1
+
+    logger.info(
+        "kids reminders evaluation complete run_date=%s effective_time=%s total_kids=%s matched_time_kids=%s eligible=%s processed=%s sent=%s skipped=%s errors=%s",
+        today.isoformat(),
+        effective_time,
+        len(kids),
+        matched_time_kids,
+        eligible_kids,
+        processed_kids,
+        notifications_sent,
+        skipped,
+        errors,
+    )
 
     return {
         "EligibleKids": eligible_kids,
