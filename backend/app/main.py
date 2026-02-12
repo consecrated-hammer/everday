@@ -227,14 +227,17 @@ async def startup_tasks() -> None:
     if _reminders_task is None or _reminders_task.done():
         _reminders_stop_event.clear()
         _reminders_task = asyncio.create_task(_health_reminders_loop())
+        startup_logger.info("health reminders scheduler task created")
     global _kids_reminders_task
     if _kids_reminders_task is None or _kids_reminders_task.done():
         _kids_reminders_stop_event.clear()
         _kids_reminders_task = asyncio.create_task(_kids_reminders_loop())
+        startup_logger.info("kids reminders scheduler task created")
     global _gmail_intake_task
     if _gmail_intake_task is None or _gmail_intake_task.done():
         _gmail_intake_stop_event.clear()
         _gmail_intake_task = asyncio.create_task(_gmail_intake_loop())
+        startup_logger.info("gmail intake scheduler task created")
 
 
 @app.on_event("shutdown")
@@ -333,10 +336,16 @@ async def _kids_reminders_loop() -> None:
         interval_seconds,
         admin_user_id,
     )
+    startup_logger.info(
+        "kids reminders scheduler loop started (interval=%ss, admin_user_id=%s)",
+        interval_seconds,
+        admin_user_id,
+    )
 
     while not _kids_reminders_stop_event.is_set():
         started = time.perf_counter()
         kids_reminders_logger.info("kids reminders scheduler tick started")
+        startup_logger.info("kids reminders scheduler tick started")
         try:
             db_module._ensure_engine()
             db = db_module.SessionLocal()
@@ -350,14 +359,24 @@ async def _kids_reminders_loop() -> None:
                     result.get("Skipped", 0),
                     result.get("Errors", 0),
                 )
+                startup_logger.info(
+                    "kids reminders run complete eligible=%s processed=%s sent=%s skipped=%s errors=%s",
+                    result.get("EligibleKids", 0),
+                    result.get("ProcessedKids", 0),
+                    result.get("NotificationsSent", 0),
+                    result.get("Skipped", 0),
+                    result.get("Errors", 0),
+                )
             finally:
                 db.close()
         except Exception:  # noqa: BLE001
             kids_reminders_logger.exception("kids reminders scheduler run failed")
+            startup_logger.exception("kids reminders scheduler run failed")
 
         elapsed_seconds = int(time.perf_counter() - started)
         sleep_for = max(1, interval_seconds - elapsed_seconds)
         kids_reminders_logger.info("kids reminders scheduler sleeping for %ss", sleep_for)
+        startup_logger.info("kids reminders scheduler sleeping for %ss", sleep_for)
         try:
             await asyncio.wait_for(_kids_reminders_stop_event.wait(), timeout=sleep_for)
         except asyncio.TimeoutError:
