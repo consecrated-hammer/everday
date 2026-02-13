@@ -89,6 +89,8 @@ run_lint() {
 
 run_tests() {
   echo "Running backend tests..."
+  local current_commit
+  current_commit="$(git rev-parse --short HEAD)"
   
   # Check if dev container is running
   if ! docker ps --format '{{.Names}}' | grep -q "^everday-dev$"; then
@@ -96,6 +98,14 @@ run_tests() {
     run_build
     # Wait a moment for container to be ready
     sleep 2
+  else
+    local running_commit
+    running_commit="$(docker inspect -f '{{ index .Config.Labels "org.everday.commit_sha" }}' everday-dev 2>/dev/null || true)"
+    if [[ -z "${running_commit}" || "${running_commit}" != "${current_commit}" ]]; then
+      echo "⚠️  Dev container commit (${running_commit:-unknown}) does not match current commit (${current_commit}). Rebuilding first..."
+      run_build
+      sleep 2
+    fi
   fi
   
   # Run tests in container with proper PYTHONPATH
