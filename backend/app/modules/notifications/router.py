@@ -24,10 +24,12 @@ from app.modules.notifications.services import (
     CountUnread,
     CreateNotificationsForUsers,
     DismissNotification,
+    IsSystemNotificationType,
     ListNotifications,
     MarkAllRead,
     MarkNotificationRead,
     RegisterUserNotificationDevice,
+    ResolveNotificationCreatedByName,
     ResolveTargetUserIds,
     UnregisterUserNotificationDevice,
 )
@@ -61,7 +63,11 @@ def _LoadUserNames(db: Session, user_ids: set[int]) -> dict[int, str]:
 
 def _BuildNotificationOut(record, name_map: dict[int, str]) -> NotificationOut:
     payload = BuildNotificationPayload(record)
-    payload["CreatedByName"] = name_map.get(record.CreatedByUserId)
+    payload["CreatedByName"] = ResolveNotificationCreatedByName(
+        created_by_user_id=record.CreatedByUserId,
+        created_by_name=name_map.get(record.CreatedByUserId),
+        notification_type=payload.get("Type"),
+    )
     return NotificationOut(**payload)
 
 
@@ -95,7 +101,11 @@ def ListNotificationItems(
             limit=limit,
             offset=offset,
         )
-        user_ids = {record.CreatedByUserId for record in records}
+        user_ids = {
+            record.CreatedByUserId
+            for record in records
+            if record.CreatedByUserId > 0 and not IsSystemNotificationType(record.Type)
+        }
         name_map = _LoadUserNames(db, user_ids)
         notifications = [_BuildNotificationOut(record, name_map) for record in records]
         unread_count = CountUnread(db, user_id=user.Id)
@@ -132,7 +142,11 @@ def CreateNotificationItems(
             source_id=payload.SourceId,
             meta=payload.Meta,
         )
-        user_ids = {record.CreatedByUserId for record in records}
+        user_ids = {
+            record.CreatedByUserId
+            for record in records
+            if record.CreatedByUserId > 0 and not IsSystemNotificationType(record.Type)
+        }
         name_map = _LoadUserNames(db, user_ids)
         notifications = [_BuildNotificationOut(record, name_map) for record in records]
         return NotificationCreateResponse(Notifications=notifications)
@@ -216,7 +230,12 @@ def MarkNotificationReadRoute(
         record = MarkNotificationRead(db, user_id=user.Id, notification_id=notification_id)
         if not record:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Notification not found")
-        name_map = _LoadUserNames(db, {record.CreatedByUserId})
+        user_ids = (
+            {record.CreatedByUserId}
+            if record.CreatedByUserId > 0 and not IsSystemNotificationType(record.Type)
+            else set()
+        )
+        name_map = _LoadUserNames(db, user_ids)
         return _BuildNotificationOut(record, name_map)
     except ProgrammingError as exc:
         _handle_db_error(exc)
@@ -232,7 +251,12 @@ def DismissNotificationRoute(
         record = DismissNotification(db, user_id=user.Id, notification_id=notification_id)
         if not record:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Notification not found")
-        name_map = _LoadUserNames(db, {record.CreatedByUserId})
+        user_ids = (
+            {record.CreatedByUserId}
+            if record.CreatedByUserId > 0 and not IsSystemNotificationType(record.Type)
+            else set()
+        )
+        name_map = _LoadUserNames(db, user_ids)
         return _BuildNotificationOut(record, name_map)
     except ProgrammingError as exc:
         _handle_db_error(exc)

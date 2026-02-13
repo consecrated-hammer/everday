@@ -23,6 +23,8 @@ struct KidsRootView: View {
                 Label("History", systemImage: "clock.arrow.circlepath")
             }
         }
+        .toolbarBackground(.visible, for: .tabBar)
+        .toolbarBackground(Color(.systemBackground), for: .tabBar)
     }
 }
 

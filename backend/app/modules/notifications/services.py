@@ -17,6 +17,31 @@ from app.modules.notifications.utils.rbac import IsAdmin
 from app.modules.notifications.utils.text import NormalizeNotificationTitle
 
 logger = logging.getLogger("notifications")
+SYSTEM_CREATED_BY_NAME = "Everday"
+SYSTEM_NOTIFICATION_TYPES: frozenset[str] = frozenset(
+    {
+        "KidsReminder",
+        "HealthReminder",
+        "HealthAiSuggestion",
+        "TaskReminder",
+        "TaskOverdue",
+    }
+)
+
+
+def IsSystemNotificationType(notification_type: str | None) -> bool:
+    return (notification_type or "").strip() in SYSTEM_NOTIFICATION_TYPES
+
+
+def ResolveNotificationCreatedByName(
+    *,
+    created_by_user_id: int,
+    created_by_name: str | None,
+    notification_type: str | None,
+) -> str | None:
+    if created_by_user_id <= 0 or IsSystemNotificationType(notification_type):
+        return SYSTEM_CREATED_BY_NAME
+    return created_by_name
 
 
 def _SerializeJson(value: dict | None) -> str | None:

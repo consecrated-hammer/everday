@@ -1,7 +1,9 @@
 import SwiftUI
 
 struct NotificationsView: View {
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
+    @EnvironmentObject var authStore: AuthStore
     @EnvironmentObject var pushCoordinator: PushNotificationCoordinator
 
     @State private var notifications: [NotificationItem] = []
@@ -18,14 +20,15 @@ struct NotificationsView: View {
         }
 
         let base = scroll
-            .background(Color(.systemGroupedBackground))
+            .background(Color(.systemBackground))
             .navigationTitle("Notifications")
-            .navigationBarTitleDisplayMode(horizontalSizeClass == .regular ? .inline : .large)
+            .navigationBarTitleDisplayMode(.large)
             .toolbar {
-                if horizontalSizeClass == .regular {
-                    ToolbarItem(placement: .principal) {
-                        ConstrainedTitleView(title: "Notifications")
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Mark all read") {
+                        Task { await markAllRead() }
                     }
+                    .disabled(isBusy || unreadCount == 0)
                 }
             }
 
@@ -46,8 +49,6 @@ struct NotificationsView: View {
     @ViewBuilder
     private var contentBody: some View {
         VStack(alignment: .leading, spacing: 16) {
-            headerSection
-            actionSection
             statusSection
             notificationsSection
         }
@@ -56,35 +57,6 @@ struct NotificationsView: View {
         .padding(.bottom, 24)
         .frame(maxWidth: 720)
         .frame(maxWidth: .infinity)
-    }
-
-    private var headerSection: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Notifications")
-                .font(.title2.bold())
-            Text("Review your notifications.")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-            if unreadCount > 0 {
-                Text("\(unreadCount) unread")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-        }
-    }
-
-    private var actionSection: some View {
-        ViewThatFits {
-            HStack(spacing: 12) {
-                refreshButton
-                markAllReadButton
-            }
-
-            VStack(alignment: .leading, spacing: 8) {
-                refreshButton
-                markAllReadButton
-            }
-        }
     }
 
     @ViewBuilder
@@ -105,12 +77,17 @@ struct NotificationsView: View {
     private var notificationsSection: some View {
         if status != .loading {
             if notifications.isEmpty {
-                Text("No notifications yet.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("No notifications")
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                    Text("You're all caught up.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
             } else {
-                VStack(spacing: 12) {
-                    ForEach(notifications) { notification in
+                VStack(spacing: 0) {
+                    ForEach(Array(notifications.enumerated()), id: \.element.Id) { index, notification in
                         NotificationCardView(
                             notification: notification,
                             isBusy: isBusy,
@@ -118,26 +95,14 @@ struct NotificationsView: View {
                             onMarkRead: { Task { await markRead(notification) } },
                             onDismiss: { Task { await dismiss(notification) } }
                         )
+                        if index < notifications.count - 1 {
+                            Divider()
+                                .padding(.vertical, 8)
+                        }
                     }
                 }
             }
         }
-    }
-
-    private var refreshButton: some View {
-        Button(status == .loading ? "Refreshing..." : "Refresh") {
-            Task { await load() }
-        }
-        .buttonStyle(.borderedProminent)
-        .disabled(isBusy)
-    }
-
-    private var markAllReadButton: some View {
-        Button("Mark all read") {
-            Task { await markAllRead() }
-        }
-        .buttonStyle(.bordered)
-        .disabled(isBusy || unreadCount == 0)
     }
 
     private var isBusy: Bool {
@@ -145,10 +110,25 @@ struct NotificationsView: View {
     }
 
     private func handleOpen(_ notification: NotificationItem) {
-        pushCoordinator.queueNavigationLink(notification.LinkUrl)
+        let rawLink = notification.LinkUrl?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if isKidUser {
+            if rawLink.hasPrefix("/kids") || rawLink.isEmpty || rawLink.hasPrefix("/notifications") {
+                dismiss()
+            } else if let url = URL(string: rawLink), let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https" {
+                openURL(url)
+            } else {
+                pushCoordinator.queueNavigationLink(notification.LinkUrl)
+            }
+        } else {
+            pushCoordinator.queueNavigationLink(notification.LinkUrl)
+        }
         if !notification.IsRead {
             Task { await markRead(notification) }
         }
+    }
+
+    private var isKidUser: Bool {
+        authStore.tokens?.role == "Kid"
     }
 
     private func load() async {
@@ -165,6 +145,20 @@ struct NotificationsView: View {
             unreadCount = response.UnreadCount
             await pushCoordinator.applyBadgeCount(response.UnreadCount)
             status = .ready
+        } catch is CancellationError {
+            if notifications.isEmpty {
+                status = .idle
+            } else {
+                status = .ready
+            }
+            return
+        } catch let urlError as URLError where urlError.code == .cancelled {
+            if notifications.isEmpty {
+                status = .idle
+            } else {
+                status = .ready
+            }
+            return
         } catch {
             status = .error
             errorMessage = (error as? ApiError)?.message ?? "Failed to load notifications."
@@ -222,6 +216,20 @@ struct NotificationsView: View {
             unreadCount = response.UnreadCount
             await pushCoordinator.applyBadgeCount(response.UnreadCount)
             status = .ready
+        } catch is CancellationError {
+            if notifications.isEmpty {
+                status = .idle
+            } else {
+                status = .ready
+            }
+            return
+        } catch let urlError as URLError where urlError.code == .cancelled {
+            if notifications.isEmpty {
+                status = .idle
+            } else {
+                status = .ready
+            }
+            return
         } catch {
             status = .error
             errorMessage = (error as? ApiError)?.message ?? "Failed to refresh notifications."
@@ -261,10 +269,6 @@ private struct NotificationCardView: View {
             actionSection
         }
         .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color(.secondarySystemBackground))
-        )
     }
 
     private var actionSection: some View {
