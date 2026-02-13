@@ -30,16 +30,16 @@ REMINDER_TYPE_DAILY = "DailyJobs"
 REMINDER_TYPE_HABITS = "Habits"
 
 REMINDER_EMOJIS = [
-    "⭐️",
-    "⚡️",
-    "☀️",
-    "☘️",
-    "✈️",
-    "⚽️",
-    "⏰",
-    "⌛️",
-    "✅",
-    "✨",
+    "🦸",
+    "🚀",
+    "🧠",
+    "🧩",
+    "🌈",
+    "🦊",
+    "🐯",
+    "🍀",
+    "🎈",
+    "🏁",
 ]
 
 

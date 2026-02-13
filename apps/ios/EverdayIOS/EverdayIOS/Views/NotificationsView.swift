@@ -62,7 +62,7 @@ struct NotificationsView: View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Notifications")
                 .font(.title2.bold())
-            Text("Review all notifications, including dismissed items.")
+            Text("Review your notifications.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
             if unreadCount > 0 {
@@ -157,7 +157,7 @@ struct NotificationsView: View {
         do {
             let response = try await NotificationsApi.fetchNotifications(
                 includeRead: true,
-                includeDismissed: true,
+                includeDismissed: false,
                 limit: 200,
                 offset: 0
             )
@@ -214,7 +214,7 @@ struct NotificationsView: View {
         do {
             let response = try await NotificationsApi.fetchNotifications(
                 includeRead: true,
-                includeDismissed: true,
+                includeDismissed: false,
                 limit: 200,
                 offset: 0
             )

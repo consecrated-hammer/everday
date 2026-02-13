@@ -41,10 +41,10 @@ struct KidsNotificationBellIcon: View {
     var body: some View {
         ZStack {
             Circle()
-                .fill(hasUnread ? Color.red.opacity(0.2) : Color.orange.opacity(0.2))
+                .fill(hasUnread ? Color.red.opacity(0.2) : Color(.systemGray5))
                 .frame(width: 28, height: 28)
             Image(systemName: hasUnread ? "bell.badge.fill" : "bell.fill")
-                .foregroundStyle(hasUnread ? .red : .orange)
+                .foregroundStyle(hasUnread ? .red : .secondary)
         }
     }
 }
