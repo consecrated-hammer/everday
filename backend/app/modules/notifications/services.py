@@ -1,13 +1,47 @@
 import json
+import logging
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.modules.auth.deps import NowUtc, UserContext
 from app.modules.auth.models import User
-from app.modules.notifications.models import Notification
+from app.modules.notifications.models import Notification, NotificationDeviceRegistration
+from app.modules.notifications.push_service import (
+    RegisterNotificationDevice,
+    SendPushForNotification,
+    UnregisterNotificationDevice,
+)
 from app.modules.notifications.schemas import NotificationTargetScope
 from app.modules.notifications.utils.rbac import IsAdmin
+from app.modules.notifications.utils.text import NormalizeNotificationTitle
+
+logger = logging.getLogger("notifications")
+SYSTEM_CREATED_BY_NAME = "Everday"
+SYSTEM_NOTIFICATION_TYPES: frozenset[str] = frozenset(
+    {
+        "KidsReminder",
+        "HealthReminder",
+        "HealthAiSuggestion",
+        "TaskReminder",
+        "TaskOverdue",
+    }
+)
+
+
+def IsSystemNotificationType(notification_type: str | None) -> bool:
+    return (notification_type or "").strip() in SYSTEM_NOTIFICATION_TYPES
+
+
+def ResolveNotificationCreatedByName(
+    *,
+    created_by_user_id: int,
+    created_by_name: str | None,
+    notification_type: str | None,
+) -> str | None:
+    if created_by_user_id <= 0 or IsSystemNotificationType(notification_type):
+        return SYSTEM_CREATED_BY_NAME
+    return created_by_name
 
 
 def _SerializeJson(value: dict | None) -> str | None:
@@ -92,6 +126,7 @@ def CreateNotification(
     db.add(record)
     db.commit()
     db.refresh(record)
+    _DispatchPushForNotifications(db, [record])
     return record
 
 
@@ -142,6 +177,7 @@ def CreateNotificationsForUsers(
     db.commit()
     for record in records:
         db.refresh(record)
+    _DispatchPushForNotifications(db, records)
     return records
 
 
@@ -178,6 +214,25 @@ def CountUnread(db: Session, *, user_id: int) -> int:
         .scalar()
     )
     return int(value or 0)
+
+
+def CountUnreadByUserIds(db: Session, *, user_ids: set[int]) -> dict[int, int]:
+    if not user_ids:
+        return {}
+    rows = (
+        db.query(Notification.UserId, func.count(Notification.Id).label("UnreadCount"))
+        .filter(
+            Notification.UserId.in_(user_ids),
+            Notification.IsRead == False,  # noqa: E712
+            Notification.IsDismissed == False,  # noqa: E712
+        )
+        .group_by(Notification.UserId)
+        .all()
+    )
+    counts = {int(row.UserId): int(row.UnreadCount or 0) for row in rows}
+    for user_id in user_ids:
+        counts.setdefault(user_id, 0)
+    return counts
 
 
 def MarkNotificationRead(
@@ -251,13 +306,68 @@ def MarkAllRead(db: Session, *, user_id: int) -> int:
     return int(updated or 0)
 
 
+def RegisterUserNotificationDevice(
+    db: Session,
+    *,
+    user_id: int,
+    platform: str,
+    device_token: str,
+    device_id: str | None,
+    push_environment: str,
+    app_version: str | None,
+    build_number: str | None,
+) -> NotificationDeviceRegistration:
+    return RegisterNotificationDevice(
+        db,
+        user_id=user_id,
+        platform=platform,
+        device_token=device_token,
+        device_id=device_id,
+        push_environment=push_environment,
+        app_version=app_version,
+        build_number=build_number,
+    )
+
+
+def UnregisterUserNotificationDevice(
+    db: Session,
+    *,
+    user_id: int,
+    platform: str,
+    device_token: str | None,
+    device_id: str | None,
+) -> int:
+    return UnregisterNotificationDevice(
+        db,
+        user_id=user_id,
+        platform=platform,
+        device_token=device_token,
+        device_id=device_id,
+    )
+
+
+def _DispatchPushForNotifications(db: Session, records: list[Notification]) -> None:
+    if not records:
+        return
+    unread_count_map = CountUnreadByUserIds(db, user_ids={record.UserId for record in records})
+    for record in records:
+        try:
+            SendPushForNotification(
+                db,
+                notification=record,
+                badge_count=unread_count_map.get(record.UserId, 0),
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception("Failed push dispatch notification_id=%s", record.Id)
+
+
 def BuildNotificationPayload(record: Notification) -> dict:
     return {
         "Id": record.Id,
         "UserId": record.UserId,
         "CreatedByUserId": record.CreatedByUserId,
         "Type": record.Type,
-        "Title": record.Title,
+        "Title": NormalizeNotificationTitle(record.Title, record.Type),
         "Body": record.Body,
         "LinkUrl": record.LinkUrl,
         "ActionLabel": record.ActionLabel,

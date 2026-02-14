@@ -8,9 +8,14 @@ from app.db import GetDb
 from app.modules.auth.deps import RequireAuthenticated, UserContext
 from app.modules.auth.models import User
 from app.modules.notifications.schemas import (
+    NotificationBadgeCountResponse,
     NotificationBulkUpdateResponse,
     NotificationCreate,
     NotificationCreateResponse,
+    NotificationDeviceRegistrationOut,
+    NotificationDeviceUnregisterRequest,
+    NotificationDeviceUnregisterResponse,
+    NotificationDeviceRegisterRequest,
     NotificationListResponse,
     NotificationOut,
 )
@@ -19,10 +24,14 @@ from app.modules.notifications.services import (
     CountUnread,
     CreateNotificationsForUsers,
     DismissNotification,
+    IsSystemNotificationType,
     ListNotifications,
     MarkAllRead,
     MarkNotificationRead,
+    RegisterUserNotificationDevice,
+    ResolveNotificationCreatedByName,
     ResolveTargetUserIds,
+    UnregisterUserNotificationDevice,
 )
 
 router = APIRouter(prefix="/api/notifications", tags=["notifications"])
@@ -54,8 +63,24 @@ def _LoadUserNames(db: Session, user_ids: set[int]) -> dict[int, str]:
 
 def _BuildNotificationOut(record, name_map: dict[int, str]) -> NotificationOut:
     payload = BuildNotificationPayload(record)
-    payload["CreatedByName"] = name_map.get(record.CreatedByUserId)
+    payload["CreatedByName"] = ResolveNotificationCreatedByName(
+        created_by_user_id=record.CreatedByUserId,
+        created_by_name=name_map.get(record.CreatedByUserId),
+        notification_type=payload.get("Type"),
+    )
     return NotificationOut(**payload)
+
+
+def _BuildDeviceOut(record) -> NotificationDeviceRegistrationOut:
+    return NotificationDeviceRegistrationOut(
+        Id=record.Id,
+        Platform=record.Platform,
+        DeviceId=record.DeviceId,
+        PushEnvironment=record.PushEnvironment,
+        IsActive=record.IsActive,
+        LastSeenAt=record.LastSeenAt,
+        UpdatedAt=record.UpdatedAt,
+    )
 
 
 @router.get("", response_model=NotificationListResponse)
@@ -76,7 +101,11 @@ def ListNotificationItems(
             limit=limit,
             offset=offset,
         )
-        user_ids = {record.CreatedByUserId for record in records}
+        user_ids = {
+            record.CreatedByUserId
+            for record in records
+            if record.CreatedByUserId > 0 and not IsSystemNotificationType(record.Type)
+        }
         name_map = _LoadUserNames(db, user_ids)
         notifications = [_BuildNotificationOut(record, name_map) for record in records]
         unread_count = CountUnread(db, user_id=user.Id)
@@ -113,7 +142,11 @@ def CreateNotificationItems(
             source_id=payload.SourceId,
             meta=payload.Meta,
         )
-        user_ids = {record.CreatedByUserId for record in records}
+        user_ids = {
+            record.CreatedByUserId
+            for record in records
+            if record.CreatedByUserId > 0 and not IsSystemNotificationType(record.Type)
+        }
         name_map = _LoadUserNames(db, user_ids)
         notifications = [_BuildNotificationOut(record, name_map) for record in records]
         return NotificationCreateResponse(Notifications=notifications)
@@ -130,6 +163,63 @@ def CreateNotificationItems(
         _handle_db_error(exc)
 
 
+@router.get("/badge-count", response_model=NotificationBadgeCountResponse)
+def GetBadgeCount(
+    db: Session = Depends(GetDb),
+    user: UserContext = Depends(RequireAuthenticated),
+) -> NotificationBadgeCountResponse:
+    try:
+        unread_count = CountUnread(db, user_id=user.Id)
+        return NotificationBadgeCountResponse(UnreadCount=unread_count)
+    except ProgrammingError as exc:
+        _handle_db_error(exc)
+
+
+@router.post("/devices/register", response_model=NotificationDeviceRegistrationOut)
+def RegisterDevice(
+    payload: NotificationDeviceRegisterRequest,
+    db: Session = Depends(GetDb),
+    user: UserContext = Depends(RequireAuthenticated),
+) -> NotificationDeviceRegistrationOut:
+    try:
+        record = RegisterUserNotificationDevice(
+            db,
+            user_id=user.Id,
+            platform=payload.Platform.value,
+            device_token=payload.DeviceToken,
+            device_id=payload.DeviceId,
+            push_environment=payload.PushEnvironment.value,
+            app_version=payload.AppVersion,
+            build_number=payload.BuildNumber,
+        )
+        return _BuildDeviceOut(record)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except ProgrammingError as exc:
+        _handle_db_error(exc)
+
+
+@router.post("/devices/unregister", response_model=NotificationDeviceUnregisterResponse)
+def UnregisterDevice(
+    payload: NotificationDeviceUnregisterRequest,
+    db: Session = Depends(GetDb),
+    user: UserContext = Depends(RequireAuthenticated),
+) -> NotificationDeviceUnregisterResponse:
+    try:
+        updated = UnregisterUserNotificationDevice(
+            db,
+            user_id=user.Id,
+            platform=payload.Platform.value,
+            device_token=payload.DeviceToken,
+            device_id=payload.DeviceId,
+        )
+        return NotificationDeviceUnregisterResponse(UpdatedCount=updated)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except ProgrammingError as exc:
+        _handle_db_error(exc)
+
+
 @router.post("/{notification_id}/read", response_model=NotificationOut)
 def MarkNotificationReadRoute(
     notification_id: int,
@@ -140,7 +230,12 @@ def MarkNotificationReadRoute(
         record = MarkNotificationRead(db, user_id=user.Id, notification_id=notification_id)
         if not record:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Notification not found")
-        name_map = _LoadUserNames(db, {record.CreatedByUserId})
+        user_ids = (
+            {record.CreatedByUserId}
+            if record.CreatedByUserId > 0 and not IsSystemNotificationType(record.Type)
+            else set()
+        )
+        name_map = _LoadUserNames(db, user_ids)
         return _BuildNotificationOut(record, name_map)
     except ProgrammingError as exc:
         _handle_db_error(exc)
@@ -156,7 +251,12 @@ def DismissNotificationRoute(
         record = DismissNotification(db, user_id=user.Id, notification_id=notification_id)
         if not record:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Notification not found")
-        name_map = _LoadUserNames(db, {record.CreatedByUserId})
+        user_ids = (
+            {record.CreatedByUserId}
+            if record.CreatedByUserId > 0 and not IsSystemNotificationType(record.Type)
+            else set()
+        )
+        name_map = _LoadUserNames(db, user_ids)
         return _BuildNotificationOut(record, name_map)
     except ProgrammingError as exc:
         _handle_db_error(exc)

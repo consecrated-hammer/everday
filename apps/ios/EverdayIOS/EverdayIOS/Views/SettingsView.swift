@@ -6,67 +6,53 @@ struct SettingsView: View {
 
     var body: some View {
         let listView = List {
-            Section("Appearance") {
-                NavigationLink {
+            Section("Preferences") {
+                if isKid {
+                    NavigationLink("Reminder settings") {
+                        KidsReminderSettingsView()
+                    }
+                    NavigationLink("Notifications") {
+                        NotificationsView()
+                    }
+                } else {
+                    NavigationLink("Health settings") {
+                        HealthSettingsView()
+                    }
+                    NavigationLink("Task settings") {
+                        SettingsTasksView()
+                    }
+                }
+
+                NavigationLink("Appearance") {
                     SettingsAppearanceView()
-                } label: {
-                    Label("Appearance", systemImage: "paintpalette")
                 }
             }
 
             Section("Account") {
-                NavigationLink {
+                NavigationLink("Account") {
                     AccountView()
-                } label: {
-                    Label("Account", systemImage: "person.crop.circle")
-                }
-            }
-
-            if !isKid {
-                Section("Health") {
-                    NavigationLink {
-                        HealthSettingsView()
-                    } label: {
-                        Label("Health settings", systemImage: "heart.text.square")
-                    }
-                }
-            }
-
-            if !isKid {
-                Section("Tasks") {
-                    NavigationLink {
-                        SettingsTasksView()
-                    } label: {
-                        Label("Task settings", systemImage: "checklist")
-                    }
-                }
-            }
-
-            if isParent {
-                Section("Integrations") {
-                    NavigationLink {
-                        SettingsIntegrationsView()
-                    } label: {
-                        Label("Integrations", systemImage: "bolt.horizontal")
-                    }
                 }
 
-                Section("Users") {
-                    NavigationLink {
+                if isParent {
+                    NavigationLink("User access") {
                         SettingsUsersView()
-                    } label: {
-                        Label("User access", systemImage: "person.3")
                     }
                 }
             }
-            Section("System") {
-                NavigationLink {
+
+            Section("Support") {
+                if isParent {
+                    NavigationLink("Integrations") {
+                        SettingsIntegrationsView()
+                    }
+                }
+
+                NavigationLink("Diagnostics") {
                     SystemSettingsView()
-                } label: {
-                    Label("System settings", systemImage: "gearshape")
                 }
             }
         }
+        .listStyle(.insetGrouped)
 
         Group {
             if horizontalSizeClass == .regular {

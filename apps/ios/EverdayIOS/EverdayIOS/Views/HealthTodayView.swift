@@ -10,7 +10,13 @@ struct HealthTodayView: View {
     @State private var weeklySummary: HealthWeeklySummary?
     @State private var weightHistory: [HealthWeightHistoryEntry] = []
     @State private var stepsHistory: [HealthStepsHistoryEntry] = []
-    @State private var showEditSheet = false
+    @State private var showStepsSheet = false
+    @State private var showWeightSheet = false
+    @State private var lastHandledQuickLogStepsRequestNonce = 0
+    @State private var lastHandledQuickLogWeightRequestNonce = 0
+    var onQuickLogMeal: () -> Void = {}
+    var quickLogStepsRequestNonce: Int = 0
+    var quickLogWeightRequestNonce: Int = 0
 
     var body: some View {
         ScrollView {
@@ -36,13 +42,19 @@ struct HealthTodayView: View {
             .frame(maxWidth: 860)
             .frame(maxWidth: .infinity)
         }
-        .sheet(isPresented: $showEditSheet) {
-            HealthTodayEditSheet(
-                initialSteps: logResponse?.DailyLog?.Steps ?? logResponse?.Summary.Steps ?? 0,
-                initialWeight: logResponse?.DailyLog?.WeightKg,
-                initialStepFactor: logResponse?.DailyLog?.StepKcalFactorOverride ?? logResponse?.Targets.StepKcalFactor,
-                onSave: { steps, weight, stepFactor in
-                    Task { await updateSteps(steps: steps, weight: weight, stepFactor: stepFactor) }
+        .sheet(isPresented: $showStepsSheet) {
+            HealthTodayStepsSheet(
+                initialSteps: currentSteps,
+                onSave: { steps in
+                    Task { await updateStepsValue(steps) }
+                }
+            )
+        }
+        .sheet(isPresented: $showWeightSheet) {
+            HealthTodayWeightSheet(
+                initialWeight: currentWeight,
+                onSave: { weight in
+                    Task { await updateWeightValue(weight) }
                 }
             )
         }
@@ -51,16 +63,30 @@ struct HealthTodayView: View {
                 await load()
             }
         }
+        .onAppear {
+            handleQuickLogStepsRequest(quickLogStepsRequestNonce)
+            handleQuickLogWeightRequest(quickLogWeightRequestNonce)
+        }
+        .onChange(of: quickLogStepsRequestNonce) { _, newValue in
+            handleQuickLogStepsRequest(newValue)
+        }
+        .onChange(of: quickLogWeightRequestNonce) { _, newValue in
+            handleQuickLogWeightRequest(newValue)
+        }
     }
 
     private var headerCard: some View {
         HealthSectionCard {
             HealthSectionHeader(
                 title: "Today",
-                subtitle: "\(HealthFormatters.formatLongDate(todayKey)) | Keep the day on track.",
+                subtitle: nil,
                 trailing: AnyView(
-                    Button("Edit") { showEditSheet = true }
-                        .buttonStyle(.bordered)
+                    Button {
+                        onQuickLogMeal()
+                    } label: {
+                        Label("Log meal", systemImage: "fork.knife")
+                    }
+                    .buttonStyle(.borderedProminent)
                 )
             )
 
@@ -94,7 +120,16 @@ struct HealthTodayView: View {
 
     private var stepsChartCard: some View {
         HealthSectionCard {
-            HealthSectionHeader(title: "Steps this week", subtitle: "7 day trend.")
+            HealthSectionHeader(
+                title: "Steps this week",
+                subtitle: "7 day trend.",
+                trailing: AnyView(
+                    Button("Log steps") {
+                        showStepsSheet = true
+                    }
+                    .buttonStyle(.bordered)
+                )
+            )
             if stepsHistory.isEmpty {
                 HealthEmptyState(message: "No steps logged yet.")
             } else {
@@ -115,7 +150,16 @@ struct HealthTodayView: View {
 
     private var weightChartCard: some View {
         HealthSectionCard {
-            HealthSectionHeader(title: "Weight trend", subtitle: "Recent check ins.")
+            HealthSectionHeader(
+                title: "Weight trend",
+                subtitle: "Recent check ins.",
+                trailing: AnyView(
+                    Button("Log weight") {
+                        showWeightSheet = true
+                    }
+                    .buttonStyle(.bordered)
+                )
+            )
             if weightHistory.isEmpty {
                 HealthEmptyState(message: "No weight data yet.")
             } else {
@@ -225,6 +269,18 @@ struct HealthTodayView: View {
         return HealthFormatters.dateKey(from: start)
     }
 
+    private var currentSteps: Int {
+        logResponse?.DailyLog?.Steps ?? logResponse?.Summary.Steps ?? 0
+    }
+
+    private var currentWeight: Double? {
+        logResponse?.DailyLog?.WeightKg
+    }
+
+    private var currentStepFactor: Double? {
+        logResponse?.DailyLog?.StepKcalFactorOverride ?? logResponse?.Targets.StepKcalFactor
+    }
+
     private func adjustedCalorieTarget(targets: HealthTargets) -> Double {
         let base = Double(targets.DailyCalorieTarget ?? 0)
         if base == 0 { return 0 }
@@ -271,17 +327,40 @@ struct HealthTodayView: View {
         }
     }
 
-    private func updateSteps(steps: Int, weight: Double?, stepFactor: Double?) async {
-        guard let _ = logResponse else { return }
+    private func updateStepsValue(_ steps: Int) async {
+        await updateTodayMetrics(steps: steps, weight: currentWeight)
+    }
+
+    private func updateWeightValue(_ weight: Double) async {
+        await updateTodayMetrics(steps: currentSteps, weight: weight)
+    }
+
+    private func handleQuickLogStepsRequest(_ nonce: Int) {
+        guard nonce > lastHandledQuickLogStepsRequestNonce else { return }
+        lastHandledQuickLogStepsRequestNonce = nonce
+        showWeightSheet = false
+        showStepsSheet = true
+    }
+
+    private func handleQuickLogWeightRequest(_ nonce: Int) {
+        guard nonce > lastHandledQuickLogWeightRequestNonce else { return }
+        lastHandledQuickLogWeightRequestNonce = nonce
+        showStepsSheet = false
+        showWeightSheet = true
+    }
+
+    private func updateTodayMetrics(steps: Int, weight: Double?) async {
+        guard logResponse != nil else { return }
         do {
             status = .loading
             errorMessage = ""
             _ = try await HealthApi.updateDailySteps(date: todayKey, request: HealthStepUpdateRequest(
                 Steps: steps,
-                StepKcalFactorOverride: stepFactor,
+                StepKcalFactorOverride: currentStepFactor,
                 WeightKg: weight
             ))
-            showEditSheet = false
+            showStepsSheet = false
+            showWeightSheet = false
             await load()
         } catch {
             status = .error
@@ -316,25 +395,17 @@ private enum LoadState {
     case error
 }
 
-private struct HealthTodayEditSheet: View {
+private struct HealthTodayStepsSheet: View {
     @Environment(\.dismiss) private var dismiss
     let initialSteps: Int
-    let initialWeight: Double?
-    let initialStepFactor: Double?
-    let onSave: (Int, Double?, Double?) -> Void
+    let onSave: (Int) -> Void
 
     @State private var stepsText: String
-    @State private var weightText: String
-    @State private var stepFactorText: String
 
-    init(initialSteps: Int, initialWeight: Double?, initialStepFactor: Double?, onSave: @escaping (Int, Double?, Double?) -> Void) {
+    init(initialSteps: Int, onSave: @escaping (Int) -> Void) {
         self.initialSteps = initialSteps
-        self.initialWeight = initialWeight
-        self.initialStepFactor = initialStepFactor
         self.onSave = onSave
         _stepsText = State(initialValue: String(initialSteps))
-        _weightText = State(initialValue: initialWeight.map { String($0) } ?? "")
-        _stepFactorText = State(initialValue: initialStepFactor.map { String($0) } ?? "")
     }
 
     var body: some View {
@@ -344,23 +415,15 @@ private struct HealthTodayEditSheet: View {
                     TextField("Steps", text: $stepsText)
                         .keyboardType(.numberPad)
                 }
-                Section("Weight") {
-                    TextField("Weight (kg)", text: $weightText)
-                        .keyboardType(.decimalPad)
-                }
-                Section("Step calorie factor") {
-                    TextField("Override factor", text: $stepFactorText)
-                        .keyboardType(.decimalPad)
-                }
             }
-            .navigationTitle("Edit today")
+            .navigationTitle("Log steps")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
-                        onSave(parsedSteps, parsedWeight, parsedStepFactor)
+                        onSave(parsedSteps)
                     }
                     .disabled(!isDirty || !isValid)
                 }
@@ -372,27 +435,63 @@ private struct HealthTodayEditSheet: View {
         Int(stepsText) ?? 0
     }
 
-    private var parsedWeight: Double? {
-        let value = Double(weightText)
-        return value
-    }
-
-    private var parsedStepFactor: Double? {
-        let value = Double(stepFactorText)
-        return value
-    }
-
     private var isDirty: Bool {
-        let stepsDirty = stepsText != String(initialSteps)
-        let weightDirty = weightText != (initialWeight.map { String($0) } ?? "")
-        let factorDirty = stepFactorText != (initialStepFactor.map { String($0) } ?? "")
-        return stepsDirty || weightDirty || factorDirty
+        stepsText != String(initialSteps)
     }
 
     private var isValid: Bool {
-        if Int(stepsText) == nil { return false }
-        if !weightText.isEmpty && Double(weightText) == nil { return false }
-        if !stepFactorText.isEmpty && Double(stepFactorText) == nil { return false }
-        return true
+        guard let steps = Int(stepsText) else { return false }
+        return steps >= 0
+    }
+}
+
+private struct HealthTodayWeightSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let initialWeight: Double?
+    let onSave: (Double) -> Void
+
+    @State private var weightText: String
+
+    init(initialWeight: Double?, onSave: @escaping (Double) -> Void) {
+        self.initialWeight = initialWeight
+        self.onSave = onSave
+        _weightText = State(initialValue: initialWeight.map { String($0) } ?? "")
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Weight") {
+                    TextField("Weight (kg)", text: $weightText)
+                        .keyboardType(.decimalPad)
+                }
+            }
+            .navigationTitle("Log weight")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        guard let parsedWeight else { return }
+                        onSave(parsedWeight)
+                    }
+                    .disabled(!isDirty || !isValid)
+                }
+            }
+        }
+    }
+
+    private var parsedWeight: Double? {
+        Double(weightText)
+    }
+
+    private var isDirty: Bool {
+        weightText != (initialWeight.map { String($0) } ?? "")
+    }
+
+    private var isValid: Bool {
+        guard let weight = parsedWeight else { return false }
+        return weight > 0
     }
 }

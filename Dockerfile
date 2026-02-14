@@ -37,6 +37,9 @@ FROM python:3.14-slim
 
 WORKDIR /app
 
+ARG VITE_COMMIT_SHA=unknown
+LABEL org.everday.commit_sha="${VITE_COMMIT_SHA}"
+
 RUN apt-get update \
   && apt-get install -y --no-install-recommends curl gnupg2 apt-transport-https ca-certificates unixodbc \
   && curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor -o /usr/share/keyrings/microsoft-prod.gpg \

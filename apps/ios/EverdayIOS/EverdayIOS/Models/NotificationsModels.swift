@@ -38,3 +38,34 @@ struct NotificationsListResponse: Decodable {
 struct NotificationsBulkUpdateResponse: Decodable {
     let UpdatedCount: Int
 }
+
+struct NotificationBadgeCountResponse: Decodable {
+    let UnreadCount: Int
+}
+
+struct NotificationDeviceRegisterRequest: Encodable {
+    let Platform: String
+    let DeviceToken: String
+    let DeviceId: String?
+    let PushEnvironment: String
+    let AppVersion: String?
+    let BuildNumber: String?
+}
+
+struct NotificationDeviceRegistrationResponse: Decodable {
+    let Id: Int
+    let Platform: String
+    let DeviceId: String?
+    let PushEnvironment: String
+    let IsActive: Bool
+}
+
+struct NotificationDeviceUnregisterRequest: Encodable {
+    let Platform: String
+    let DeviceToken: String?
+    let DeviceId: String?
+}
+
+struct NotificationDeviceUnregisterResponse: Decodable {
+    let UpdatedCount: Int
+}

@@ -36,4 +36,17 @@ enum KidsApi {
             requiresAuth: true
         )
     }
+
+    static func fetchReminderSettings() async throws -> KidsReminderSettings {
+        try await ApiClient.shared.request(path: "kids/me/reminder-settings", requiresAuth: true)
+    }
+
+    static func updateReminderSettings(_ payload: KidsReminderSettingsUpdate) async throws -> KidsReminderSettings {
+        try await ApiClient.shared.request(
+            path: "kids/me/reminder-settings",
+            method: "PUT",
+            body: payload,
+            requiresAuth: true
+        )
+    }
 }

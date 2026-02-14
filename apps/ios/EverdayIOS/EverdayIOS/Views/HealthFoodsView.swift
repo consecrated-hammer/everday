@@ -84,7 +84,7 @@ struct HealthFoodsView: View {
             }
             Button("Cancel", role: .cancel) { templateToDelete = nil }
         } message: {
-            Text("This will remove the meal template.")
+            Text("This will remove the meal.")
         }
         .task {
             if status == .idle {
@@ -95,10 +95,10 @@ struct HealthFoodsView: View {
 
     private var headerCard: some View {
         HealthSectionCard {
-            HealthSectionHeader(title: "Foods", subtitle: "Manage foods and meal templates.")
+            HealthSectionHeader(title: "Foods", subtitle: "Manage foods and meals.")
             Picker("Tab", selection: $tab) {
                 Text("Foods").tag(FoodTab.foods)
-                Text("Templates").tag(FoodTab.templates)
+                Text("Meals").tag(FoodTab.templates)
             }
             .pickerStyle(.segmented)
 
@@ -202,14 +202,14 @@ struct HealthFoodsView: View {
             }
 
             if filteredTemplates.isEmpty {
-                HealthEmptyState(message: "No meal templates yet.")
+                HealthEmptyState(message: "No meals yet.")
             }
         }
     }
 
     private var aiMealCard: some View {
         HealthSectionCard {
-            HealthSectionHeader(title: "AI meal helper", subtitle: "Describe a meal to build a template.")
+            HealthSectionHeader(title: "AI meal helper", subtitle: "Describe a meal to build a saved meal.")
             TextField("Describe your meal", text: $aiMealText, axis: .vertical)
             Button(aiMealStatus == .loading ? "Parsing..." : "Parse meal") {
                 Task { await parseMeal() }
@@ -227,7 +227,7 @@ struct HealthFoodsView: View {
                     Text("\(result.CaloriesPerServing) kcal | \(HealthFormatters.formatNumber(result.ProteinPerServing, decimals: 1)) g protein")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    Button("Create meal template") {
+                    Button("Create meal") {
                         Task { await createMealFromParse(result) }
                     }
                     .buttonStyle(.borderedProminent)
@@ -790,7 +790,7 @@ private struct TemplateFormSheet: View {
         NavigationStack {
             List {
                 Section("Details") {
-                    TextField("Template name", text: $name)
+                    TextField("Meal name", text: $name)
                     TextField("Servings", text: $servings)
                         .keyboardType(.decimalPad)
                     Toggle("Favourite", isOn: $isFavourite)
@@ -991,7 +991,7 @@ private struct TemplateItemSheet: View {
                     TextField("Notes", text: $notes, axis: .vertical)
                 }
             }
-            .navigationTitle("Template item")
+            .navigationTitle("Meal item")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }

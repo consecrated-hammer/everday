@@ -33,4 +33,29 @@ enum NotificationsApi {
             requiresAuth: true
         )
     }
+
+    static func fetchBadgeCount() async throws -> NotificationBadgeCountResponse {
+        try await ApiClient.shared.request(
+            path: "notifications/badge-count",
+            requiresAuth: true
+        )
+    }
+
+    static func registerPushDevice(_ request: NotificationDeviceRegisterRequest) async throws -> NotificationDeviceRegistrationResponse {
+        try await ApiClient.shared.request(
+            path: "notifications/devices/register",
+            method: "POST",
+            body: request,
+            requiresAuth: true
+        )
+    }
+
+    static func unregisterPushDevice(_ request: NotificationDeviceUnregisterRequest) async throws -> NotificationDeviceUnregisterResponse {
+        try await ApiClient.shared.request(
+            path: "notifications/devices/unregister",
+            method: "POST",
+            body: request,
+            requiresAuth: true
+        )
+    }
 }

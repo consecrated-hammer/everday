@@ -148,3 +148,45 @@ class PocketMoneyRule(Base):
     CreatedByUserId = Column(Integer, nullable=False)
     CreatedAt = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
     UpdatedAt = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+
+
+class ReminderSettings(Base):
+    __tablename__ = "reminder_settings"
+    __table_args__ = (
+        UniqueConstraint("KidUserId", name="uq_kids_reminder_settings_kid"),
+        {"schema": "kids"},
+    )
+
+    Id = Column(Integer, primary_key=True, index=True)
+    KidUserId = Column(Integer, nullable=False, index=True)
+    DailyJobsRemindersEnabled = Column(Boolean, nullable=False, default=True)
+    DailyJobsReminderTime = Column(String(5), nullable=False, default="19:00")
+    HabitsRemindersEnabled = Column(Boolean, nullable=False, default=True)
+    HabitsReminderTime = Column(String(5), nullable=False, default="19:00")
+    ReminderTimeZone = Column(String(64), nullable=False, default="Australia/Adelaide")
+    CreatedAt = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    UpdatedAt = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+
+
+class ReminderRun(Base):
+    __tablename__ = "reminder_runs"
+    __table_args__ = (
+        UniqueConstraint(
+            "KidUserId",
+            "RunDate",
+            "RunTime",
+            "ReminderType",
+            name="uq_kids_reminder_runs_kid_date_time_type",
+        ),
+        {"schema": "kids"},
+    )
+
+    Id = Column(Integer, primary_key=True, index=True)
+    KidUserId = Column(Integer, nullable=False, index=True)
+    RunDate = Column(Date, nullable=False, index=True)
+    RunTime = Column(String(5), nullable=False)
+    ReminderType = Column(String(20), nullable=False)
+    Result = Column(String(20), nullable=False)
+    NotificationSent = Column(Boolean, nullable=False, default=False)
+    ErrorMessage = Column(String(500))
+    CreatedAt = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)

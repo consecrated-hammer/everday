@@ -9,6 +9,7 @@ struct KidsAdminView: View {
     @State private var activeKidId: Int?
     @State private var activeTab: KidsAdminTab = .month
     @State private var monthCursor: Date = Calendar.current.date(from: Calendar.current.dateComponents([.year, .month], from: Date())) ?? Date()
+    @State private var calendarDisplayMode: KidsAdminCalendarDisplayMode = .chores
 
     @State private var monthSummary: KidsMonthSummaryResponse?
     @State private var monthOverview: KidsMonthOverviewResponse?
@@ -212,6 +213,7 @@ struct KidsAdminView: View {
     private var monthTabBody: some View {
         VStack(alignment: .leading, spacing: 16) {
             monthHeader
+            currentTotalHeroCard
             monthSummaryCard
             calendarCard
         }
@@ -268,7 +270,6 @@ struct KidsAdminView: View {
     }
 
     private var monthSummaryCard: some View {
-        let totals = adminTotals
         return VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Month summary")
@@ -286,21 +287,35 @@ struct KidsAdminView: View {
                 summaryMetric(label: "Bonus approved", value: monthSummary.map { KidsFormatters.formatCurrency($0.ApprovedBonusTotal) } ?? "-")
                 summaryMetric(label: "Bonus pending", value: monthSummary.map { KidsFormatters.formatCurrency($0.PendingBonusTotal) } ?? "-")
             }
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color(.systemBackground))
+        )
+    }
 
-            Divider()
+    private var currentTotalHeroCard: some View {
+        let totals = adminTotals
+        let currentValue = monthSummary != nil ? KidsFormatters.formatCurrency(totals.current) : "-"
+        let projectedValue = monthSummary != nil ? KidsFormatters.formatCurrency(totals.projected) : "-"
+        return VStack(alignment: .leading, spacing: 10) {
+            Text("Current total")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
 
-            HStack {
-                Text("Current total")
-                Spacer()
-                Text(monthSummary != nil ? KidsFormatters.formatCurrency(totals.current) : "-")
-                    .font(.headline)
-            }
+            Text(currentValue)
+                .font(.system(size: 34, weight: .bold, design: .rounded))
+                .foregroundStyle(.primary)
 
             HStack {
                 Text("Projected total")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
                 Spacer()
-                Text(monthSummary != nil ? KidsFormatters.formatCurrency(totals.projected) : "-")
+                Text(projectedValue)
                     .font(.headline)
+                    .foregroundStyle(.primary)
             }
         }
         .padding(16)
@@ -318,6 +333,13 @@ struct KidsAdminView: View {
                 Text("Tap a day to edit entries.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
+                Picker("Calendar mode", selection: $calendarDisplayMode) {
+                    ForEach(KidsAdminCalendarDisplayMode.allCases, id: \.self) { mode in
+                        Text(mode.label).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .padding(.top, 4)
                 if isCompactCalendar {
                     calendarLegend
                 }
@@ -348,38 +370,41 @@ struct KidsAdminView: View {
 
                                 if isCompactCalendar {
                                     HStack(spacing: 6) {
-                                        if let icon = statusIcon(for: cell) {
-                                            Image(systemName: icon)
-                                                .font(.system(size: 16, weight: .semibold))
-                                                .foregroundStyle(cell.statusColor)
-                                        }
-                                        if let moneyIcon = moneyIcon(for: cell) {
-                                            Image(systemName: moneyIcon)
-                                                .font(.system(size: 16, weight: .semibold))
-                                                .foregroundStyle(cell.moneyTotal < 0 ? .red : .green)
+                                        if calendarDisplayMode == .chores {
+                                            if let icon = statusIcon(for: cell) {
+                                                Image(systemName: icon)
+                                                    .font(.system(size: 16, weight: .semibold))
+                                                    .foregroundStyle(cell.statusColor)
+                                            }
+                                        } else {
+                                            if let moneyIcon = moneyIcon(for: cell) {
+                                                Image(systemName: moneyIcon)
+                                                    .font(.system(size: 16, weight: .semibold))
+                                                    .foregroundStyle(cell.moneyTotal < 0 ? .red : .green)
+                                            }
                                         }
                                     }
                                     .frame(maxWidth: .infinity, alignment: .leading)
-                                    if cell.pendingCount > 0 {
+                                    if calendarDisplayMode == .chores, cell.pendingCount > 0 {
                                         Image(systemName: "exclamationmark.circle.fill")
                                             .font(.system(size: 16, weight: .semibold))
                                             .foregroundStyle(.red)
                                             .accessibilityLabel("Pending approvals")
                                     }
                                 } else {
-                                    if !cell.statusText.isEmpty {
+                                    if calendarDisplayMode == .chores, !cell.statusText.isEmpty {
                                         Text(cell.statusText)
                                             .font(.caption2.weight(.semibold))
                                             .foregroundStyle(cell.statusColor)
                                     }
 
-                                    if cell.pendingCount > 0 {
+                                    if calendarDisplayMode == .chores, cell.pendingCount > 0 {
                                         Text("Pending approvals")
                                             .font(.caption2.weight(.semibold))
                                             .foregroundStyle(.red)
                                     }
 
-                                    if !cell.moneyLabel.isEmpty {
+                                    if calendarDisplayMode == .money, !cell.moneyLabel.isEmpty {
                                         Text(cell.moneyLabel)
                                             .font(.caption2)
                                             .foregroundStyle(cell.moneyTotal < 0 ? .red : .green)
@@ -411,15 +436,20 @@ struct KidsAdminView: View {
 
     private var calendarLegend: some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 8) {
-                calendarLegendItem(icon: "checkmark.circle.fill", label: "Done", color: .green)
-                calendarLegendItem(icon: "arrow.triangle.2.circlepath", label: "In progress", color: .orange)
-                calendarLegendItem(icon: "xmark.circle.fill", label: "Missed", color: .red)
-            }
-            HStack(spacing: 8) {
-                calendarLegendItem(icon: "exclamationmark.circle.fill", label: "Pending", color: .red)
-                calendarLegendItem(icon: "arrow.up.right.circle.fill", label: "Money in", color: .green)
-                calendarLegendItem(icon: "arrow.down.right.circle.fill", label: "Money out", color: .red)
+            if calendarDisplayMode == .chores {
+                HStack(spacing: 8) {
+                    calendarLegendItem(icon: "checkmark.circle.fill", label: "Done", color: .green)
+                    calendarLegendItem(icon: "arrow.triangle.2.circlepath", label: "In progress", color: .orange)
+                    calendarLegendItem(icon: "xmark.circle.fill", label: "Missed", color: .red)
+                }
+                HStack(spacing: 8) {
+                    calendarLegendItem(icon: "exclamationmark.circle.fill", label: "Pending", color: .red)
+                }
+            } else {
+                HStack(spacing: 8) {
+                    calendarLegendItem(icon: "arrow.up.right.circle.fill", label: "Money in", color: .green)
+                    calendarLegendItem(icon: "arrow.down.right.circle.fill", label: "Money out", color: .red)
+                }
             }
         }
         .font(.caption)
@@ -2134,6 +2164,20 @@ private enum KidsAdminTab: String, CaseIterable {
             return "History"
         case .chores:
             return "Chores"
+        }
+    }
+}
+
+private enum KidsAdminCalendarDisplayMode: String, CaseIterable {
+    case chores
+    case money
+
+    var label: String {
+        switch self {
+        case .chores:
+            return "Chores"
+        case .money:
+            return "Pocket money"
         }
     }
 }

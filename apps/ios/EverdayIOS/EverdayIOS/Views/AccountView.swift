@@ -29,7 +29,7 @@ struct AccountView: View {
                 }
 
                 Button(role: .destructive) {
-                    authStore.logout()
+                    Task { await authStore.logout() }
                 } label: {
                     Label("Sign out", systemImage: "rectangle.portrait.and.arrow.right")
                 }

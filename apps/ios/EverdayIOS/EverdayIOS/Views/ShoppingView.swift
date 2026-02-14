@@ -2,33 +2,20 @@ import SwiftUI
 
 struct ShoppingView: View {
     @State private var items: [ShoppingItem] = []
-    @State private var selectedIds: Set<Int> = []
     @State private var status: LoadState = .idle
     @State private var errorMessage = ""
-    @State private var searchTerm = ""
     @State private var showForm = false
-    @State private var editingItem: ShoppingItem?
-    @State private var deleteTarget: ShoppingItem?
-    @State private var showDeleteConfirm = false
-    @State private var showRemoveSelectedConfirm = false
 
     private let householdId = ShoppingConfig.householdId()
 
     var body: some View {
         ShoppingContent(
             items: $items,
-            selectedIds: $selectedIds,
             status: $status,
             errorMessage: $errorMessage,
-            searchTerm: $searchTerm,
             showForm: $showForm,
-            editingItem: $editingItem,
-            deleteTarget: $deleteTarget,
-            showDeleteConfirm: $showDeleteConfirm,
-            showRemoveSelectedConfirm: $showRemoveSelectedConfirm,
             onSave: saveItem,
             onDelete: deleteItem,
-            onRemoveSelected: removeSelected,
             onLoad: load
         )
     }
@@ -48,23 +35,14 @@ struct ShoppingView: View {
     private func saveItem(_ text: String) async throws {
         status = .saving
         errorMessage = ""
-        if let editingItem {
-            _ = try await ShoppingApi.updateItem(
-                itemId: editingItem.Id,
-                householdId: householdId,
-                request: ShoppingItemUpdate(Item: text)
-            )
-        } else {
-            _ = try await ShoppingApi.createItem(
-                ShoppingItemCreate(HouseholdId: householdId, Item: text)
-            )
-        }
+        _ = try await ShoppingApi.createItem(
+            ShoppingItemCreate(HouseholdId: householdId, Item: text)
+        )
         items = try await ShoppingApi.fetchItems(householdId: householdId)
         status = .ready
     }
 
     private func deleteItem(_ item: ShoppingItem) async {
-        deleteTarget = nil
         do {
             status = .saving
             errorMessage = ""
@@ -76,43 +54,19 @@ struct ShoppingView: View {
             errorMessage = (error as? ApiError)?.message ?? "Failed to delete item."
         }
     }
-
-    private func removeSelected() async {
-        guard !selectedIds.isEmpty else { return }
-        do {
-            status = .saving
-            errorMessage = ""
-            for itemId in selectedIds {
-                try await ShoppingApi.deleteItem(itemId: itemId, householdId: householdId)
-            }
-            selectedIds.removeAll()
-            items = try await ShoppingApi.fetchItems(householdId: householdId)
-            status = .ready
-        } catch {
-            status = .error
-            errorMessage = (error as? ApiError)?.message ?? "Failed to remove selected items."
-        }
-    }
 }
 
 private struct ShoppingContent: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-    @Environment(\.editMode) private var editMode
+    @State private var completingIds: Set<Int> = []
 
     @Binding var items: [ShoppingItem]
-    @Binding var selectedIds: Set<Int>
     @Binding var status: LoadState
     @Binding var errorMessage: String
-    @Binding var searchTerm: String
     @Binding var showForm: Bool
-    @Binding var editingItem: ShoppingItem?
-    @Binding var deleteTarget: ShoppingItem?
-    @Binding var showDeleteConfirm: Bool
-    @Binding var showRemoveSelectedConfirm: Bool
 
     let onSave: (String) async throws -> Void
     let onDelete: (ShoppingItem) async -> Void
-    let onRemoveSelected: () async -> Void
     let onLoad: () async -> Void
 
     var body: some View {
@@ -120,17 +74,10 @@ private struct ShoppingContent: View {
             .modifier(
                 ShoppingChromeModifier(
                     items: $items,
-                    selectedIds: $selectedIds,
                     status: $status,
                     errorMessage: $errorMessage,
                     showForm: $showForm,
-                    editingItem: $editingItem,
-                    deleteTarget: $deleteTarget,
-                    showDeleteConfirm: $showDeleteConfirm,
-                    showRemoveSelectedConfirm: $showRemoveSelectedConfirm,
                     onSave: onSave,
-                    onDelete: onDelete,
-                    onRemoveSelected: onRemoveSelected,
                     onLoad: onLoad
                 )
             )
@@ -149,32 +96,30 @@ private struct ShoppingContent: View {
     }
 
     private var listView: some View {
-        List(selection: $selectedIds) {
+        List {
             headerSection
             itemsSection
             errorSection
         }
         .listStyle(.insetGrouped)
-        .searchable(text: $searchTerm)
     }
 
     private var headerSection: some View {
         Section {
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Shopping list")
-                    .font(.title2.bold())
-                Text("Track shared groceries and household items.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+            Button {
+                showForm = true
+            } label: {
+                Label("Add item", systemImage: "plus.circle.fill")
+                    .font(.headline)
+                    .frame(maxWidth: .infinity, alignment: .center)
             }
-            .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
+            .buttonStyle(.borderedProminent)
 
-            Text("Zebra helper examples:")
-                .font(.footnote.weight(.semibold))
-                .foregroundStyle(.secondary)
-            Text("\"Alexa, ask zebra helper to add milk\"\n\"Alexa, ask zebra helper to remove milk\"\n\"Alexa, ask zebra helper to clear the list\"")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
+            Text(
+                "Zebra helper examples:\n\"Alexa, ask zebra helper to add milk\"\n\"Alexa, ask zebra helper to remove milk\"\n\"Alexa, ask zebra helper to clear the list\""
+            )
+            .font(.footnote)
+            .foregroundStyle(.secondary)
         }
     }
 
@@ -183,12 +128,12 @@ private struct ShoppingContent: View {
         Section {
             if status == .loading {
                 ProgressView("Loading shopping list...")
-            } else if filteredItems.isEmpty {
-                Text(items.isEmpty ? "No items yet." : "No results.")
+            } else if items.isEmpty {
+                Text("No items yet.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             } else {
-                ForEach(filteredItems) { item in
+                ForEach(items) { item in
                     shoppingRow(item)
                 }
             }
@@ -206,44 +151,36 @@ private struct ShoppingContent: View {
         }
     }
 
-    private var filteredItems: [ShoppingItem] {
-        let query = searchTerm.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        if query.isEmpty { return items }
-        return items.filter { item in
-            item.Item.lowercased().contains(query) ||
-            (item.AddedByName ?? "-").lowercased().contains(query)
-        }
-    }
-
-    private var hasSelectedItems: Bool {
-        !selectedIds.isEmpty
-    }
-
     @ViewBuilder
     private func shoppingRow(_ item: ShoppingItem) -> some View {
-        if isEditing {
-            ShoppingRowContent(item: item)
-        } else {
+        let isCompleting = completingIds.contains(item.Id)
+        HStack(spacing: 12) {
             Button {
-                editingItem = item
-                showForm = true
+                Task { await completeItem(item) }
             } label: {
-                ShoppingRowContent(item: item)
+                Image(systemName: isCompleting ? "checkmark.circle.fill" : "circle")
+                    .font(.title3)
+                    .foregroundStyle(isCompleting ? .green : .secondary)
+                    .scaleEffect(isCompleting ? 1.06 : 1.0)
+                    .animation(.spring(response: 0.25, dampingFraction: 0.8), value: isCompleting)
             }
             .buttonStyle(.plain)
-            .swipeActions {
-                Button(role: .destructive) {
-                    deleteTarget = item
-                    showDeleteConfirm = true
-                } label: {
-                    Label("Delete", systemImage: "trash")
-                }
-            }
+            .disabled(isCompleting)
+
+            ShoppingRowContent(item: item, isCompleting: isCompleting)
         }
     }
 
-    private var isEditing: Bool {
-        editMode?.wrappedValue.isEditing == true
+    private func completeItem(_ item: ShoppingItem) async {
+        guard !completingIds.contains(item.Id) else { return }
+        withAnimation(.easeOut(duration: 0.16)) {
+            completingIds.insert(item.Id)
+        }
+        try? await Task.sleep(nanoseconds: 320_000_000)
+        await onDelete(item)
+        withAnimation(.easeOut(duration: 0.2)) {
+            completingIds.remove(item.Id)
+        }
     }
 }
 
@@ -251,18 +188,11 @@ private struct ShoppingChromeModifier: ViewModifier {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     @Binding var items: [ShoppingItem]
-    @Binding var selectedIds: Set<Int>
     @Binding var status: LoadState
     @Binding var errorMessage: String
     @Binding var showForm: Bool
-    @Binding var editingItem: ShoppingItem?
-    @Binding var deleteTarget: ShoppingItem?
-    @Binding var showDeleteConfirm: Bool
-    @Binding var showRemoveSelectedConfirm: Bool
 
     let onSave: (String) async throws -> Void
-    let onDelete: (ShoppingItem) async -> Void
-    let onRemoveSelected: () async -> Void
     let onLoad: () async -> Void
 
     func body(content: Content) -> some View {
@@ -271,16 +201,6 @@ private struct ShoppingChromeModifier: ViewModifier {
             .navigationBarTitleDisplayMode(horizontalSizeClass == .regular ? .inline : .large)
             .toolbar { toolbarContent }
             .sheet(isPresented: $showForm) { editSheet }
-            .alert("Delete item", isPresented: $showDeleteConfirm) { deleteAlertButtons } message: {
-                Text("This will remove the item from the list.")
-            }
-            .alert("Remove selected", isPresented: $showRemoveSelectedConfirm) { removeSelectedAlertButtons } message: {
-                Text("Remove the selected items from the list?")
-            }
-            .onChange(of: items.map { $0.Id }) { _, _ in
-                let available = Set(items.map { $0.Id })
-                selectedIds = selectedIds.filter { available.contains($0) }
-            }
             .task {
                 if status == .idle {
                     await onLoad()
@@ -295,68 +215,27 @@ private struct ShoppingChromeModifier: ViewModifier {
                 ConstrainedTitleView(title: "Shopping")
             }
         }
-        ToolbarItem(placement: .topBarLeading) {
-            EditButton()
-        }
-        ToolbarItem(placement: .topBarTrailing) {
-            Button("Add") {
-                editingItem = nil
-                showForm = true
-            }
-        }
-        if hasSelectedItems {
-            ToolbarItem(placement: .bottomBar) {
-                Button("Remove selected") {
-                    showRemoveSelectedConfirm = true
-                }
-                .foregroundStyle(.red)
-            }
-        }
     }
 
     private var editSheet: some View {
         ShoppingItemForm(
-            item: editingItem,
+            item: nil,
             onSave: { text in
                 try await onSave(text)
             }
         )
     }
-
-    private var deleteAlertButtons: some View {
-        Group {
-            Button("Delete", role: .destructive) {
-                if let target = deleteTarget {
-                    Task { await onDelete(target) }
-                }
-            }
-            Button("Cancel", role: .cancel) {
-                deleteTarget = nil
-            }
-        }
-    }
-
-    private var removeSelectedAlertButtons: some View {
-        Group {
-            Button("Remove", role: .destructive) {
-                Task { await onRemoveSelected() }
-            }
-            Button("Cancel", role: .cancel) { }
-        }
-    }
-
-    private var hasSelectedItems: Bool {
-        !selectedIds.isEmpty
-    }
 }
 
 private struct ShoppingRowContent: View {
     let item: ShoppingItem
+    var isCompleting: Bool = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(item.Item)
                 .font(.headline)
+                .strikethrough(isCompleting, color: .secondary)
             HStack(spacing: 8) {
                 Text(item.AddedByName ?? "-")
                 Text("|")
@@ -366,6 +245,8 @@ private struct ShoppingRowContent: View {
             .foregroundStyle(.secondary)
         }
         .padding(.vertical, 4)
+        .opacity(isCompleting ? 0.55 : 1.0)
+        .animation(.easeOut(duration: 0.16), value: isCompleting)
     }
 }
 
