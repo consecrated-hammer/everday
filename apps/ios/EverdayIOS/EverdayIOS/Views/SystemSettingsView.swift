@@ -14,7 +14,37 @@ struct SystemSettingsView: View {
 
     var body: some View {
         let listView = List {
-            Section("Environment") {
+            Section {
+                settingsRow(
+                    title: "API",
+                    value: statusLabel(for: apiStatus),
+                    valueColor: statusColor(for: apiStatus)
+                )
+                settingsRow(
+                    title: "Database",
+                    value: statusLabel(for: dbStatus),
+                    valueColor: statusColor(for: dbStatus)
+                )
+
+                Button {
+                    Task { await refreshStatus() }
+                } label: {
+                    Text(isRefreshing ? "Refreshing..." : "Refresh")
+                }
+                .disabled(isRefreshing)
+
+                if !statusMessage.isEmpty {
+                    Text(statusMessage)
+                        .font(.footnote)
+                        .foregroundStyle(.red)
+                }
+            } header: {
+                Text("Status")
+            } footer: {
+                statusFooterText
+            }
+
+            Section {
                 Picker("Environment", selection: Binding(
                     get: { environmentStore.current },
                     set: { newValue in
@@ -27,52 +57,21 @@ struct SystemSettingsView: View {
                     }
                 }
                 .pickerStyle(.segmented)
+            } header: {
+                Text("Environment")
+            } footer: {
                 Text("Switching environment will sign you out.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
             }
 
-            Section("System status") {
-                HStack {
-                    statusPill(title: "API", status: apiStatus)
-                    statusPill(title: "Database", status: dbStatus)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-                if let lastChecked {
-                    Text("Last checked \(formatTimestamp(lastChecked))")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                } else {
-                    Text("Status has not been checked yet.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
-
-                if !statusMessage.isEmpty {
-                    Text(statusMessage)
-                        .font(.footnote)
-                        .foregroundStyle(.red)
-                }
-
-                Button {
-                    Task { await refreshStatus() }
-                } label: {
-                    if isRefreshing {
-                        Label("Refreshing...", systemImage: "arrow.triangle.2.circlepath")
-                    } else {
-                        Label("Refresh status", systemImage: "arrow.triangle.2.circlepath")
-                    }
-                }
-                .disabled(isRefreshing)
-            }
-
-            Section("Build information") {
+            Section {
                 settingsRow(title: "Version", value: appVersion)
                 settingsRow(title: "Build", value: buildNumber)
                 settingsRow(title: "Environment", value: environmentStore.current.displayName)
+            } header: {
+                Text("Build")
             }
         }
+        .listStyle(.insetGrouped)
 
         Group {
             if horizontalSizeClass == .regular {
@@ -83,12 +82,12 @@ struct SystemSettingsView: View {
                 listView
             }
         }
-        .navigationTitle("System")
+        .navigationTitle("Diagnostics")
         .navigationBarTitleDisplayMode(horizontalSizeClass == .regular ? .inline : .large)
         .toolbar {
             if horizontalSizeClass == .regular {
                 ToolbarItem(placement: .principal) {
-                    ConstrainedTitleView(title: "System")
+                    ConstrainedTitleView(title: "Diagnostics")
                 }
             }
         }
@@ -150,43 +149,45 @@ struct SystemSettingsView: View {
         isRefreshing = false
     }
 
-    private func statusPill(title: String, status: SystemStatusState) -> some View {
-        let label: String
-        let color: Color
-        switch status {
-        case .ok:
-            label = "Ready"
-            color = .green
-        case .error:
-            label = "Offline"
-            color = .red
-        case .checking:
-            label = "Checking"
-            color = .orange
-        case .idle:
-            label = "Unknown"
-            color = .secondary
+    private var statusFooterText: Text {
+        if let lastChecked {
+            return Text("Last checked \(formatTimestamp(lastChecked))")
         }
-
-        return HStack(spacing: 6) {
-            Circle()
-                .fill(color)
-                .frame(width: 8, height: 8)
-            Text("\(title) \(label)")
-                .font(.footnote)
-        }
-        .padding(.vertical, 6)
-        .padding(.horizontal, 10)
-        .background(Color(.secondarySystemGroupedBackground))
-        .clipShape(Capsule())
+        return Text("Status has not been checked yet.")
     }
 
-    private func settingsRow(title: String, value: String) -> some View {
+    private func settingsRow(title: String, value: String, valueColor: Color = .secondary) -> some View {
         HStack {
             Text(title)
             Spacer()
             Text(value)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(valueColor)
+        }
+    }
+
+    private func statusLabel(for status: SystemStatusState) -> String {
+        switch status {
+        case .ok:
+            return "Ready"
+        case .error:
+            return "Offline"
+        case .checking:
+            return "Checking"
+        case .idle:
+            return "Unknown"
+        }
+    }
+
+    private func statusColor(for status: SystemStatusState) -> Color {
+        switch status {
+        case .ok:
+            return .green
+        case .error:
+            return .red
+        case .checking:
+            return .orange
+        case .idle:
+            return .secondary
         }
     }
 

@@ -32,6 +32,11 @@ final class AuthStore: ObservableObject {
         tokens?.accessToken.isEmpty == false
     }
 
+    var currentUserId: Int? {
+        guard let token = tokens?.accessToken else { return nil }
+        return JwtHelper.decodeSubjectUserId(token)
+    }
+
     var displayName: String {
         let first = tokens?.firstName ?? ""
         let last = tokens?.lastName ?? ""

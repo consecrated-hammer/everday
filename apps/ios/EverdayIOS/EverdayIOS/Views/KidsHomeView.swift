@@ -5,7 +5,6 @@ import SwiftUICharts
 
 struct KidsHomeView: View {
     @EnvironmentObject var authStore: AuthStore
-    @EnvironmentObject var pushCoordinator: PushNotificationCoordinator
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var overview: KidsOverviewResponse?
     @State private var ledgerEntries: [KidsLedgerEntry] = []
@@ -57,23 +56,6 @@ struct KidsHomeView: View {
         .background(Color(.systemGroupedBackground))
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItemGroup(placement: .topBarTrailing) {
-                NavigationLink {
-                    NotificationsView()
-                } label: {
-                    KidsNotificationBellIcon(unreadCount: pushCoordinator.unreadCount)
-                }
-                .accessibilityLabel("Notifications")
-
-                NavigationLink {
-                    SettingsView()
-                } label: {
-                    Image(systemName: "gearshape")
-                }
-                .accessibilityLabel("Settings")
-            }
-        }
         .task {
             if status == .idle {
                 await load()

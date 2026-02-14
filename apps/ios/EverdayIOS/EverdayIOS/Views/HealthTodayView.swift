@@ -12,6 +12,11 @@ struct HealthTodayView: View {
     @State private var stepsHistory: [HealthStepsHistoryEntry] = []
     @State private var showStepsSheet = false
     @State private var showWeightSheet = false
+    @State private var lastHandledQuickLogStepsRequestNonce = 0
+    @State private var lastHandledQuickLogWeightRequestNonce = 0
+    var onQuickLogMeal: () -> Void = {}
+    var quickLogStepsRequestNonce: Int = 0
+    var quickLogWeightRequestNonce: Int = 0
 
     var body: some View {
         ScrollView {
@@ -58,11 +63,32 @@ struct HealthTodayView: View {
                 await load()
             }
         }
+        .onAppear {
+            handleQuickLogStepsRequest(quickLogStepsRequestNonce)
+            handleQuickLogWeightRequest(quickLogWeightRequestNonce)
+        }
+        .onChange(of: quickLogStepsRequestNonce) { _, newValue in
+            handleQuickLogStepsRequest(newValue)
+        }
+        .onChange(of: quickLogWeightRequestNonce) { _, newValue in
+            handleQuickLogWeightRequest(newValue)
+        }
     }
 
     private var headerCard: some View {
         HealthSectionCard {
-            HealthSectionHeader(title: "Today", subtitle: nil)
+            HealthSectionHeader(
+                title: "Today",
+                subtitle: nil,
+                trailing: AnyView(
+                    Button {
+                        onQuickLogMeal()
+                    } label: {
+                        Label("Log meal", systemImage: "fork.knife")
+                    }
+                    .buttonStyle(.borderedProminent)
+                )
+            )
 
             let columns = Array(
                 repeating: GridItem(.flexible(), spacing: 12),
@@ -307,6 +333,20 @@ struct HealthTodayView: View {
 
     private func updateWeightValue(_ weight: Double) async {
         await updateTodayMetrics(steps: currentSteps, weight: weight)
+    }
+
+    private func handleQuickLogStepsRequest(_ nonce: Int) {
+        guard nonce > lastHandledQuickLogStepsRequestNonce else { return }
+        lastHandledQuickLogStepsRequestNonce = nonce
+        showWeightSheet = false
+        showStepsSheet = true
+    }
+
+    private func handleQuickLogWeightRequest(_ nonce: Int) {
+        guard nonce > lastHandledQuickLogWeightRequestNonce else { return }
+        lastHandledQuickLogWeightRequestNonce = nonce
+        showStepsSheet = false
+        showWeightSheet = true
     }
 
     private func updateTodayMetrics(steps: Int, weight: Double?) async {

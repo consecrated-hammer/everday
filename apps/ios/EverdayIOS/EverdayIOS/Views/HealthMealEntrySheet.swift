@@ -11,6 +11,7 @@ struct HealthMealEntrySheet: View {
     let templates: [HealthMealTemplateWithItems]
     let shareUsers: [SettingsUser]
     let nextSortOrder: Int
+    let flowMode: EntryFlowMode
     let onSaved: () -> Void
 
     @State private var status: LoadState = .idle
@@ -43,6 +44,10 @@ struct HealthMealEntrySheet: View {
     @State private var scanImageBase64: String?
     @State private var scanNote = ""
     @State private var aiQuantityText = "1"
+    @State private var showQuickAddMealChooser = false
+    @State private var activeAiModal: AiToolModal?
+    @State private var showDescribeLogConfirmation = false
+    @State private var showScanLogConfirmation = false
 
     init(
         logDate: String,
@@ -53,6 +58,7 @@ struct HealthMealEntrySheet: View {
         templates: [HealthMealTemplateWithItems],
         shareUsers: [SettingsUser],
         nextSortOrder: Int,
+        flowMode: EntryFlowMode = .detailed,
         onSaved: @escaping () -> Void
     ) {
         self.logDate = logDate
@@ -63,6 +69,7 @@ struct HealthMealEntrySheet: View {
         self.templates = templates
         self.shareUsers = shareUsers
         self.nextSortOrder = nextSortOrder
+        self.flowMode = flowMode
         self.onSaved = onSaved
         let initialMode: SelectionMode = existingEntry?.MealTemplateId != nil ? .template : .food
         _selectionMode = State(initialValue: initialMode)
@@ -77,31 +84,46 @@ struct HealthMealEntrySheet: View {
     var body: some View {
         NavigationStack {
             List {
-                mealSection
-                if existingEntry == nil {
-                    aiSection
+                if !isQuickAddFlow {
+                    mealSection
                 }
                 browseSection
-                entryTypeSection
+                if !isQuickAddFlow && !isAiBrowseTab {
+                    entryTypeSection
+                }
                 if browseTab == .search {
                     searchSection
                 }
-                selectionSection
-                servingSection
-                notesSection
-                shareSection
+                if isAiBrowseTab {
+                    aiBrowseSection
+                } else if isQuickAddFlow {
+                    quickAddSelectionSection
+                } else {
+                    selectionSection
+                    servingSection
+                    notesSection
+                    shareSection
+                }
                 errorSection
             }
-            .navigationTitle(existingEntry == nil ? "Add entry" : "Edit entry")
+            .navigationTitle(navigationTitleText)
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
                 }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(status == .loading ? "Saving..." : "Save") {
-                        Task { await save() }
+                if isQuickAddFlow {
+                    ToolbarItem(placement: .principal) {
+                        quickAddMealPicker
                     }
-                    .disabled(!isDirty || !isValid || status == .loading)
+                }
+                if !isQuickAddFlow {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button(status == .loading ? "Saving..." : "Save") {
+                            Task { await save() }
+                        }
+                        .disabled(!isDirty || !isValid || status == .loading)
+                    }
                 }
             }
             .task(id: selectedFoodId) {
@@ -113,6 +135,26 @@ struct HealthMealEntrySheet: View {
             .task(id: scanImageItem) {
                 await loadScanImage()
             }
+            .confirmationDialog(
+                "Choose meal slot",
+                isPresented: $showQuickAddMealChooser,
+                titleVisibility: .visible
+            ) {
+                ForEach(mealPickerOrder, id: \.self) { meal in
+                    Button(meal.label) {
+                        selectedMealType = meal
+                    }
+                }
+                Button("Cancel", role: .cancel) { }
+            }
+            .sheet(item: $activeAiModal) { modal in
+                switch modal {
+                case .describe:
+                    aiDescribeModal
+                case .scan:
+                    aiScanModal
+                }
+            }
         }
     }
 
@@ -120,7 +162,7 @@ struct HealthMealEntrySheet: View {
     private var mealSection: some View {
         Section("Meal") {
             Picker("Meal", selection: $selectedMealType) {
-                ForEach(HealthMealType.allCases, id: \.self) { meal in
+                ForEach(mealPickerOrder, id: \.self) { meal in
                     Text(meal.label).tag(meal)
                 }
             }
@@ -128,70 +170,164 @@ struct HealthMealEntrySheet: View {
     }
 
     @ViewBuilder
-    private var aiSection: some View {
-        Section("AI quick log") {
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Describe meal")
+    private var quickAddMealPicker: some View {
+        Button {
+            showQuickAddMealChooser = true
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "fork.knife")
+                    .imageScale(.medium)
+                Text(selectedMealType.label)
                     .font(.subheadline.weight(.semibold))
-                TextField("Describe your meal", text: $describeText, axis: .vertical)
-                HStack(spacing: 10) {
-                    Button(describeStatus == .loading ? "Parsing..." : "Parse meal") {
-                        Task { await parseMealDescription() }
-                    }
-                    .buttonStyle(.bordered)
-                    .disabled(describeText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || describeStatus == .loading)
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .accessibilityLabel("Meal slot")
+        .accessibilityValue(selectedMealType.label)
+        .accessibilityHint("Double tap to choose a meal slot")
+        .tint(.primary)
+        .buttonStyle(.plain)
+    }
 
-                    if describeResult != nil {
-                        Button("Log parsed meal") {
-                            Task { await logParsedMeal() }
+    private var mealPickerOrder: [HealthMealType] {
+        [.Breakfast, .Snack1, .Lunch, .Snack2, .Dinner, .Snack3]
+    }
+
+    @ViewBuilder
+    private var aiBrowseSection: some View {
+        Section("AI") {
+            aiSectionContent
+        }
+    }
+
+    @ViewBuilder
+    private var aiSectionContent: some View {
+        aiToolLauncherRow(
+            title: "Describe meal",
+            subtitle: "Use text to estimate calories and macros.",
+            action: openDescribeAiModal
+        )
+
+        aiToolLauncherRow(
+            title: "Scan photo",
+            subtitle: "Analyze a meal photo or nutrition label.",
+            action: openScanAiModal
+        )
+    }
+
+    @ViewBuilder
+    private func aiToolLauncherRow(title: String, subtitle: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.body.weight(.semibold))
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var aiDescribeModal: some View {
+        NavigationStack {
+            List {
+                Section("Describe meal") {
+                    TextField("Describe your meal", text: $describeText)
+                        .submitLabel(.go)
+                        .onSubmit {
+                            triggerDescribeEstimate()
                         }
-                        .buttonStyle(.borderedProminent)
-                        .disabled(describeStatus == .loading || status == .loading)
+                    Button(describeStatus == .loading ? "Analyzing..." : "Estimate meal") {
+                        triggerDescribeEstimate()
                     }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(describeText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || describeStatus == .loading)
                 }
 
                 if let result = describeResult {
-                    VStack(alignment: .leading, spacing: 4) {
+                    Section("Review") {
                         Text(result.MealName)
-                            .font(.footnote.weight(.semibold))
+                            .font(.subheadline.weight(.semibold))
                         Text(result.Summary)
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                         Text("\(result.CaloriesPerServing) kcal | \(HealthFormatters.formatNumber(result.ProteinPerServing, decimals: 1)) g protein")
                             .font(.caption)
                             .foregroundStyle(.secondary)
+                        TextField("Quantity", text: $aiQuantityText)
+                            .keyboardType(.decimalPad)
+                        Button(status == .loading ? "Logging..." : "Confirm and log meal") {
+                            showDescribeLogConfirmation = true
+                        }
+                        .disabled(describeStatus == .loading || status == .loading)
+                    }
+                }
+
+                if !errorMessage.isEmpty {
+                    Section {
+                        HealthErrorBanner(message: errorMessage)
                     }
                 }
             }
-
-            Divider()
-
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Scan photo")
-                    .font(.subheadline.weight(.semibold))
-
-                Picker("Scan mode", selection: $scanMode) {
-                    Text("Meal photo").tag(HealthImageScanMode.meal)
-                    Text("Nutrition label").tag(HealthImageScanMode.label)
+            .navigationTitle("Describe meal")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Close") {
+                        activeAiModal = nil
+                    }
                 }
-                .pickerStyle(.segmented)
-
-                PhotosPicker(selection: $scanImageItem, matching: .images) {
-                    Text(scanImageBase64 == nil ? "Choose photo" : "Change photo")
+            }
+            .confirmationDialog(
+                "Log this meal to \(selectedMealType.label)?",
+                isPresented: $showDescribeLogConfirmation,
+                titleVisibility: .visible
+            ) {
+                Button("Log meal") {
+                    Task { await logParsedMeal() }
                 }
+                Button("Cancel", role: .cancel) { }
+            }
+        }
+    }
 
-                TextField("Context note (optional)", text: $scanNote, axis: .vertical)
+    private var aiScanModal: some View {
+        NavigationStack {
+            List {
+                Section("Scan photo") {
+                    Picker("Scan mode", selection: $scanMode) {
+                        Text("Meal photo").tag(HealthImageScanMode.meal)
+                        Text("Nutrition label").tag(HealthImageScanMode.label)
+                    }
+                    .pickerStyle(.segmented)
 
-                Button(scanStatus == .loading ? "Analyzing..." : "Analyze photo") {
-                    Task { await analyzeScanPhoto() }
+                    PhotosPicker(selection: $scanImageItem, matching: .images) {
+                        Text(scanImageBase64 == nil ? "Choose photo" : "Change photo")
+                    }
+
+                    TextField("Context note", text: $scanNote, axis: .vertical)
+
+                    Button(scanStatus == .loading ? "Analyzing..." : "Analyze photo") {
+                        Task { await analyzeScanPhoto() }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(scanImageBase64 == nil || scanStatus == .loading)
                 }
-                .buttonStyle(.bordered)
-                .disabled(scanImageBase64 == nil || scanStatus == .loading)
 
                 if let result = scanResult {
-                    VStack(alignment: .leading, spacing: 4) {
+                    Section("Review") {
                         Text(result.FoodName)
-                            .font(.footnote.weight(.semibold))
+                            .font(.subheadline.weight(.semibold))
                         Text(result.Summary)
                             .font(.footnote)
                             .foregroundStyle(.secondary)
@@ -205,46 +341,84 @@ struct HealthMealEntrySheet: View {
                                     .foregroundStyle(.secondary)
                             }
                         }
-                        Button("Log scan result") {
-                            Task { await logScanResult() }
+                        TextField("Quantity", text: $aiQuantityText)
+                            .keyboardType(.decimalPad)
+                        Button(status == .loading ? "Logging..." : "Confirm and log meal") {
+                            showScanLogConfirmation = true
                         }
-                        .buttonStyle(.borderedProminent)
                         .disabled(scanStatus == .loading || status == .loading)
                     }
                 }
 
                 if !scanError.isEmpty {
-                    HealthErrorBanner(message: scanError)
+                    Section {
+                        HealthErrorBanner(message: scanError)
+                    }
                 }
-
-                TextField("AI log quantity", text: $aiQuantityText)
-                    .keyboardType(.decimalPad)
+            }
+            .navigationTitle("Scan photo")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Close") {
+                        activeAiModal = nil
+                    }
+                }
+            }
+            .confirmationDialog(
+                "Log this meal to \(selectedMealType.label)?",
+                isPresented: $showScanLogConfirmation,
+                titleVisibility: .visible
+            ) {
+                Button("Log meal") {
+                    Task { await logScanResult() }
+                }
+                Button("Cancel", role: .cancel) { }
             }
         }
+    }
+
+    @ViewBuilder
+    private var legacyAiSectionRemoved: some View {
+        // Legacy wrapper kept empty intentionally.
     }
 
     @ViewBuilder
     private var browseSection: some View {
         Section("Browse") {
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(EntryBrowseTab.allCases) { tab in
-                        HealthChip(title: tab.label, isSelected: browseTab == tab) {
+                HStack(spacing: 6) {
+                    ForEach(availableBrowseTabs) { tab in
+                        entryBrowseChip(title: tab.label, isSelected: browseTab == tab) {
                             browseTab = tab
                         }
                     }
                 }
-                .padding(.vertical, 2)
+                .padding(.vertical, 1)
             }
         }
+    }
+
+    @ViewBuilder
+    private func entryBrowseChip(title: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+                .padding(.vertical, 2)
+                .padding(.horizontal, 7)
+                .background(isSelected ? Color.accentColor.opacity(0.14) : Color(.secondarySystemBackground))
+                .foregroundStyle(isSelected ? Color.accentColor : .primary)
+                .clipShape(Capsule())
+        }
+        .buttonStyle(.plain)
     }
 
     @ViewBuilder
     private var entryTypeSection: some View {
         Section("Entry type") {
             Picker("Entry type", selection: $selectionMode) {
-                Text("Food").tag(SelectionMode.food)
-                Text("Template").tag(SelectionMode.template)
+                Text("Food item").tag(SelectionMode.food)
+                Text("Meal").tag(SelectionMode.template)
             }
             .pickerStyle(.segmented)
         }
@@ -259,7 +433,7 @@ struct HealthMealEntrySheet: View {
 
     @ViewBuilder
     private var selectionSection: some View {
-        Section(selectionMode == .food ? "Foods" : "Templates") {
+        Section(selectionMode == .food ? "Food items" : "Meals") {
             if browseTab == .recent && recentStatus == .loading {
                 ProgressView("Loading recent items...")
             }
@@ -333,6 +507,75 @@ struct HealthMealEntrySheet: View {
     }
 
     @ViewBuilder
+    private var quickAddSelectionSection: some View {
+        if browseTab == .search && trimmedSearchText.isEmpty {
+            EmptyView()
+        } else {
+            Section("Pick an item") {
+                if browseTab == .recent && recentStatus == .loading {
+                    ProgressView("Loading recent items...")
+                } else if displayedFoods.isEmpty && displayedTemplates.isEmpty {
+                    Text(emptyQuickAddMessage)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                } else {
+                    if !displayedFoods.isEmpty {
+                        ForEach(displayedFoods) { food in
+                            quickAddFoodRow(food)
+                        }
+                    }
+
+                    if !displayedTemplates.isEmpty {
+                        ForEach(displayedTemplates) { template in
+                            quickAddTemplateRow(template)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func quickAddFoodRow(_ food: HealthFood) -> some View {
+        Button {
+            Task { await quickAddFood(food) }
+        } label: {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(food.FoodName)
+                    Text("\(food.ServingDescription) | \(Int(food.CaloriesPerServing.rounded())) kcal")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Image(systemName: "plus.circle.fill")
+                    .foregroundStyle(Color.accentColor)
+            }
+        }
+        .disabled(status == .loading)
+    }
+
+    @ViewBuilder
+    private func quickAddTemplateRow(_ template: HealthMealTemplateWithItems) -> some View {
+        Button {
+            Task { await quickAddTemplate(template) }
+        } label: {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(template.Template.TemplateName)
+                    Text(templateSubtitle(template))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Image(systemName: "plus.circle.fill")
+                    .foregroundStyle(Color.accentColor)
+            }
+        }
+        .disabled(status == .loading)
+    }
+
+    @ViewBuilder
     private var servingSection: some View {
         Section("Serving") {
             TextField("Quantity", text: $quantityText)
@@ -345,7 +588,7 @@ struct HealthMealEntrySheet: View {
                     }
                 }
             } else {
-                Text("Templates log as 1 serving by default.")
+                Text("Meals log as 1 serving by default.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -386,6 +629,35 @@ struct HealthMealEntrySheet: View {
         "\(logDate)-\(selectedMealType.rawValue)-\(existingEntry == nil ? "add" : "edit")"
     }
 
+    private var isQuickAddFlow: Bool {
+        flowMode == .quickAdd && existingEntry == nil
+    }
+
+    private var isAiBrowseTab: Bool {
+        browseTab == .ai
+    }
+
+    private var availableBrowseTabs: [EntryBrowseTab] {
+        if existingEntry != nil {
+            return EntryBrowseTab.allCases.filter { $0 != .ai }
+        }
+        return EntryBrowseTab.allCases
+    }
+
+    private var sheetTitle: String {
+        if existingEntry != nil {
+            return "Edit entry"
+        }
+        if isQuickAddFlow {
+            return "Add to \(selectedMealType.label)"
+        }
+        return "Add entry"
+    }
+
+    private var navigationTitleText: String {
+        isQuickAddFlow ? "Add entry" : sheetTitle
+    }
+
     private var trimmedSearchText: String {
         searchText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
@@ -417,6 +689,8 @@ struct HealthMealEntrySheet: View {
             return sortedFoods.filter { $0.FoodName.localizedCaseInsensitiveContains(trimmedSearchText) }
         case .library:
             return sortedFoods
+        case .ai:
+            return []
         }
     }
 
@@ -431,6 +705,8 @@ struct HealthMealEntrySheet: View {
             return sortedTemplates.filter { $0.Template.TemplateName.localizedCaseInsensitiveContains(trimmedSearchText) }
         case .library:
             return sortedTemplates
+        case .ai:
+            return []
         }
     }
 
@@ -443,7 +719,24 @@ struct HealthMealEntrySheet: View {
         case .search:
             return trimmedSearchText.isEmpty ? "Enter a search term." : "No matching items found."
         case .library:
-            return selectionMode == .food ? "No foods yet." : "No templates yet."
+            return selectionMode == .food ? "No food items yet." : "No meals yet."
+        case .ai:
+            return "Choose an AI tool."
+        }
+    }
+
+    private var emptyQuickAddMessage: String {
+        switch browseTab {
+        case .recent:
+            return recentStatus == .loading ? "Loading recent items..." : "No recent items yet."
+        case .favourites:
+            return "No favourites yet."
+        case .search:
+            return "No items found."
+        case .library:
+            return "No foods or meals yet."
+        case .ai:
+            return "Choose an AI tool."
         }
     }
 
@@ -574,6 +867,14 @@ struct HealthMealEntrySheet: View {
         recentFoodIds = sortRecentIds(foodStats)
         recentTemplateIds = sortRecentIds(templateStats)
         recentStatus = .ready
+
+        if isQuickAddFlow,
+           browseTab == .recent,
+           recentFoodIds.isEmpty,
+           recentTemplateIds.isEmpty,
+           hasFavouriteItems {
+            browseTab = .favourites
+        }
     }
 
     private func updateRecentUsage(_ stats: inout [String: RecentUsage], id: String, lastUsed: TimeInterval) {
@@ -689,6 +990,92 @@ struct HealthMealEntrySheet: View {
         }
     }
 
+    private func quickAddFood(_ food: HealthFood) async {
+        status = .loading
+        errorMessage = ""
+        do {
+            let logId = try await ensureDailyLogId()
+            let portionLabel = food.ServingDescription.isEmpty
+                ? "\(HealthFormatters.formatNumber(food.ServingQuantity, decimals: 2)) \(food.ServingUnit)"
+                : food.ServingDescription
+            _ = try await HealthApi.createMealEntry(
+                HealthCreateMealEntryRequest(
+                    DailyLogId: logId,
+                    MealType: selectedMealType,
+                    FoodId: food.FoodId,
+                    MealTemplateId: nil,
+                    Quantity: 1,
+                    PortionOptionId: nil,
+                    PortionLabel: portionLabel,
+                    PortionBaseUnit: food.ServingUnit,
+                    PortionBaseAmount: max(food.ServingQuantity, 0.0001),
+                    EntryNotes: nil,
+                    SortOrder: nextSortOrder,
+                    ScheduleSlotId: nil
+                )
+            )
+            status = .ready
+            onSaved()
+            dismiss()
+        } catch {
+            status = .error
+            errorMessage = (error as? ApiError)?.message ?? "Unable to add item."
+        }
+    }
+
+    private func quickAddTemplate(_ template: HealthMealTemplateWithItems) async {
+        status = .loading
+        errorMessage = ""
+        do {
+            let logId = try await ensureDailyLogId()
+            _ = try await HealthApi.createMealEntry(
+                HealthCreateMealEntryRequest(
+                    DailyLogId: logId,
+                    MealType: selectedMealType,
+                    FoodId: nil,
+                    MealTemplateId: template.Template.MealTemplateId,
+                    Quantity: 1,
+                    PortionOptionId: nil,
+                    PortionLabel: "serving",
+                    PortionBaseUnit: "each",
+                    PortionBaseAmount: 1,
+                    EntryNotes: nil,
+                    SortOrder: nextSortOrder,
+                    ScheduleSlotId: nil
+                )
+            )
+            status = .ready
+            onSaved()
+            dismiss()
+        } catch {
+            status = .error
+            errorMessage = (error as? ApiError)?.message ?? "Unable to add meal."
+        }
+    }
+
+    private func openDescribeAiModal() {
+        describeStatus = .idle
+        describeResult = nil
+        describeText = ""
+        aiQuantityText = "1"
+        errorMessage = ""
+        showDescribeLogConfirmation = false
+        activeAiModal = .describe
+    }
+
+    private func openScanAiModal() {
+        scanStatus = .idle
+        scanResult = nil
+        scanError = ""
+        scanNote = ""
+        scanImageItem = nil
+        scanImageBase64 = nil
+        aiQuantityText = "1"
+        errorMessage = ""
+        showScanLogConfirmation = false
+        activeAiModal = .scan
+    }
+
     private func parseMealDescription() async {
         describeStatus = .loading
         errorMessage = ""
@@ -701,6 +1088,12 @@ struct HealthMealEntrySheet: View {
             describeStatus = .error
             errorMessage = (error as? ApiError)?.message ?? "Unable to parse meal description."
         }
+    }
+
+    private func triggerDescribeEstimate() {
+        guard describeStatus != .loading else { return }
+        guard !describeText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        Task { await parseMealDescription() }
     }
 
     private func logParsedMeal() async {
@@ -920,6 +1313,10 @@ struct HealthMealEntrySheet: View {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
     }
+
+    private var hasFavouriteItems: Bool {
+        foods.contains(where: { $0.IsFavourite }) || templates.contains(where: { $0.Template.IsFavourite })
+    }
 }
 
 private enum SelectionMode: String, CaseIterable {
@@ -932,6 +1329,7 @@ private enum EntryBrowseTab: String, CaseIterable, Identifiable {
     case favourites
     case search
     case library
+    case ai
 
     var id: String { rawValue }
 
@@ -945,8 +1343,22 @@ private enum EntryBrowseTab: String, CaseIterable, Identifiable {
             return "Search"
         case .library:
             return "Foods"
+        case .ai:
+            return "AI"
         }
     }
+}
+
+enum EntryFlowMode {
+    case detailed
+    case quickAdd
+}
+
+private enum AiToolModal: String, Identifiable {
+    case describe
+    case scan
+
+    var id: String { rawValue }
 }
 
 private struct RecentUsage {

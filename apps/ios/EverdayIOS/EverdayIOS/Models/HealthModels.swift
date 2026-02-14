@@ -20,6 +20,28 @@ enum HealthMealType: String, Codable, CaseIterable {
     }
 }
 
+extension HealthMealType {
+    static func defaultForCurrentTime(_ value: Date = Date(), calendar: Calendar = .current) -> HealthMealType {
+        let hour = calendar.component(.hour, from: value)
+        if hour < 10 {
+            return .Breakfast
+        }
+        if hour < 12 {
+            return .Snack1
+        }
+        if hour < 14 {
+            return .Lunch
+        }
+        if hour < 17 {
+            return .Snack2
+        }
+        if hour < 20 {
+            return .Dinner
+        }
+        return .Snack3
+    }
+}
+
 enum HealthImageScanMode: String, Codable, CaseIterable {
     case meal = "meal"
     case label = "label"

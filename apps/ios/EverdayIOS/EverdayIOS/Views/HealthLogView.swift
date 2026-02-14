@@ -1,7 +1,6 @@
 import SwiftUI
 
 struct HealthLogView: View {
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var logDate = Date()
     @State private var status: LoadState = .idle
     @State private var errorMessage = ""
@@ -21,11 +20,24 @@ struct HealthLogView: View {
     @State private var saveMealName = ""
     @State private var saveMealServings = "1"
 
+    let quickAddMealNonce: Int
+    let consumedQuickAddMealNonce: Int
+    let onConsumeQuickAddMealNonce: (Int) -> Void
+
+    init(
+        quickAddMealNonce: Int = 0,
+        consumedQuickAddMealNonce: Int = 0,
+        onConsumeQuickAddMealNonce: @escaping (Int) -> Void = { _ in }
+    ) {
+        self.quickAddMealNonce = quickAddMealNonce
+        self.consumedQuickAddMealNonce = consumedQuickAddMealNonce
+        self.onConsumeQuickAddMealNonce = onConsumeQuickAddMealNonce
+    }
+
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                dateCard
-                summaryCard
+            VStack(alignment: .leading, spacing: 12) {
+                compactDateRow
 
                 ForEach(mealOrder, id: \.self) { meal in
                     mealSection(meal)
@@ -41,11 +53,11 @@ struct HealthLogView: View {
                     HealthErrorBanner(message: mealActionError)
                 }
             }
-            .padding(20)
+            .padding(16)
             .frame(maxWidth: 860)
             .frame(maxWidth: .infinity)
         }
-        .sheet(isPresented: $showEntrySheet) {
+        .fullScreenCover(isPresented: $showEntrySheet) {
             HealthMealEntrySheet(
                 logDate: logDateKey,
                 dailyLogId: logResponse?.DailyLog?.DailyLogId,
@@ -55,6 +67,7 @@ struct HealthLogView: View {
                 templates: templates,
                 shareUsers: shareUsers,
                 nextSortOrder: nextSortOrder,
+                flowMode: editingEntry == nil ? .quickAdd : .detailed,
                 onSaved: { Task { await load() } }
             )
         }
@@ -80,51 +93,47 @@ struct HealthLogView: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Create a reusable meal template from \(saveMealMealType.label.lowercased()).")
+            Text("Create a reusable meal from \(saveMealMealType.label.lowercased()).")
         }
         .task(id: logDateKey) {
             await load()
         }
-    }
-
-    private var dateCard: some View {
-        HealthSectionCard {
-            HealthSectionHeader(title: "Log date", subtitle: "Select a day to review or add entries.")
-            HStack(spacing: 12) {
-                Button {
-                    shiftDate(days: -1)
-                } label: {
-                    Image(systemName: "chevron.left")
-                }
-                .buttonStyle(.bordered)
-
-                DatePicker("", selection: $logDate, in: ...Date(), displayedComponents: .date)
-                    .labelsHidden()
-
-                Button {
-                    shiftDate(days: 1)
-                } label: {
-                    Image(systemName: "chevron.right")
-                }
-                .buttonStyle(.bordered)
-                .disabled(isNextDisabled)
-            }
+        .onAppear {
+            handleQuickAddMealIfNeeded()
+        }
+        .onChange(of: quickAddMealNonce) { _, _ in
+            handleQuickAddMealIfNeeded()
         }
     }
 
-    private var summaryCard: some View {
-        HealthSectionCard {
-            HealthSectionHeader(title: "Day total", subtitle: "Calories and key macros.")
-            if let totals = logResponse?.Totals {
-                let columns = Array(repeating: GridItem(.flexible(), spacing: 12), count: horizontalSizeClass == .regular ? 3 : 2)
-                LazyVGrid(columns: columns, spacing: 12) {
-                    HealthMetricTile(title: "Calories", value: HealthFormatters.formatCalories(totals.TotalCalories), detail: nil)
-                    HealthMetricTile(title: "Protein", value: HealthFormatters.formatGrams(totals.TotalProtein), detail: nil)
-                    HealthMetricTile(title: "Carbs", value: HealthFormatters.formatGrams(totals.TotalCarbs), detail: nil)
-                    HealthMetricTile(title: "Fat", value: HealthFormatters.formatGrams(totals.TotalFat), detail: nil)
-                }
-            } else {
-                HealthEmptyState(message: "No totals yet.")
+    private var compactDateRow: some View {
+        HStack(spacing: 10) {
+            Button {
+                shiftDate(days: -1)
+            } label: {
+                Image(systemName: "chevron.left")
+                    .font(.subheadline.weight(.semibold))
+            }
+            .buttonStyle(.bordered)
+
+            DatePicker("", selection: $logDate, in: ...Date(), displayedComponents: .date)
+                .labelsHidden()
+
+            Button {
+                shiftDate(days: 1)
+            } label: {
+                Image(systemName: "chevron.right")
+                    .font(.subheadline.weight(.semibold))
+            }
+            .buttonStyle(.bordered)
+            .disabled(isNextDisabled)
+
+            Spacer(minLength: 8)
+
+            if let calories = logResponse?.Totals.TotalCalories {
+                Text(HealthFormatters.formatCalories(calories))
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.secondary)
             }
         }
     }
@@ -265,6 +274,18 @@ struct HealthLogView: View {
         saveMealOpen = true
     }
 
+    private func handleQuickAddMealIfNeeded() {
+        guard quickAddMealNonce > consumedQuickAddMealNonce else { return }
+        activeMealType = defaultMealTypeForCurrentTime()
+        editingEntry = nil
+        showEntrySheet = true
+        onConsumeQuickAddMealNonce(quickAddMealNonce)
+    }
+
+    private func defaultMealTypeForCurrentTime(_ value: Date = Date()) -> HealthMealType {
+        HealthMealType.defaultForCurrentTime(value)
+    }
+
     private func saveMealTemplate() async {
         let name = saveMealName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else {
@@ -299,7 +320,7 @@ struct HealthLogView: View {
             saveMealOpen = false
         } catch {
             mealActionLoading = false
-            mealActionError = (error as? ApiError)?.message ?? "Unable to save meal template."
+            mealActionError = (error as? ApiError)?.message ?? "Unable to save meal."
         }
     }
 

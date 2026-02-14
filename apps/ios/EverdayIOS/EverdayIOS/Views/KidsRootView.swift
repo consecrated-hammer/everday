@@ -22,6 +22,14 @@ struct KidsRootView: View {
             .tabItem {
                 Label("History", systemImage: "clock.arrow.circlepath")
             }
+
+            NavigationStack {
+                SettingsView()
+            }
+            .tag(KidsTab.settings)
+            .tabItem {
+                Label("Settings", systemImage: "gearshape")
+            }
         }
         .toolbarBackground(.visible, for: .tabBar)
         .toolbarBackground(Color(.systemBackground), for: .tabBar)
@@ -31,23 +39,32 @@ struct KidsRootView: View {
 private enum KidsTab {
     case home
     case history
+    case settings
 }
 
 struct KidsNotificationBellIcon: View {
     let unreadCount: Int
 
-    private var hasUnread: Bool {
-        unreadCount > 0
-    }
-
     var body: some View {
-        ZStack {
-            Circle()
-                .fill(hasUnread ? Color.red.opacity(0.2) : Color(.systemGray5))
-                .frame(width: 28, height: 28)
-            Image(systemName: hasUnread ? "bell.badge.fill" : "bell.fill")
-                .foregroundStyle(hasUnread ? .red : .secondary)
+        ZStack(alignment: .topTrailing) {
+            Image(systemName: "bell.fill")
+                .foregroundStyle(.secondary)
+                .frame(width: 24, height: 24)
+            if unreadCount > 0 {
+                Text(unreadCount > 99 ? "99+" : "\(unreadCount)")
+                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 5)
+                    .frame(minWidth: 20, minHeight: 18)
+                    .background(
+                        RoundedRectangle(cornerRadius: 9, style: .continuous)
+                            .fill(Color(red: 0.86, green: 0.10, blue: 0.16))
+                    )
+                    .offset(x: 6, y: -6)
+            }
         }
+        .frame(width: 36, height: 30, alignment: .center)
+        .contentShape(Rectangle())
     }
 }
 
@@ -99,103 +116,15 @@ struct KidsReminderSettingsView: View {
 
     var body: some View {
         List {
-            Section {
-                Toggle(
-                    "Daily jobs reminders",
-                    isOn: Binding(
-                        get: { dailyJobsEnabled },
-                        set: { value in
-                            dailyJobsEnabled = value
-                            if !value, expandedPicker == .dailyJobs {
-                                expandedPicker = nil
-                            }
-                            Task { @MainActor in
-                                await handleReminderToggleChanged(reminder: .dailyJobs, value: value)
-                            }
-                        }
-                    )
-                )
-
-                reminderTimeRow(
-                    enabled: dailyJobsEnabled,
-                    time: dailyJobsTime
-                ) {
-                    toggleTimePicker(for: .dailyJobs)
-                }
-                .accessibilityLabel("Daily jobs reminder time")
-
-                if expandedPicker == .dailyJobs, dailyJobsEnabled {
-                    DatePicker(
-                        "Daily jobs reminder time",
-                        selection: Binding(
-                            get: { dailyJobsTime },
-                            set: { value in
-                                dailyJobsTime = value
-                                schedulePersist(immediate: false)
-                            }
-                        ),
-                        displayedComponents: .hourAndMinute
-                    )
-                    .datePickerStyle(.wheel)
-                    .labelsHidden()
-                }
-
-                Toggle(
-                    "Habits reminders",
-                    isOn: Binding(
-                        get: { habitsEnabled },
-                        set: { value in
-                            habitsEnabled = value
-                            if !value, expandedPicker == .habits {
-                                expandedPicker = nil
-                            }
-                            Task { @MainActor in
-                                await handleReminderToggleChanged(reminder: .habits, value: value)
-                            }
-                        }
-                    )
-                )
-
-                reminderTimeRow(
-                    enabled: habitsEnabled,
-                    time: habitsTime
-                ) {
-                    toggleTimePicker(for: .habits)
-                }
-                .accessibilityLabel("Habits reminder time")
-
-                if expandedPicker == .habits, habitsEnabled {
-                    DatePicker(
-                        "Habits reminder time",
-                        selection: Binding(
-                            get: { habitsTime },
-                            set: { value in
-                                habitsTime = value
-                                schedulePersist(immediate: false)
-                            }
-                        ),
-                        displayedComponents: .hourAndMinute
-                    )
-                    .datePickerStyle(.wheel)
-                    .labelsHidden()
-                }
-            } header: {
-                Text("Notifications")
-            } footer: {
-                NotificationsFooterText
-            }
-
-            if !errorMessage.isEmpty {
-                Section {
-                    Text(errorMessage)
-                        .font(.footnote)
-                        .foregroundStyle(.red)
-                }
-            }
-
+            dailyJobsSection
+            habitsSection
+            errorSection
         }
         .listStyle(.insetGrouped)
-        .navigationTitle("Notifications")
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            timezoneBottomFooter
+        }
+        .navigationTitle("Reminder settings")
         .navigationBarTitleDisplayMode(.large)
         .alert("Notifications are disabled for this app.", isPresented: $showNotificationsDisabledAlert) {
             Button("Open Settings") {
@@ -218,13 +147,129 @@ struct KidsReminderSettingsView: View {
         }
     }
 
-    private var NotificationsFooterText: Text {
-        var lines: [String] = []
-        if !systemNotificationsEnabled {
-            lines.append("Notifications are turned off in iOS Settings.")
+    private var dailyJobsSection: some View {
+        Section {
+            Toggle(
+                "Daily jobs reminders",
+                isOn: Binding(
+                    get: { dailyJobsEnabled },
+                    set: { value in
+                        dailyJobsEnabled = value
+                        if !value, expandedPicker == .dailyJobs {
+                            expandedPicker = nil
+                        }
+                        Task { @MainActor in
+                            await handleReminderToggleChanged(reminder: .dailyJobs, value: value)
+                        }
+                    }
+                )
+            )
+
+            reminderTimeRow(
+                enabled: dailyJobsEnabled,
+                time: dailyJobsTime
+            ) {
+                toggleTimePicker(for: .dailyJobs)
+            }
+            .accessibilityLabel("Daily jobs reminder time")
+
+            if expandedPicker == .dailyJobs, dailyJobsEnabled {
+                DatePicker(
+                    "Daily jobs reminder time",
+                    selection: Binding(
+                        get: { dailyJobsTime },
+                        set: { value in
+                            dailyJobsTime = value
+                            schedulePersist(immediate: false)
+                        }
+                    ),
+                    displayedComponents: .hourAndMinute
+                )
+                .datePickerStyle(.wheel)
+                .labelsHidden()
+            }
+        } header: {
+            Text("Daily jobs")
         }
-        lines.append("Timezone: \(reminderTimeZone)")
-        return Text(lines.joined(separator: "\n"))
+    }
+
+    private var habitsSection: some View {
+        Section {
+            Toggle(
+                "Habits reminders",
+                isOn: Binding(
+                    get: { habitsEnabled },
+                    set: { value in
+                        habitsEnabled = value
+                        if !value, expandedPicker == .habits {
+                            expandedPicker = nil
+                        }
+                        Task { @MainActor in
+                            await handleReminderToggleChanged(reminder: .habits, value: value)
+                        }
+                    }
+                )
+            )
+
+            reminderTimeRow(
+                enabled: habitsEnabled,
+                time: habitsTime
+            ) {
+                toggleTimePicker(for: .habits)
+            }
+            .accessibilityLabel("Habits reminder time")
+
+            if expandedPicker == .habits, habitsEnabled {
+                DatePicker(
+                    "Habits reminder time",
+                    selection: Binding(
+                        get: { habitsTime },
+                        set: { value in
+                            habitsTime = value
+                            schedulePersist(immediate: false)
+                        }
+                    ),
+                    displayedComponents: .hourAndMinute
+                )
+                .datePickerStyle(.wheel)
+                .labelsHidden()
+            }
+        } header: {
+            Text("Habits")
+        } footer: {
+            notificationsDisabledFooterText
+        }
+    }
+
+    @ViewBuilder
+    private var errorSection: some View {
+        if !errorMessage.isEmpty {
+            Section {
+                Text(errorMessage)
+                    .font(.footnote)
+                    .foregroundStyle(.red)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var notificationsDisabledFooterText: some View {
+        if !systemNotificationsEnabled {
+            Text("Notifications are turned off in iOS Settings.")
+        }
+    }
+
+    private var timezoneBottomFooter: some View {
+        HStack {
+            Text("Timezone: \(reminderTimeZone)")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+            Spacer()
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 8)
+        .padding(.bottom, 8)
+        .background(Color(.systemGroupedBackground))
     }
 
     @ViewBuilder
@@ -352,7 +397,7 @@ struct KidsReminderSettingsView: View {
     private func BuildApiErrorMessage(_ error: Error, fallback: String) -> String {
         let raw = (error as? ApiError)?.message.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         if raw.caseInsensitiveCompare("Method Not Allowed") == .orderedSame {
-            return "This environment does not support kids reminder updates. Switch to DEV in System settings."
+            return "This environment does not support kids reminder updates. Switch to DEV in Diagnostics."
         }
         if raw.isEmpty {
             return fallback

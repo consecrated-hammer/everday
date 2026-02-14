@@ -158,7 +158,35 @@ enum JwtHelper {
         return now + skewSeconds >= exp
     }
 
+    static func decodeSubjectUserId(_ token: String) -> Int? {
+        guard let payload = decodePayload(token) else { return nil }
+        if let sub = payload["sub"] as? String {
+            return Int(sub)
+        }
+        if let sub = payload["sub"] as? Int {
+            return sub
+        }
+        if let sub = payload["sub"] as? Double {
+            return Int(sub)
+        }
+        return nil
+    }
+
     private static func decodeExp(_ token: String) -> TimeInterval? {
+        guard let payload = decodePayload(token) else { return nil }
+        if let exp = payload["exp"] as? Double {
+            return exp
+        }
+        if let exp = payload["exp"] as? Int {
+            return TimeInterval(exp)
+        }
+        if let exp = payload["exp"] as? String {
+            return TimeInterval(exp)
+        }
+        return nil
+    }
+
+    private static func decodePayload(_ token: String) -> [String: Any]? {
         let parts = token.split(separator: ".")
         guard parts.count > 1 else { return nil }
         let payload = parts[1]
@@ -167,10 +195,9 @@ enum JwtHelper {
             .replacingOccurrences(of: "_", with: "/")
         let padded = normalized + String(repeating: "=", count: (4 - normalized.count % 4) % 4)
         guard let data = Data(base64Encoded: padded),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let exp = json["exp"] as? Double else {
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             return nil
         }
-        return exp
+        return json
     }
 }

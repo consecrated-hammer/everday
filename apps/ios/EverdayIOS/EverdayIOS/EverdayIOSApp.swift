@@ -9,12 +9,45 @@ struct EverdayIOSApp: App {
     @StateObject private var environmentStore = EnvironmentStore()
     @StateObject private var pushCoordinator = PushNotificationCoordinator.shared
 
+    init() {
+        ConfigureTabBarBadgeAppearance()
+    }
+
     var body: some Scene {
         WindowGroup {
             RootView()
                 .environmentObject(authStore)
                 .environmentObject(environmentStore)
                 .environmentObject(pushCoordinator)
+        }
+    }
+
+    private func ConfigureTabBarBadgeAppearance() {
+        let appearance = UITabBarAppearance()
+        appearance.configureWithOpaqueBackground()
+        appearance.backgroundColor = UIColor.systemBackground
+
+        let badgeColor = UIColor(red: 0.86, green: 0.16, blue: 0.18, alpha: 1.0)
+        let badgeTextAttributes: [NSAttributedString.Key: Any] = [
+            .foregroundColor: UIColor.white,
+            .font: UIFont.systemFont(ofSize: 11, weight: .semibold),
+        ]
+
+        let itemAppearances = [
+            appearance.stackedLayoutAppearance,
+            appearance.inlineLayoutAppearance,
+            appearance.compactInlineLayoutAppearance,
+        ]
+        for itemAppearance in itemAppearances {
+            itemAppearance.normal.badgeBackgroundColor = badgeColor
+            itemAppearance.selected.badgeBackgroundColor = badgeColor
+            itemAppearance.normal.badgeTextAttributes = badgeTextAttributes
+            itemAppearance.selected.badgeTextAttributes = badgeTextAttributes
+        }
+
+        UITabBar.appearance().standardAppearance = appearance
+        if #available(iOS 15.0, *) {
+            UITabBar.appearance().scrollEdgeAppearance = appearance
         }
     }
 }

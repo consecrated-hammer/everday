@@ -33,7 +33,7 @@ struct HealthHistoryDayView: View {
             .frame(maxWidth: 860)
             .frame(maxWidth: .infinity)
         }
-        .sheet(isPresented: $showEntrySheet) {
+        .fullScreenCover(isPresented: $showEntrySheet) {
             HealthMealEntrySheet(
                 logDate: dateKey,
                 dailyLogId: logResponse?.DailyLog?.DailyLogId,

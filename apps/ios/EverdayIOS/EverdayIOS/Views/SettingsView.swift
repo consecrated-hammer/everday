@@ -6,68 +6,53 @@ struct SettingsView: View {
 
     var body: some View {
         let listView = List {
-            NavigationLink {
-                SettingsAppearanceView()
-            } label: {
-                Label("Appearance", systemImage: "paintpalette")
-            }
+            Section("Preferences") {
+                if isKid {
+                    NavigationLink("Reminder settings") {
+                        KidsReminderSettingsView()
+                    }
+                    NavigationLink("Notifications") {
+                        NotificationsView()
+                    }
+                } else {
+                    NavigationLink("Health settings") {
+                        HealthSettingsView()
+                    }
+                    NavigationLink("Task settings") {
+                        SettingsTasksView()
+                    }
+                }
 
-            NavigationLink {
-                AccountView()
-            } label: {
-                Label("Account", systemImage: "person.crop.circle")
-            }
-
-            if !isKid {
-                NavigationLink {
-                    HealthSettingsView()
-                } label: {
-                    Label("Health settings", systemImage: "heart.text.square")
+                NavigationLink("Appearance") {
+                    SettingsAppearanceView()
                 }
             }
 
-            if !isKid {
-                NavigationLink {
-                    SettingsTasksView()
-                } label: {
-                    Label("Task settings", systemImage: "checklist")
+            Section("Account") {
+                NavigationLink("Account") {
+                    AccountView()
+                }
+
+                if isParent {
+                    NavigationLink("User access") {
+                        SettingsUsersView()
+                    }
                 }
             }
 
-            if isKid {
-                NavigationLink {
-                    NotificationsView()
-                } label: {
-                    Label("Notification inbox", systemImage: "bell")
+            Section("Support") {
+                if isParent {
+                    NavigationLink("Integrations") {
+                        SettingsIntegrationsView()
+                    }
                 }
 
-                NavigationLink {
-                    KidsReminderSettingsView()
-                } label: {
-                    Label("Reminder settings", systemImage: "bell.badge")
+                NavigationLink("Diagnostics") {
+                    SystemSettingsView()
                 }
-            }
-
-            if isParent {
-                NavigationLink {
-                    SettingsIntegrationsView()
-                } label: {
-                    Label("Integrations", systemImage: "bolt.horizontal")
-                }
-
-                NavigationLink {
-                    SettingsUsersView()
-                } label: {
-                    Label("User access", systemImage: "person.3")
-                }
-            }
-
-            NavigationLink {
-                SystemSettingsView()
-            } label: {
-                Label("System settings", systemImage: "gearshape")
             }
         }
+        .listStyle(.insetGrouped)
 
         Group {
             if horizontalSizeClass == .regular {
