@@ -4,6 +4,7 @@ import logging
 import httpx
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.db import GetDb
@@ -157,7 +158,11 @@ def Register(payload: RegisterRequest, db: Session = Depends(GetDb)) -> Register
         ApprovedByUserId=None,
     )
     db.add(record)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Username already exists")
     db.refresh(record)
 
     _NotifyPendingApproval(db, record)
