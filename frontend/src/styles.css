@@ -4544,6 +4544,25 @@ th.cell-number .th-button {
   box-shadow: 0 20px 40px rgba(94, 74, 51, 0.15);
 }
 
+.login-card--wide {
+  width: min(680px, 100%);
+}
+
+.login-links {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.login-instructions {
+  margin: 16px 0 0;
+  padding-left: 20px;
+  color: var(--text-soft);
+  display: grid;
+  gap: 8px;
+}
+
 .table-wrap {
   margin-top: 8px;
   overflow-x: auto;

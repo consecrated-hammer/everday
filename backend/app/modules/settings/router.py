@@ -17,26 +17,30 @@ from app.modules.auth.service import HashPassword
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
 
+def _ToUserOut(entry: User) -> UserOut:
+    return UserOut(
+        Id=entry.Id,
+        Username=entry.Username,
+        FirstName=entry.FirstName,
+        LastName=entry.LastName,
+        Email=entry.Email,
+        DiscordHandle=entry.DiscordHandle,
+        Role=entry.Role,
+        IsApproved=entry.IsApproved,
+        ApprovedAt=entry.ApprovedAt,
+        ApprovedByUserId=entry.ApprovedByUserId,
+        CreatedAt=entry.CreatedAt,
+        RequirePasswordChange=entry.RequirePasswordChange,
+    )
+
+
 @router.get("/users", response_model=list[UserOut])
 def ListUsers(
     db: Session = Depends(GetDb),
     user: UserContext = Depends(RequireModuleRole("settings", write=False)),
 ) -> list[UserOut]:
     users = db.query(User).order_by(User.Username.asc()).all()
-    return [
-        UserOut(
-            Id=entry.Id,
-            Username=entry.Username,
-            FirstName=entry.FirstName,
-            LastName=entry.LastName,
-            Email=entry.Email,
-            DiscordHandle=entry.DiscordHandle,
-            Role=entry.Role,
-            CreatedAt=entry.CreatedAt,
-            RequirePasswordChange=entry.RequirePasswordChange,
-        )
-        for entry in users
-    ]
+    return [_ToUserOut(entry) for entry in users]
 
 
 @router.post("/users", response_model=UserOut, status_code=status.HTTP_201_CREATED)
@@ -72,21 +76,14 @@ def CreateUser(
         DiscordHandle=payload.DiscordHandle.strip() if payload.DiscordHandle else None,
         Role=role,
         RequirePasswordChange=payload.RequirePasswordChange,
+        IsApproved=True,
+        ApprovedAt=NowUtc(),
+        ApprovedByUserId=user.Id,
     )
     db.add(record)
     db.commit()
     db.refresh(record)
-    return UserOut(
-        Id=record.Id,
-        Username=record.Username,
-        FirstName=record.FirstName,
-        LastName=record.LastName,
-        Email=record.Email,
-        DiscordHandle=record.DiscordHandle,
-        Role=record.Role,
-        CreatedAt=record.CreatedAt,
-        RequirePasswordChange=record.RequirePasswordChange,
-    )
+    return _ToUserOut(record)
 
 
 @router.put("/users/{user_id}/roles", response_model=UserOut)
@@ -116,17 +113,7 @@ def UpdateUserRole(
         db.query(KidLink).filter(KidLink.KidUserId == target.Id).delete()
     db.commit()
 
-    return UserOut(
-        Id=target.Id,
-        Username=target.Username,
-        FirstName=target.FirstName,
-        LastName=target.LastName,
-        Email=target.Email,
-        DiscordHandle=target.DiscordHandle,
-        Role=target.Role,
-        CreatedAt=target.CreatedAt,
-        RequirePasswordChange=target.RequirePasswordChange,
-    )
+    return _ToUserOut(target)
 
 
 @router.put("/users/{user_id}/password", response_model=UserOut)
@@ -160,17 +147,7 @@ def UpdateUserPassword(
     db.add(target)
     db.commit()
 
-    return UserOut(
-        Id=target.Id,
-        Username=target.Username,
-        FirstName=target.FirstName,
-        LastName=target.LastName,
-        Email=target.Email,
-        DiscordHandle=target.DiscordHandle,
-        Role=target.Role,
-        CreatedAt=target.CreatedAt,
-        RequirePasswordChange=target.RequirePasswordChange,
-    )
+    return _ToUserOut(target)
 
 
 @router.put("/users/{user_id}/profile", response_model=UserOut)
@@ -192,14 +169,27 @@ def UpdateUserProfile(
     db.add(target)
     db.commit()
 
-    return UserOut(
-        Id=target.Id,
-        Username=target.Username,
-        FirstName=target.FirstName,
-        LastName=target.LastName,
-        Email=target.Email,
-        DiscordHandle=target.DiscordHandle,
-        Role=target.Role,
-        CreatedAt=target.CreatedAt,
-        RequirePasswordChange=target.RequirePasswordChange,
-    )
+    return _ToUserOut(target)
+
+
+@router.put("/users/{user_id}/approve", response_model=UserOut)
+def ApproveUser(
+    user_id: int,
+    db: Session = Depends(GetDb),
+    user: UserContext = Depends(RequireModuleRole("settings", write=True)),
+) -> UserOut:
+    target = db.query(User).filter(User.Id == user_id).first()
+    if not target:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    if target.IsApproved == False:
+        target.IsApproved = True
+        target.ApprovedAt = NowUtc()
+        target.ApprovedByUserId = user.Id
+        target.FailedLoginCount = 0
+        target.LockedUntil = None
+        db.add(target)
+        db.commit()
+        db.refresh(target)
+
+    return _ToUserOut(target)

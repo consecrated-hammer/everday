@@ -14,6 +14,8 @@ from app.modules.auth.schemas import (
     ChangePasswordRequest,
     ForgotPasswordRequest,
     LoginRequest,
+    RegisterRequest,
+    RegisterResponse,
     RefreshRequest,
     ResetPasswordRequest,
     TokenResponse,
@@ -52,6 +54,12 @@ def Login(payload: LoginRequest, db: Session = Depends(GetDb)) -> TokenResponse:
             db.commit()
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
+    if user.IsApproved == False:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account pending approval. A parent must approve this account before sign in.",
+        )
+
     user.FailedLoginCount = 0
     user.LockedUntil = None
 
@@ -83,6 +91,44 @@ def Login(payload: LoginRequest, db: Session = Depends(GetDb)) -> TokenResponse:
     )
 
 
+@router.post("/register", response_model=RegisterResponse, status_code=status.HTTP_201_CREATED)
+def Register(payload: RegisterRequest, db: Session = Depends(GetDb)) -> RegisterResponse:
+    username = payload.Username.strip()
+    if not username:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Username required")
+
+    existing = db.query(User).filter(User.Username == username).first()
+    if existing:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Username already exists")
+
+    min_length = int(_require_env("AUTH_PASSWORD_MIN_LENGTH"))
+    if len(payload.Password) < min_length:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Password must be at least {min_length} characters",
+        )
+
+    record = User(
+        Username=username,
+        PasswordHash=HashPassword(payload.Password),
+        FirstName=payload.FirstName.strip() if payload.FirstName else None,
+        LastName=payload.LastName.strip() if payload.LastName else None,
+        Email=payload.Email.strip().lower() if payload.Email else None,
+        DiscordHandle=payload.DiscordHandle.strip() if payload.DiscordHandle else None,
+        Role="Kid",
+        RequirePasswordChange=False,
+        IsApproved=False,
+        ApprovedAt=None,
+        ApprovedByUserId=None,
+    )
+    db.add(record)
+    db.commit()
+
+    return RegisterResponse(
+        Message="Account request submitted. A parent must approve this account before sign in."
+    )
+
+
 @router.post("/refresh", response_model=TokenResponse)
 def Refresh(payload: RefreshRequest, db: Session = Depends(GetDb)) -> TokenResponse:
     now = NowUtc()
@@ -103,6 +149,14 @@ def Refresh(payload: RefreshRequest, db: Session = Depends(GetDb)) -> TokenRespo
     user = db.query(User).filter(User.Id == matched.UserId).first()
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+    if user.IsApproved == False:
+        matched.RevokedAt = now
+        db.add(matched)
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account pending approval. A parent must approve this account before sign in.",
+        )
 
     matched.RevokedAt = now
     access_token, expires_in = CreateAccessToken(user.Id, user.Username)

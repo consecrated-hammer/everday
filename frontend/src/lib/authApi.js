@@ -86,3 +86,16 @@ export const ResetPassword = async (payload) => {
   }
   return response.json();
 };
+
+export const Register = async (payload) => {
+  const response = await fetch(`${ApiBaseUrl}/auth/register`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  if (!response.ok) {
+    const detail = await ReadErrorDetail(response);
+    throw new Error(detail || "Request failed");
+  }
+  return response.json();
+};

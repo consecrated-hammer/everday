@@ -12,6 +12,7 @@ import BudgetExpenses from "./pages/Budget/Expenses.jsx";
 import BudgetAllocations from "./pages/Budget/Allocations.jsx";
 import BudgetSettings from "./pages/Budget/Settings.jsx";
 import Login from "./pages/Login/Login.jsx";
+import CreateAccount from "./pages/Login/CreateAccount.jsx";
 import ResetPassword from "./pages/Login/ResetPassword.jsx";
 import Shopping from "./pages/Shopping/Shopping.jsx";
 import Settings from "./pages/Settings/Settings.jsx";
@@ -47,6 +48,7 @@ const App = () => (
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/create-account" element={<CreateAccount />} />
         <Route path="/reset" element={<ResetPassword />} />
         <Route path="/kids-app" element={<KidsProductPage />} />
         <Route path="/kids-app/privacy" element={<KidsPrivacyPage />} />
