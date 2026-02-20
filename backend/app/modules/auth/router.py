@@ -55,7 +55,7 @@ def _NotifyPendingApproval(db: Session, pending_user: User) -> None:
             title="Account approval requested",
             body=f"{requested_name} is waiting for account approval in Settings.",
             notification_type="General",
-            link_url="/settings/users",
+            link_url="/settings/access",
             action_label="Review users",
             source_module="auth",
             source_id=f"user:{pending_user.Id}",
