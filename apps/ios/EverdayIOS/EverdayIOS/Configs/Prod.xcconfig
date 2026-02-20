@@ -2,3 +2,4 @@ SLASH = /
 API_BASE_URL = https:$(SLASH)$(SLASH)everday.batserver.au
 API_ENVIRONMENT = PROD
 APS_ENVIRONMENT = production
+OTHER_LDFLAGS = $(inherited) -framework AppIntents

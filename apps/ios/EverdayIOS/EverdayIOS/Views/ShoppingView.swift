@@ -116,7 +116,12 @@ private struct ShoppingContent: View {
             .buttonStyle(.borderedProminent)
 
             Text(
-                "Zebra helper examples:\n\"Alexa, ask zebra helper to add milk\"\n\"Alexa, ask zebra helper to remove milk\"\n\"Alexa, ask zebra helper to clear the list\""
+                """
+                Zebra helper examples:
+                "Alexa, ask zebra helper to add milk"
+                "Alexa, ask zebra helper to remove milk"
+                "Alexa, ask zebra helper to clear the list"
+                """
             )
             .font(.footnote)
             .foregroundStyle(.secondary)
@@ -174,12 +179,12 @@ private struct ShoppingContent: View {
     private func completeItem(_ item: ShoppingItem) async {
         guard !completingIds.contains(item.Id) else { return }
         withAnimation(.easeOut(duration: 0.16)) {
-            completingIds.insert(item.Id)
+            _ = completingIds.insert(item.Id)
         }
         try? await Task.sleep(nanoseconds: 320_000_000)
         await onDelete(item)
         withAnimation(.easeOut(duration: 0.2)) {
-            completingIds.remove(item.Id)
+            _ = completingIds.remove(item.Id)
         }
     }
 }
