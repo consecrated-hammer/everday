@@ -44,7 +44,6 @@ def upgrade() -> None:
         ["Id"],
         source_schema="auth",
         referent_schema="auth",
-        ondelete="SET NULL",
     )
     op.execute(
         """

@@ -31,9 +31,44 @@ from app.modules.auth.service import (
     VerifyPasswordResetToken,
     VerifyRefreshToken,
 )
+from app.modules.notifications.services import CreateNotificationsForUsers
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 logger = logging.getLogger("app.auth")
+
+
+def _NotifyPendingApproval(db: Session, pending_user: User) -> None:
+    parent_ids = sorted({row.Id for row in db.query(User.Id).filter(User.Role == "Parent").all()})
+    if not parent_ids:
+        return
+
+    display_name = " ".join(
+        part for part in (pending_user.FirstName or "", pending_user.LastName or "") if part
+    ).strip()
+    requested_name = display_name or pending_user.Username
+
+    try:
+        CreateNotificationsForUsers(
+            db,
+            user_ids=parent_ids,
+            created_by_user_id=0,
+            title="Account approval requested",
+            body=f"{requested_name} is waiting for account approval in Settings.",
+            notification_type="General",
+            link_url="/settings/users",
+            action_label="Review users",
+            source_module="auth",
+            source_id=f"user:{pending_user.Id}",
+            meta={
+                "PendingUserId": pending_user.Id,
+                "PendingUsername": pending_user.Username,
+            },
+        )
+    except Exception:
+        logger.exception(
+            "failed to create account approval notifications",
+            extra={"pending_user_id": pending_user.Id, "pending_username": pending_user.Username},
+        )
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -123,6 +158,9 @@ def Register(payload: RegisterRequest, db: Session = Depends(GetDb)) -> Register
     )
     db.add(record)
     db.commit()
+    db.refresh(record)
+
+    _NotifyPendingApproval(db, record)
 
     return RegisterResponse(
         Message="Account request submitted. A parent must approve this account before sign in."
