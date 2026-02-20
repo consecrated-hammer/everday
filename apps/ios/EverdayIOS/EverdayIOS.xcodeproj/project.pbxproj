@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		0444EBDFEB2E4253BD01C123 /* ResetPasswordView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CE5AD4D6E0D4E0F903830E8 /* ResetPasswordView.swift */; };
+		F2C3147D9A3B4E17B8C5D601 /* CreateAccountView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7A91C8F4C6B4A329D51A0B1 /* CreateAccountView.swift */; };
 		084228AC801D405BB0776551 /* ShoppingFormatters.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22C4922A42B64052906E0078 /* ShoppingFormatters.swift */; };
 		09AD406B2A0C473FAC729C49 /* SettingsAppearanceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C63A64CFC70B435887494EB5 /* SettingsAppearanceView.swift */; };
 		1370A200A7C046C0AC1572FF /* LifeAdminFormatters.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF79DC8F70EE4BCAA01414AA /* LifeAdminFormatters.swift */; };
@@ -129,6 +130,7 @@
 		794B2086C7294218A7B5B107 /* HealthComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthComponents.swift; sourceTree = "<group>"; };
 		7CA19EC3F89C4AACBAE1094E /* BudgetComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BudgetComponents.swift; sourceTree = "<group>"; };
 		8CE5AD4D6E0D4E0F903830E8 /* ResetPasswordView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResetPasswordView.swift; sourceTree = "<group>"; };
+		E7A91C8F4C6B4A329D51A0B1 /* CreateAccountView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreateAccountView.swift; sourceTree = "<group>"; };
 		9086C4BD1BC04764A23D6AD7 /* NotesApi.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotesApi.swift; sourceTree = "<group>"; };
 		9EE162BADD0A47898C4E0C7C /* LifeAdminRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LifeAdminRootView.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F6071829304050 /* EverdayIOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EverdayIOSApp.swift; sourceTree = "<group>"; };
@@ -281,6 +283,7 @@
 			children = (
 				A1B2C3D4E5F6071829304052 /* RootView.swift */,
 				A1B2C3D4E5F6071829304054 /* LoginView.swift */,
+				E7A91C8F4C6B4A329D51A0B1 /* CreateAccountView.swift */,
 				8CE5AD4D6E0D4E0F903830E8 /* ResetPasswordView.swift */,
 				A1B2C3D4E5F6071829304079 /* DashboardView.swift */,
 				A1B2C3D4E5F6071829304083 /* AccountView.swift */,
@@ -421,6 +424,7 @@
 				A1B2C3D4E5F6071829304051 /* EverdayIOSApp.swift in Sources */,
 				A1B2C3D4E5F6071829304053 /* RootView.swift in Sources */,
 				A1B2C3D4E5F6071829304055 /* LoginView.swift in Sources */,
+				F2C3147D9A3B4E17B8C5D601 /* CreateAccountView.swift in Sources */,
 				0444EBDFEB2E4253BD01C123 /* ResetPasswordView.swift in Sources */,
 				A1B2C3D4E5F6071829304075 /* DashboardView.swift in Sources */,
 				A1B2C3D4E5F6071829304076 /* AccountView.swift in Sources */,
