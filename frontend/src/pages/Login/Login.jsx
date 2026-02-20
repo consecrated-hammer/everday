@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 import { ForgotPassword, Login as LoginRequest } from "../../lib/authApi.js";
 import { SetTokens } from "../../lib/authStorage.js";
@@ -84,6 +84,9 @@ const Login = () => {
                 <button type="button" className="text-button" onClick={() => setMode("forgot")}>
                   Forgot login
                 </button>
+                <Link className="text-button" to="/create-account">
+                  Create account
+                </Link>
               </div>
             </form>
           </>

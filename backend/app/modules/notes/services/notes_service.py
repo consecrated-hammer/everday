@@ -581,7 +581,7 @@ def ReorderItems(db: Session, user: UserContext, note_id: int, item_orders: List
 
 def ListShareUsers(db: Session, user: UserContext) -> List[UserOut]:
     """List users available for sharing notes."""
-    records = db.query(User).order_by(User.Username.asc()).all()
+    records = db.query(User).filter(User.IsApproved == True).order_by(User.Username.asc()).all()
     return [
         UserOut(
             Id=entry.Id,
@@ -591,6 +591,9 @@ def ListShareUsers(db: Session, user: UserContext) -> List[UserOut]:
             Email=entry.Email,
             DiscordHandle=entry.DiscordHandle,
             Role=entry.Role,
+            IsApproved=entry.IsApproved,
+            ApprovedAt=entry.ApprovedAt,
+            ApprovedByUserId=entry.ApprovedByUserId,
             CreatedAt=entry.CreatedAt,
             RequirePasswordChange=entry.RequirePasswordChange,
         )

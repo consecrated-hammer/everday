@@ -4544,6 +4544,25 @@ th.cell-number .th-button {
   box-shadow: 0 20px 40px rgba(94, 74, 51, 0.15);
 }
 
+.login-card--wide {
+  width: min(680px, 100%);
+}
+
+.login-links {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.login-instructions {
+  margin: 16px 0 0;
+  padding-left: 20px;
+  color: var(--text-soft);
+  display: grid;
+  gap: 8px;
+}
+
 .table-wrap {
   margin-top: 8px;
   overflow-x: auto;
@@ -9212,6 +9231,31 @@ body.kids-theme {
   margin-top: 16px;
 }
 
+.kids-footer {
+  margin-top: 20px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.kids-footer-logout {
+  border: 1px solid var(--kids-border);
+  background: rgba(255, 255, 255, 0.75);
+  color: var(--kids-muted);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 0.82rem;
+}
+
+.kids-footer-logout:hover {
+  color: var(--kids-ink);
+  background: #fff;
+}
+
+.kids-footer-logout:focus-visible {
+  outline: 2px solid var(--kids-accent);
+  outline-offset: 2px;
+}
+
 .kids-home {
   display: grid;
   grid-template-columns: repeat(12, minmax(0, 1fr));
@@ -11991,6 +12035,10 @@ body.kids-theme {
   .kids-header {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .kids-footer {
+    justify-content: flex-start;
   }
 
   .kids-home {

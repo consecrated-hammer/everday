@@ -3,6 +3,7 @@ import { NavLink, useParams, useSearchParams } from "react-router-dom";
 import { createPortal } from "react-dom";
 
 import {
+  ApproveUser,
   CreateUser,
   FetchGmailAuthUrl,
   FetchGmailStatus,
@@ -930,6 +931,19 @@ const Settings = () => {
     }
   }, []);
 
+  const onApproveUser = useCallback(async (userId) => {
+    try {
+      setStatus("saving");
+      setError("");
+      const updated = await ApproveUser(userId);
+      setUsers((prev) => prev.map((entry) => (entry.Id === updated.Id ? updated : entry)));
+      setStatus("ready");
+    } catch (err) {
+      setStatus("error");
+      setError(err?.message || "Failed to approve user");
+    }
+  }, []);
+
   const onOpenPasswordModal = (user) => {
     setPasswordTarget(user);
     setPasswordForm({ NewPassword: "", ConfirmPassword: "" });
@@ -1489,6 +1503,7 @@ const Settings = () => {
       users.map((user) => {
         const displayName = GetUserDisplayName(user);
         const gravatar = GetGravatarUrl(user.Email || "");
+        const isApproved = user.IsApproved !== false;
         return {
           Id: user.Id,
           AvatarFallback: GetUserInitials(user),
@@ -1497,8 +1512,9 @@ const Settings = () => {
           Email: user.Email || "Not set",
           Username: user.Username,
           Role: user.Role || "Kid",
-          Status: user.RequirePasswordChange ? "Reset required" : "Active",
+          Status: isApproved ? (user.RequirePasswordChange ? "Reset required" : "Active") : "Pending approval",
           LastActive: user.CreatedAt || "",
+          IsApproved: isApproved,
           RequirePasswordChange: Boolean(user.RequirePasswordChange),
           User: user
         };
@@ -1638,6 +1654,19 @@ const Settings = () => {
             role="menu"
             style={accessMenu.style}
           >
+            {accessMenu.user.IsApproved === false ? (
+              <button
+                type="button"
+                className="dropdown-item"
+                onClick={() => {
+                  setAccessMenu(null);
+                  onApproveUser(accessMenu.user.Id);
+                }}
+                disabled={status === "saving"}
+              >
+                Approve account
+              </button>
+            ) : null}
             <button
               type="button"
               className="dropdown-item"
@@ -3426,8 +3455,19 @@ const Settings = () => {
                           const isOpen = accessMenu?.userId === row.Id;
                           return (
                             <div className="settings-access-actions">
+                              {row.IsApproved ? null : <span className="badge">Pending approval</span>}
                               {row.RequirePasswordChange ? (
                                 <span className="badge">Reset required</span>
+                              ) : null}
+                              {!row.IsApproved ? (
+                                <button
+                                  type="button"
+                                  className="button-secondary"
+                                  onClick={() => onApproveUser(row.Id)}
+                                  disabled={status === "saving"}
+                                >
+                                  Approve
+                                </button>
                               ) : null}
                               <div className="settings-access-menu">
                                 <button
@@ -3481,6 +3521,19 @@ const Settings = () => {
                                   >
                                     Reset password
                                   </button>
+                                  {user.IsApproved === false ? (
+                                    <button
+                                      type="button"
+                                      className="button-secondary"
+                                      onClick={() => onApproveUser(user.Id)}
+                                      disabled={status === "saving"}
+                                    >
+                                      Approve account
+                                    </button>
+                                  ) : null}
+                                  {user.IsApproved === false ? (
+                                    <span className="badge">Pending approval</span>
+                                  ) : null}
                                   {user.RequirePasswordChange ? (
                                     <span className="badge">Reset required</span>
                                   ) : null}

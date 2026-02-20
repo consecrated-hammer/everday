@@ -57,6 +57,11 @@ def RequireAuthenticated(
     user = db.query(User).filter(User.Id == user_id).first()
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+    if user.IsApproved == False:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account pending approval. A parent must approve this account before sign in.",
+        )
 
     return UserContext(Id=user.Id, Username=user.Username, Role=user.Role)
 

@@ -32,6 +32,12 @@ export const UpdateUserProfile = async (userId, payload) => {
   });
 };
 
+export const ApproveUser = async (userId) => {
+  return RequestJson(`/settings/users/${userId}/approve`, {
+    method: "PUT"
+  });
+};
+
 export const FetchGoogleAuthUrl = async () => {
   return RequestJson("/integrations/google/oauth/start");
 };

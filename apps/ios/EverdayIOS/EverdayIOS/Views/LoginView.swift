@@ -2,6 +2,7 @@ import SwiftUI
 
 struct LoginView: View {
     @EnvironmentObject var authStore: AuthStore
+    @EnvironmentObject var environmentStore: EnvironmentStore
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var username = ""
     @State private var password = ""
@@ -26,6 +27,10 @@ struct LoginView: View {
         return min(UIScreen.main.bounds.width * 0.78, 320)
     }
 
+    private var createAccountWebUrl: URL? {
+        URL(string: "\(environmentStore.current.baseUrl)/create-account")
+    }
+
     var body: some View {
         NavigationStack {
             let content = VStack(spacing: 20) {
@@ -42,6 +47,9 @@ struct LoginView: View {
                             .font(.largeTitle.bold())
                         Text("Sign in to continue")
                             .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        Text("Paul Family companion app")
+                            .font(.footnote)
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -112,12 +120,28 @@ struct LoginView: View {
                 .disabled(!canSubmit)
 
                 NavigationLink {
+                    CreateAccountView()
+                } label: {
+                    Text("Create account")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+
+                NavigationLink {
                     ResetPasswordView()
                 } label: {
                     Text("Forgot password?")
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.bordered)
+
+                if let webCreateAccountUrl = createAccountWebUrl {
+                    Link(destination: webCreateAccountUrl) {
+                        Text("Need web setup? Open \(environmentStore.current.displayName) create account")
+                            .font(.footnote)
+                    }
+                    .foregroundStyle(.secondary)
+                }
 
                 Spacer()
             }

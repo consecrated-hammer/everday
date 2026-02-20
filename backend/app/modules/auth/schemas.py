@@ -34,6 +34,9 @@ class UserOut(BaseModel):
     Email: str | None = None
     DiscordHandle: str | None = None
     Role: str
+    IsApproved: bool = True
+    ApprovedAt: datetime | None = None
+    ApprovedByUserId: int | None = None
     CreatedAt: datetime
     RequirePasswordChange: bool
 
@@ -47,6 +50,20 @@ class CreateUserRequest(BaseModel):
     DiscordHandle: str | None = Field(default=None, max_length=120)
     Role: str = Field(default="Kid", max_length=20)
     RequirePasswordChange: bool = False
+
+
+class RegisterRequest(BaseModel):
+    Username: str = Field(..., max_length=120)
+    Password: str = Field(..., max_length=200)
+    FirstName: str | None = Field(default=None, max_length=120)
+    LastName: str | None = Field(default=None, max_length=120)
+    Email: str | None = Field(default=None, max_length=254)
+    DiscordHandle: str | None = Field(default=None, max_length=120)
+
+
+class RegisterResponse(BaseModel):
+    Status: str = "PendingApproval"
+    Message: str
 
 
 class UpdateUserRoleRequest(BaseModel):
