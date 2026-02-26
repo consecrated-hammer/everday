@@ -47,6 +47,14 @@ final class AuthService {
             requiresAuth: false
         )
     }
+
+    func deleteAccount() async throws {
+        try await client.requestVoid(
+            path: "auth/account",
+            method: "DELETE",
+            requiresAuth: true
+        )
+    }
 }
 
 struct LoginRequestPayload: Encodable {

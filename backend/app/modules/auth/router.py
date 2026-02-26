@@ -8,6 +8,11 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.db import GetDb
+from app.modules.auth.account_deletion_service import (
+    DELETED_USER_PLACEHOLDER_ID,
+    DELETED_USER_TEXT,
+    DeleteAccountAndData,
+)
 from app.modules.auth.deps import NowUtc, RequireAuthenticated, UserContext, _require_env
 from app.modules.auth.email import SendPasswordResetEmail
 from app.modules.auth.models import PasswordResetToken, RefreshToken, User
@@ -241,6 +246,47 @@ def Logout(payload: RefreshRequest, user: UserContext = Depends(RequireAuthentic
             db.commit()
             return {"status": "ok"}
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Refresh token not found")
+
+
+@router.delete("/account")
+def DeleteAccount(
+    user: UserContext = Depends(RequireAuthenticated),
+    db: Session = Depends(GetDb),
+) -> dict:
+    try:
+        summary = DeleteAccountAndData(db, user_id=user.Id)
+        db.commit()
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except IntegrityError as exc:
+        db.rollback()
+        logger.exception(
+            "account deletion integrity error",
+            extra={"user_id": user.Id, "username": user.Username},
+        )
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Unable to delete account due to related records. Contact support.",
+        ) from exc
+    except Exception as exc:  # noqa: BLE001
+        db.rollback()
+        logger.exception(
+            "account deletion failed",
+            extra={"user_id": user.Id, "username": user.Username},
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to delete account. Try again.",
+        ) from exc
+
+    message = "Account and associated data permanently deleted."
+    if summary["ReassignedRows"] > 0:
+        message += (
+            f" Shared history retained for other users was reassigned to placeholder user id "
+            f"{DELETED_USER_PLACEHOLDER_ID} ({DELETED_USER_TEXT})."
+        )
+    return {"status": "ok", "message": message, **summary}
 
 
 @router.post("/change-password")

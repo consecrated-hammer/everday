@@ -137,7 +137,7 @@ struct LoginView: View {
 
                 if let webCreateAccountUrl = createAccountWebUrl {
                     Link(destination: webCreateAccountUrl) {
-                        Text("Need web setup? Open \(environmentStore.current.displayName) create account")
+                        Text("Need an account? Create one on the web.")
                             .font(.footnote)
                     }
                     .foregroundStyle(.secondary)

@@ -86,7 +86,7 @@ struct CreateAccountView: View {
             Section("Web account page") {
                 if let url = createAccountWebUrl {
                     Link(
-                        "Open \(environmentStore.current.displayName) create account page",
+                        "Open \(environmentStore.current.displayName) account setup page",
                         destination: url
                     )
                         .font(.footnote)

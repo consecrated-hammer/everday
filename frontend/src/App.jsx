@@ -36,6 +36,7 @@ import Notes from "./pages/Notes/Notes.jsx";
 import KidsProductPage from "./pages/Marketing/KidsProductPage.jsx";
 import KidsPrivacyPage from "./pages/Marketing/KidsPrivacyPage.jsx";
 import KidsSupportPage from "./pages/Marketing/KidsSupportPage.jsx";
+import KidsTermsPage from "./pages/Marketing/KidsTermsPage.jsx";
 
 const HealthHistoryRedirect = () => {
   const { date } = useParams();
@@ -52,6 +53,7 @@ const App = () => (
         <Route path="/reset" element={<ResetPassword />} />
         <Route path="/kids-app" element={<KidsProductPage />} />
         <Route path="/kids-app/privacy" element={<KidsPrivacyPage />} />
+        <Route path="/kids-app/terms" element={<KidsTermsPage />} />
         <Route path="/kids-app/support" element={<KidsSupportPage />} />
       <Route
         element={

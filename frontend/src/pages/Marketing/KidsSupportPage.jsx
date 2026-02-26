@@ -45,6 +45,7 @@ const KidsSupportPage = () => (
       <h2 id="support-links-title">Useful links</h2>
       <div className="kids-marketing-links kids-marketing-links--stacked">
         <Link to="/kids-app/privacy">Privacy policy</Link>
+        <Link to="/kids-app/terms">Terms of use</Link>
         <Link to="/kids-app">Product page</Link>
       </div>
     </section>
