@@ -58,7 +58,7 @@ struct AccountView: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This will permanently delete your account and all associated data. This cannot be undone. Shared history for other users may show Deleted user.")
+            Text("This will permanently delete your account and all associated data. This cannot be undone.")
         }
         .alert("Delete account failed", isPresented: Binding(
             get: { deleteAccountError != nil },
