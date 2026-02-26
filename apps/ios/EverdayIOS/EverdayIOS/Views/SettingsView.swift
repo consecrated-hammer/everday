@@ -51,6 +51,22 @@ struct SettingsView: View {
                     SystemSettingsView()
                 }
             }
+
+            Section("Legal") {
+                if let privacyUrl {
+                    Link("Privacy Policy", destination: privacyUrl)
+                } else {
+                    Text("Privacy Policy unavailable")
+                        .foregroundStyle(.secondary)
+                }
+
+                if let termsUrl {
+                    Link("Terms of Use", destination: termsUrl)
+                } else {
+                    Text("Terms of Use unavailable")
+                        .foregroundStyle(.secondary)
+                }
+            }
         }
         .listStyle(.insetGrouped)
 
@@ -80,5 +96,20 @@ struct SettingsView: View {
 
     private var isParent: Bool {
         authStore.tokens?.role == "Parent"
+    }
+
+    private var privacyUrl: URL? {
+        buildLegalUrl(path: "kids-app/privacy")
+    }
+
+    private var termsUrl: URL? {
+        buildLegalUrl(path: "kids-app/terms")
+    }
+
+    private func buildLegalUrl(path: String) -> URL? {
+        let raw = EnvironmentStore.resolvedEnvironment().baseUrl
+        let withScheme = raw.hasPrefix("http") ? raw : "https://\(raw)"
+        guard let base = URL(string: withScheme) else { return nil }
+        return base.appendingPathComponent(path)
     }
 }

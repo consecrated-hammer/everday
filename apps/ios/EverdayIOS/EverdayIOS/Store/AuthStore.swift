@@ -60,6 +60,11 @@ final class AuthStore: ObservableObject {
         await PushNotificationCoordinator.shared.handleAuthStateChanged(isAuthenticated: false)
     }
 
+    func deleteAccount() async throws {
+        try await authService.deleteAccount()
+        await logout()
+    }
+
     private func save(_ tokens: AuthTokens) {
         self.tokens = tokens
         tokenStore.saveTokens(tokens)
