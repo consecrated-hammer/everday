@@ -8,7 +8,6 @@
 
 /* Begin PBXBuildFile section */
 		0444EBDFEB2E4253BD01C123 /* ResetPasswordView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CE5AD4D6E0D4E0F903830E8 /* ResetPasswordView.swift */; };
-		F2C3147D9A3B4E17B8C5D601 /* CreateAccountView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7A91C8F4C6B4A329D51A0B1 /* CreateAccountView.swift */; };
 		084228AC801D405BB0776551 /* ShoppingFormatters.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22C4922A42B64052906E0078 /* ShoppingFormatters.swift */; };
 		09AD406B2A0C473FAC729C49 /* SettingsAppearanceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C63A64CFC70B435887494EB5 /* SettingsAppearanceView.swift */; };
 		1370A200A7C046C0AC1572FF /* LifeAdminFormatters.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF79DC8F70EE4BCAA01414AA /* LifeAdminFormatters.swift */; };
@@ -87,6 +86,7 @@
 		DC2B3A40BB0C45F398F13729 /* BudgetExpensesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 359FB8B2C0C74AD4ACDB3695 /* BudgetExpensesView.swift */; };
 		DE685BA5D85146CB9A41B4C5 /* BudgetRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69974E90CB3E4A6982E54155 /* BudgetRootView.swift */; };
 		E1F0A679BCDF4B40B2588969 /* ShoppingApi.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4DC6CE94E764B27960000E7 /* ShoppingApi.swift */; };
+		F2C3147D9A3B4E17B8C5D601 /* CreateAccountView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7A91C8F4C6B4A329D51A0B1 /* CreateAccountView.swift */; };
 		F31FDEEF31D144F0AA109E57 /* NotesModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18667992083D490DBE57FA98 /* NotesModels.swift */; };
 		F5D3362BE72A4433B255A4D0 /* SettingsModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61CAB6AE73C543D8A41CD804 /* SettingsModels.swift */; };
 		F8304E9F396841FFBE56FAB5 /* HealthLogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB163B73959E49AAADD8949C /* HealthLogView.swift */; };
@@ -130,7 +130,6 @@
 		794B2086C7294218A7B5B107 /* HealthComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthComponents.swift; sourceTree = "<group>"; };
 		7CA19EC3F89C4AACBAE1094E /* BudgetComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BudgetComponents.swift; sourceTree = "<group>"; };
 		8CE5AD4D6E0D4E0F903830E8 /* ResetPasswordView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResetPasswordView.swift; sourceTree = "<group>"; };
-		E7A91C8F4C6B4A329D51A0B1 /* CreateAccountView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreateAccountView.swift; sourceTree = "<group>"; };
 		9086C4BD1BC04764A23D6AD7 /* NotesApi.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotesApi.swift; sourceTree = "<group>"; };
 		9EE162BADD0A47898C4E0C7C /* LifeAdminRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LifeAdminRootView.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F6071829304050 /* EverdayIOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EverdayIOSApp.swift; sourceTree = "<group>"; };
@@ -179,6 +178,7 @@
 		D01E1478F47145A090982DC0 /* TasksModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TasksModels.swift; sourceTree = "<group>"; };
 		D50EA68E6E57482F88CD1F65 /* SettingsUsersView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsUsersView.swift; sourceTree = "<group>"; };
 		D7F644CE36514115B8E09CFE /* LifeAdminLibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LifeAdminLibraryView.swift; sourceTree = "<group>"; };
+		E7A91C8F4C6B4A329D51A0B1 /* CreateAccountView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreateAccountView.swift; sourceTree = "<group>"; };
 		F4DC6CE94E764B27960000E7 /* ShoppingApi.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShoppingApi.swift; sourceTree = "<group>"; };
 		FF79DC8F70EE4BCAA01414AA /* LifeAdminFormatters.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LifeAdminFormatters.swift; sourceTree = "<group>"; };
 		FF83E6574FA7588C1B9F2A14 /* KidsAdminApi.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KidsAdminApi.swift; sourceTree = "<group>"; };
@@ -522,7 +522,6 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 8G8SGDTGM9;
 				ENABLE_PREVIEWS = YES;
 				INFOPLIST_FILE = EverdayIOS/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Everday Life Admin";
@@ -554,7 +553,6 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 8G8SGDTGM9;
 				INFOPLIST_FILE = EverdayIOS/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Everday Life Admin";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
@@ -598,7 +596,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = dwarf;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = 8G8SGDTGM9;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -646,7 +644,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				DEAD_CODE_STRIPPING = YES;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = 8G8SGDTGM9;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
