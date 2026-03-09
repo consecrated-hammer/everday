@@ -174,7 +174,7 @@ class UserSettings(BaseModel):
     ShowWeightChartOnToday: bool = True
     ShowStepsChartOnToday: bool = True
     ShowWeightProjectionOnToday: bool = True
-    ReminderTimeZone: str = "UTC"
+    ReminderTimeZone: str = "Australia/Adelaide"
     FoodRemindersEnabled: bool = False
     FoodReminderTimes: dict[str, str] = Field(default_factory=dict)
     FoodReminderSlots: dict[str, FoodReminderSlot] = Field(default_factory=dict)

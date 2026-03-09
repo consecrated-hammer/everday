@@ -14,7 +14,8 @@ from sqlalchemy.orm import Session
 from app.modules.auth.deps import NowUtc, UserContext
 from app.modules.auth.models import User
 from app.modules.notifications.services import CreateNotificationsForUsers
-from app.modules.auth.models import User
+from app.modules.health.models import Settings as HealthSettings
+from app.modules.kids.models import ReminderSettings as KidsReminderSettings
 from app.modules.tasks.models import (
     Task,
     TaskAssignee,
@@ -1048,7 +1049,14 @@ def EnsureTaskSettings(db: Session, user_id: int, now: datetime) -> TaskSettings
     record = GetTaskSettings(db, user_id)
     if record:
         return record
-    record = TaskSettings(UserId=user_id, CreatedAt=now, UpdatedAt=now)
+    record = TaskSettings(
+        UserId=user_id,
+        OverdueReminderTime=DEFAULT_OVERDUE_REMINDER_TIME,
+        OverdueReminderTimeZone=DEFAULT_OVERDUE_REMINDER_TIMEZONE,
+        OverdueRemindersEnabled=True,
+        CreatedAt=now,
+        UpdatedAt=now,
+    )
     db.add(record)
     return record
 
@@ -1106,12 +1114,24 @@ def UpdateTaskSettings(db: Session, user_id: int, payload: dict) -> TaskSettings
     now = NowUtc()
     record = GetTaskSettings(db, user_id)
     if not record:
-        record = TaskSettings(UserId=user_id, CreatedAt=now, UpdatedAt=now)
+        record = TaskSettings(
+            UserId=user_id,
+            OverdueReminderTime=DEFAULT_OVERDUE_REMINDER_TIME,
+            OverdueReminderTimeZone=DEFAULT_OVERDUE_REMINDER_TIMEZONE,
+            OverdueRemindersEnabled=True,
+            CreatedAt=now,
+            UpdatedAt=now,
+        )
     if "OverdueReminderTime" in payload:
         record.OverdueReminderTime = _NormalizeReminderTime(payload.get("OverdueReminderTime"))
     if "OverdueReminderTimeZone" in payload:
-        record.OverdueReminderTimeZone = _NormalizeReminderTimeZone(
-            payload.get("OverdueReminderTimeZone")
+        normalized_tz = _NormalizeReminderTimeZone(payload.get("OverdueReminderTimeZone"))
+        record.OverdueReminderTimeZone = normalized_tz or DEFAULT_OVERDUE_REMINDER_TIMEZONE
+        _PropagateGlobalReminderTimeZone(
+            db,
+            user_id=user_id,
+            reminder_time_zone=record.OverdueReminderTimeZone,
+            now=now,
         )
     if "OverdueRemindersEnabled" in payload and payload.get("OverdueRemindersEnabled") is not None:
         record.OverdueRemindersEnabled = bool(payload.get("OverdueRemindersEnabled"))
@@ -1120,6 +1140,25 @@ def UpdateTaskSettings(db: Session, user_id: int, payload: dict) -> TaskSettings
     db.commit()
     db.refresh(record)
     return record
+
+
+def _PropagateGlobalReminderTimeZone(
+    db: Session,
+    *,
+    user_id: int,
+    reminder_time_zone: str,
+    now: datetime,
+) -> None:
+    health_settings = db.query(HealthSettings).filter(HealthSettings.UserId == user_id).first()
+    if health_settings:
+        health_settings.ReminderTimeZone = reminder_time_zone
+        db.add(health_settings)
+
+    kids_settings = db.query(KidsReminderSettings).filter(KidsReminderSettings.KidUserId == user_id).first()
+    if kids_settings:
+        kids_settings.ReminderTimeZone = reminder_time_zone
+        kids_settings.UpdatedAt = now
+        db.add(kids_settings)
 
 
 def ResolveOverdueReminderTime(value: str | None) -> time:

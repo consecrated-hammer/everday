@@ -3,12 +3,15 @@ import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
 import logging
+from zoneinfo import ZoneInfo
 
 from sqlalchemy.orm import Session
 
 from app.modules.auth.service import HashApiKey, VerifyApiKey
 from app.modules.auth.models import User
 from app.modules.health.models import Settings as SettingsModel
+from app.modules.kids.models import ReminderSettings as KidsReminderSettings
+from app.modules.tasks.models import TaskSettings
 from app.modules.health.schemas import (
     HaeApiKeyResponse,
     GoalRecommendationInput,
@@ -181,8 +184,55 @@ def _SerializeFoodReminderSlots(value: dict[str, dict | str] | None) -> str:
 
 def _ResolveReminderTimeZone(value: str | None) -> str:
     if value and value.strip():
-        return value.strip()
+        cleaned = value.strip()
+        try:
+            ZoneInfo(cleaned)
+            return cleaned
+        except Exception:  # noqa: BLE001
+            return DefaultReminderTimeZone
     return DefaultReminderTimeZone
+
+
+def _NormalizeReminderTimeZoneInput(value: str | None) -> str:
+    cleaned = (value or "").strip()
+    if not cleaned:
+        return DefaultReminderTimeZone
+    try:
+        ZoneInfo(cleaned)
+    except Exception as exc:  # noqa: BLE001
+        raise ValueError("Reminder time zone is invalid.") from exc
+    return cleaned
+
+
+def _GetTaskReminderTimeZone(db: Session, user_id: int) -> str | None:
+    record = db.query(TaskSettings).filter(TaskSettings.UserId == user_id).first()
+    if not record:
+        return None
+    return _ResolveReminderTimeZone(record.OverdueReminderTimeZone)
+
+
+def _SetTaskReminderTimeZone(db: Session, user_id: int, tz_name: str) -> None:
+    now = datetime.now(timezone.utc)
+    record = db.query(TaskSettings).filter(TaskSettings.UserId == user_id).first()
+    if not record:
+        record = TaskSettings(
+            UserId=user_id,
+            OverdueReminderTimeZone=tz_name,
+            OverdueRemindersEnabled=True,
+            CreatedAt=now,
+            UpdatedAt=now,
+        )
+        db.add(record)
+        return
+    record.OverdueReminderTimeZone = tz_name
+    record.UpdatedAt = now
+    db.add(record)
+
+    kids_settings = db.query(KidsReminderSettings).filter(KidsReminderSettings.KidUserId == user_id).first()
+    if kids_settings:
+        kids_settings.ReminderTimeZone = tz_name
+        kids_settings.UpdatedAt = now
+        db.add(kids_settings)
 
 
 def _ResolveWeightReminderTime(value: str | None) -> str:
@@ -379,6 +429,7 @@ def EnsureSettingsForUser(db: Session, UserId: int) -> SettingsModel:
     if record:
         return record
 
+    global_tz = _GetTaskReminderTimeZone(db, UserId) or DefaultReminderTimeZone
     record = SettingsModel(
         SettingsId=str(uuid.uuid4()),
         UserId=UserId,
@@ -423,7 +474,7 @@ def EnsureSettingsForUser(db: Session, UserId: int) -> SettingsModel:
         FoodReminderSlots=_SerializeFoodReminderSlots(DefaultFoodReminderSlots),
         WeightRemindersEnabled=False,
         WeightReminderTime=DefaultWeightReminderTime,
-        ReminderTimeZone=DefaultReminderTimeZone,
+        ReminderTimeZone=global_tz,
     )
     db.add(record)
     db.commit()
@@ -549,6 +600,9 @@ def GetUserSettings(db: Session, UserId: int) -> UserSettings:
         if profile and _ProfileReady(profile):
             GoalSummaryValue = _TryUpdateGoalStatus(db, UserId, record, profile)
     targets = GetSettings(db, UserId)
+    reminder_tz = _GetTaskReminderTimeZone(db, UserId) or _ResolveReminderTimeZone(
+        record.ReminderTimeZone
+    )
     return UserSettings(
         Targets=targets,
         TodayLayout=_ParseLayout(record.TodayLayout),
@@ -564,7 +618,7 @@ def GetUserSettings(db: Session, UserId: int) -> UserSettings:
         ShowWeightProjectionOnToday=bool(record.ShowWeightProjectionOnToday)
         if record.ShowWeightProjectionOnToday is not None
         else True,
-        ReminderTimeZone=_ResolveReminderTimeZone(record.ReminderTimeZone),
+        ReminderTimeZone=reminder_tz,
         FoodRemindersEnabled=bool(record.FoodRemindersEnabled)
         if record.FoodRemindersEnabled is not None
         else False,
@@ -628,7 +682,9 @@ def UpdateSettings(db: Session, UserId: int, Input: UpdateSettingsInput) -> User
                 raise ValueError("Reminder time must be in HH:MM format.")
             record.WeightReminderTime = value or DefaultWeightReminderTime
         elif field == "ReminderTimeZone":
-            record.ReminderTimeZone = _ResolveReminderTimeZone(value)
+            normalized_tz = _NormalizeReminderTimeZoneInput(value)
+            record.ReminderTimeZone = normalized_tz
+            _SetTaskReminderTimeZone(db, UserId, normalized_tz)
         elif value is not None:
             setattr(record, field, value)
 
