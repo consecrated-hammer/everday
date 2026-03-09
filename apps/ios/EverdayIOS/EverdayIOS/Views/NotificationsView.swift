@@ -10,6 +10,7 @@ struct NotificationsView: View {
     @State private var unreadCount = 0
     @State private var status: LoadState = .idle
     @State private var errorMessage = ""
+    @State private var showDismissAllConfirmation = false
 
     var body: some View {
         let scroll = ScrollView {
@@ -25,11 +26,32 @@ struct NotificationsView: View {
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Mark all read") {
-                        Task { await markAllRead() }
+                    Menu {
+                        Button("Mark all read") {
+                            Task { await markAllRead() }
+                        }
+                        .disabled(isBusy || unreadCount == 0)
+
+                        Button("Dismiss all", role: .destructive) {
+                            showDismissAllConfirmation = true
+                        }
+                        .disabled(isBusy || notifications.isEmpty)
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
                     }
-                    .disabled(isBusy || unreadCount == 0)
                 }
+            }
+            .confirmationDialog(
+                "Dismiss all notifications?",
+                isPresented: $showDismissAllConfirmation,
+                titleVisibility: .visible
+            ) {
+                Button("Dismiss all", role: .destructive) {
+                    Task { await dismissAllNotifications() }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This will dismiss every notification in this list.")
             }
 
         let tasks = base
@@ -201,6 +223,19 @@ struct NotificationsView: View {
         } catch {
             status = .error
             errorMessage = (error as? ApiError)?.message ?? "Failed to mark all read."
+        }
+    }
+
+    private func dismissAllNotifications() async {
+        guard !notifications.isEmpty else { return }
+        status = .saving
+        errorMessage = ""
+        do {
+            _ = try await NotificationsApi.dismissAll()
+            await refreshAfterAction()
+        } catch {
+            status = .error
+            errorMessage = (error as? ApiError)?.message ?? "Failed to dismiss all notifications."
         }
     }
 

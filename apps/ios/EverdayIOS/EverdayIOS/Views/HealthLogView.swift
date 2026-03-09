@@ -68,7 +68,7 @@ struct HealthLogView: View {
                 shareUsers: shareUsers,
                 nextSortOrder: nextSortOrder,
                 flowMode: editingEntry == nil ? .quickAdd : .detailed,
-                onSaved: { Task { await load() } }
+                onSaved: { Task { await load(forceCatalogRefresh: true) } }
             )
         }
         .alert("Delete entry", isPresented: Binding(
@@ -227,19 +227,19 @@ struct HealthLogView: View {
         }
     }
 
-    private func load() async {
+    private func load(forceCatalogRefresh: Bool = false) async {
         status = .loading
         errorMessage = ""
         do {
             async let logResult = HealthApi.fetchDailyLog(date: logDateKey)
-            if foods.isEmpty {
+            if forceCatalogRefresh || foods.isEmpty {
                 foods = try await HealthApi.fetchFoods()
             }
-            if templates.isEmpty {
+            if forceCatalogRefresh || templates.isEmpty {
                 let response = try await HealthApi.fetchMealTemplates()
                 templates = response.Templates
             }
-            if shareUsers.isEmpty {
+            if forceCatalogRefresh || shareUsers.isEmpty {
                 do {
                     shareUsers = try await SettingsApi.fetchUsers()
                 } catch {

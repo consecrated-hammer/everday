@@ -802,8 +802,16 @@ struct HealthMealEntrySheet: View {
         if selectionMode == .food && selectedFoodId == nil { return false }
         if selectionMode == .template && selectedTemplateId == nil { return false }
         if Double(quantityText) == nil || (Double(quantityText) ?? 0) <= 0 { return false }
-        if selectionMode == .food && portionChoices.isEmpty { return false }
+        if selectionMode == .food && portionChoices.isEmpty && !hasExistingPortionFallback { return false }
         return true
+    }
+
+    private var hasExistingPortionFallback: Bool {
+        guard selectionMode == .food, let existingEntry else { return false }
+        let label = (existingEntry.PortionLabel ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let baseUnit = (existingEntry.PortionBaseUnit ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let baseAmount = existingEntry.PortionBaseAmount ?? 0
+        return !label.isEmpty && !baseUnit.isEmpty && baseAmount > 0
     }
 
     private func templateSubtitle(_ template: HealthMealTemplateWithItems) -> String {
@@ -1302,10 +1310,18 @@ struct HealthMealEntrySheet: View {
         if selectionMode == .template {
             return PortionPayload(optionId: nil, label: "serving", baseUnit: "each", baseAmount: 1)
         }
-        guard let choice = portionChoices.first(where: { $0.id == selectedPortionId }) ?? portionChoices.first else {
-            throw ApiError(message: "Select a serving size")
+        if let choice = portionChoices.first(where: { $0.id == selectedPortionId }) ?? portionChoices.first {
+            return PortionPayload(optionId: choice.optionId, label: choice.label, baseUnit: choice.baseUnit, baseAmount: choice.baseAmount)
         }
-        return PortionPayload(optionId: choice.optionId, label: choice.label, baseUnit: choice.baseUnit, baseAmount: choice.baseAmount)
+        if let existingEntry, hasExistingPortionFallback {
+            return PortionPayload(
+                optionId: existingEntry.PortionOptionId,
+                label: existingEntry.PortionLabel ?? "serving",
+                baseUnit: existingEntry.PortionBaseUnit ?? "each",
+                baseAmount: max(existingEntry.PortionBaseAmount ?? 1, 0.0001)
+            )
+        }
+        throw ApiError(message: "Select a serving size")
     }
 
     private func trimmedOrNil(_ value: String?) -> String? {
