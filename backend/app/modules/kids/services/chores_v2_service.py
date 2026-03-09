@@ -29,6 +29,7 @@ class ProjectionPoint:
 @dataclass(frozen=True)
 class MonthSummary:
     MissedDays: int
+    MissedDeductionCents: int
     ApprovedBonusCents: int
     PendingBonusCents: int
     ProjectedPayoutCents: int
@@ -99,10 +100,28 @@ def BuildMonthProjection(
     month_start: date,
     month_end: date,
     daily_slice_cents: int,
+    monthly_allowance_cents: int | None,
     chores: list[Chore],
     assignments: list[ChoreAssignment],
     entries: list[ChoreEntry],
 ) -> tuple[list[ProjectionPoint], MonthSummary, dict[date, bool]]:
+    days_in_month = (month_end - month_start).days + 1
+    normalized_allowance = max(0, monthly_allowance_cents if monthly_allowance_cents is not None else 0)
+    base_daily = normalized_allowance // days_in_month if days_in_month > 0 else 0
+    remainder = normalized_allowance % days_in_month if days_in_month > 0 else 0
+    fallback_daily_slice = max(0, daily_slice_cents)
+
+    daily_slice_by_date: dict[date, int] = {}
+    cursor = month_start
+    offset = 0
+    while cursor <= month_end:
+        if monthly_allowance_cents is None:
+            daily_slice_by_date[cursor] = fallback_daily_slice
+        else:
+            daily_slice_by_date[cursor] = base_daily + (1 if offset < remainder else 0)
+        cursor = cursor + timedelta(days=1)
+        offset += 1
+
     chore_by_id = {chore.Id: chore for chore in chores}
     assignment_by_chore: dict[int, list[ChoreAssignment]] = {}
     for assignment in assignments:
@@ -151,8 +170,9 @@ def BuildMonthProjection(
         approved = approved_by_date.get(on_date, set())
         return required.issubset(approved)
 
-    today_protected = _IsProtected(today)
+    is_closed_month = today >= month_end
     missed_days = 0
+    missed_deduction_cents = 0
     running = 0
     projection: list[ProjectionPoint] = []
     protected_by_date: dict[date, bool] = {}
@@ -161,17 +181,22 @@ def BuildMonthProjection(
     while cursor <= month_end:
         protected = _IsProtected(cursor)
         protected_by_date[cursor] = protected
+        day_slice = daily_slice_by_date.get(cursor, fallback_daily_slice)
         if cursor < today:
             if protected:
-                running += daily_slice_cents
+                running += day_slice
             else:
                 missed_days += 1
+                missed_deduction_cents += day_slice
         elif cursor == today:
             if protected:
-                running += daily_slice_cents
+                running += day_slice
+            elif is_closed_month:
+                missed_days += 1
+                missed_deduction_cents += day_slice
         else:
-            if today_protected:
-                running += daily_slice_cents
+            # Future days remain potential earnings for projection.
+            running += day_slice
         running += approved_bonus_by_date.get(cursor, 0)
         projection.append(ProjectionPoint(Date=cursor, AmountCents=running))
         cursor = cursor + timedelta(days=1)
@@ -179,6 +204,7 @@ def BuildMonthProjection(
     projected_payout = projection[-1].AmountCents if projection else 0
     summary = MonthSummary(
         MissedDays=missed_days,
+        MissedDeductionCents=missed_deduction_cents,
         ApprovedBonusCents=approved_bonus_total,
         PendingBonusCents=pending_bonus_total,
         ProjectedPayoutCents=max(projected_payout, 0),
