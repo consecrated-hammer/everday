@@ -38,15 +38,11 @@ struct SettingsTasksView: View {
                 Toggle("Enable overdue reminders", isOn: $formState.overdueRemindersEnabled)
                 DatePicker("Reminder time", selection: $formState.reminderTime, displayedComponents: .hourAndMinute)
                     .disabled(!formState.overdueRemindersEnabled)
-                NavigationLink {
-                    ReminderTimeZonePickerView(selection: $formState.reminderTimeZone)
-                } label: {
-                    HStack {
-                        Text("Global time zone")
-                        Spacer()
-                        Text(formState.reminderTimeZone)
-                            .foregroundStyle(.secondary)
-                    }
+                HStack {
+                    Text("Global time zone")
+                    Spacer()
+                    Text(formState.reminderTimeZone)
+                        .foregroundStyle(.secondary)
                 }
                 if let lastNotified = settings?.OverdueLastNotifiedDate {
                     HStack {
@@ -59,7 +55,7 @@ struct SettingsTasksView: View {
             } header: {
                 Text("Overdue reminders")
             } footer: {
-                Text("This time zone applies to reminders across Health, Tasks, and Kids.")
+                Text("Change global time zone from Settings.")
             }
 
             Section {
@@ -193,7 +189,7 @@ struct SettingsTasksView: View {
                     from: formState.reminderTime,
                     timeZoneIdentifier: formState.reminderTimeZone
                 ),
-                OverdueReminderTimeZone: formState.reminderTimeZone,
+                OverdueReminderTimeZone: nil,
                 OverdueRemindersEnabled: formState.overdueRemindersEnabled
             )
             let updated = try await SettingsApi.updateTaskSettings(request)
@@ -296,69 +292,4 @@ private enum LoadState {
     case idle
     case loading
     case loaded
-}
-
-private struct ReminderTimeZonePickerView: View {
-    @Binding var selection: String
-    @Environment(\.dismiss) private var dismiss
-    @State private var query = ""
-
-    private static let suggestedIds = [
-        "Australia/Adelaide",
-        "Australia/Sydney",
-        "UTC"
-    ]
-
-    private var suggestedTimeZones: [String] {
-        Self.suggestedIds.filter { TimeZone(identifier: $0) != nil }
-    }
-
-    private var allTimeZones: [String] {
-        TimeZone.knownTimeZoneIdentifiers.sorted()
-    }
-
-    private var filteredTimeZones: [String] {
-        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return allTimeZones }
-        let needle = trimmed.lowercased()
-        return allTimeZones.filter { $0.lowercased().contains(needle) }
-    }
-
-    var body: some View {
-        List {
-            if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                Section("Suggested") {
-                    ForEach(suggestedTimeZones, id: \.self) { identifier in
-                        timeZoneRow(identifier)
-                    }
-                }
-            }
-            Section("All time zones") {
-                ForEach(filteredTimeZones, id: \.self) { identifier in
-                    timeZoneRow(identifier)
-                }
-            }
-        }
-        .navigationTitle("Time zone")
-        .navigationBarTitleDisplayMode(.inline)
-        .searchable(text: $query, prompt: "Search time zones")
-    }
-
-    @ViewBuilder
-    private func timeZoneRow(_ identifier: String) -> some View {
-        Button {
-            selection = identifier
-            dismiss()
-        } label: {
-            HStack {
-                Text(identifier)
-                    .foregroundStyle(.primary)
-                Spacer()
-                if selection == identifier {
-                    Image(systemName: "checkmark")
-                        .foregroundStyle(.blue)
-                }
-            }
-        }
-    }
 }
