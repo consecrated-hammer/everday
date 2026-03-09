@@ -39,7 +39,7 @@ struct SettingsTasksView: View {
                 DatePicker("Reminder time", selection: $formState.reminderTime, displayedComponents: .hourAndMinute)
                     .disabled(!formState.overdueRemindersEnabled)
                 HStack {
-                    Text("Global time zone")
+                    Text("Time zone")
                     Spacer()
                     Text(formState.reminderTimeZone)
                         .foregroundStyle(.secondary)
@@ -55,7 +55,7 @@ struct SettingsTasksView: View {
             } header: {
                 Text("Overdue reminders")
             } footer: {
-                Text("Change global time zone from Settings.")
+                Text("Change time zone from Settings.")
             }
 
             Section {

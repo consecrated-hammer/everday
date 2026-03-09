@@ -7,7 +7,7 @@ struct SettingsView: View {
     var body: some View {
         let listView = List {
             Section("Preferences") {
-                NavigationLink("Global time zone") {
+                NavigationLink("Time zone") {
                     GlobalTimeZoneSettingsView()
                 }
 
@@ -175,7 +175,7 @@ private struct GlobalTimeZoneSettingsView: View {
             }
         }
         .listStyle(.insetGrouped)
-        .navigationTitle("Global time zone")
+        .navigationTitle("Time zone")
         .navigationBarTitleDisplayMode(.inline)
         .task {
             if isLoading {
@@ -229,7 +229,7 @@ private struct GlobalTimeZoneSettingsView: View {
             let normalized = normalizeReminderTimeZone(updated.OverdueReminderTimeZone)
             reminderTimeZone = normalized
             lastSavedTimeZone = normalized
-            saveMessage = "Global time zone updated."
+            saveMessage = "Time zone updated."
         } catch {
             reminderTimeZone = lastSavedTimeZone
             errorMessage = (error as? ApiError)?.message ?? "Failed to update global time zone."
