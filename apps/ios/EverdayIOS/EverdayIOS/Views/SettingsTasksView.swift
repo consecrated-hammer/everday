@@ -185,7 +185,10 @@ struct SettingsTasksView: View {
         saveMessage = ""
         do {
             let request = TaskSettingsUpdateRequest(
-                OverdueReminderTime: TaskSettingsFormState.timeString(from: formState.reminderTime),
+                OverdueReminderTime: TaskSettingsFormState.timeString(
+                    from: formState.reminderTime,
+                    timeZoneIdentifier: formState.reminderTimeZone
+                ),
                 OverdueReminderTimeZone: formState.reminderTimeZone,
                 OverdueRemindersEnabled: formState.overdueRemindersEnabled
             )
@@ -224,43 +227,64 @@ struct SettingsTasksView: View {
 }
 
 private struct TaskSettingsFormState: Equatable {
+    private static let defaultReminderTimeZone = "Australia/Adelaide"
+
     var overdueRemindersEnabled: Bool
     var reminderTime: Date
     var reminderTimeZone: String
 
     static var `default`: TaskSettingsFormState {
-        TaskSettingsFormState(
+        let reminderTimeZone = defaultReminderTimeZone
+        return TaskSettingsFormState(
             overdueRemindersEnabled: true,
-            reminderTime: timeFromString("08:00"),
-            reminderTimeZone: TimeZone.current.identifier
+            reminderTime: timeFromString("08:00", timeZoneIdentifier: reminderTimeZone),
+            reminderTimeZone: reminderTimeZone
         )
     }
 
     static func from(settings: TaskSettings) -> TaskSettingsFormState {
         let timeValue = settings.OverdueReminderTime ?? "08:00"
+        let reminderTimeZone = normalizeReminderTimeZone(settings.OverdueReminderTimeZone)
         return TaskSettingsFormState(
             overdueRemindersEnabled: settings.OverdueRemindersEnabled ?? true,
-            reminderTime: timeFromString(timeValue),
-            reminderTimeZone: settings.OverdueReminderTimeZone ?? TimeZone.current.identifier
+            reminderTime: timeFromString(timeValue, timeZoneIdentifier: reminderTimeZone),
+            reminderTimeZone: reminderTimeZone
         )
     }
 
-    private static func timeFromString(_ value: String) -> Date {
+    private static func timeFromString(_ value: String, timeZoneIdentifier: String) -> Date {
+        let timeZone = resolveTimeZone(timeZoneIdentifier)
+        var calendar = Calendar.current
+        calendar.timeZone = timeZone
         let parts = value.split(separator: ":")
         let hour = parts.count > 0 ? Int(parts[0]) ?? 8 : 8
         let minute = parts.count > 1 ? Int(parts[1]) ?? 0 : 0
-        var components = Calendar.current.dateComponents([.year, .month, .day], from: Date())
+        var components = calendar.dateComponents([.year, .month, .day], from: Date())
         components.hour = hour
         components.minute = minute
-        return Calendar.current.date(from: components) ?? Date()
+        return calendar.date(from: components) ?? Date()
     }
 
-    static func timeString(from date: Date) -> String {
+    static func timeString(from date: Date, timeZoneIdentifier: String) -> String {
         let formatter = DateFormatter()
         formatter.dateFormat = "HH:mm"
         formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone.current
+        formatter.timeZone = resolveTimeZone(timeZoneIdentifier)
         return formatter.string(from: date)
+    }
+
+    private static func normalizeReminderTimeZone(_ value: String?) -> String {
+        let cleaned = (value ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        if TimeZone(identifier: cleaned) != nil {
+            return cleaned
+        }
+        return defaultReminderTimeZone
+    }
+
+    private static func resolveTimeZone(_ identifier: String) -> TimeZone {
+        TimeZone(identifier: identifier)
+            ?? TimeZone(identifier: defaultReminderTimeZone)
+            ?? TimeZone.current
     }
 }
 

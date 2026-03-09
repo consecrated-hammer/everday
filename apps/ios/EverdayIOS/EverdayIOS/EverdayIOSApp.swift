@@ -82,7 +82,7 @@ final class EverdayAppDelegate: NSObject, UIApplicationDelegate {
 
     func applicationDidBecomeActive(_ application: UIApplication) {
         Task { @MainActor in
-            await PushNotificationCoordinator.shared.syncBadgeCountFromServer()
+            await PushNotificationCoordinator.shared.refreshPushStateOnAppActive()
         }
     }
 }
@@ -203,6 +203,21 @@ final class PushNotificationCoordinator: NSObject, ObservableObject {
         } catch {
             // Ignore badge sync failures.
         }
+    }
+
+    func refreshPushStateOnAppActive() async {
+        let settings = await UNUserNotificationCenter.current().notificationSettings()
+        switch settings.authorizationStatus {
+        case .authorized, .provisional, .ephemeral:
+            UIApplication.shared.registerForRemoteNotifications()
+        case .notDetermined, .denied:
+            break
+        @unknown default:
+            break
+        }
+
+        await registerCurrentDeviceIfNeeded(force: false)
+        await syncBadgeCountFromServer()
     }
 
     func applyBadgeCount(_ unreadCount: Int) async {

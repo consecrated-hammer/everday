@@ -30,7 +30,7 @@ from app.services.schedules import AddMonths, AddYears
 
 DEFAULT_TIMEZONE = "UTC"
 DEFAULT_OVERDUE_REMINDER_TIME = "08:00"
-DEFAULT_OVERDUE_REMINDER_TIMEZONE = "UTC"
+DEFAULT_OVERDUE_REMINDER_TIMEZONE = "Australia/Adelaide"
 
 
 class TaskAccessError(ValueError):
