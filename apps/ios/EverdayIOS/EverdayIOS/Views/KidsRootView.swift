@@ -74,6 +74,8 @@ struct KidsReminderSettingsView: View {
     @State private var loadState: LoadState = .idle
     @State private var errorMessage = ""
     @State private var reminderTimeZone = "Australia/Adelaide"
+    @State private var lastPersistedTimeZone = "Australia/Adelaide"
+    @State private var isSavingTimeZone = false
     @State private var systemNotificationsEnabled = true
 
     @State private var dailyJobsEnabled = true
@@ -106,6 +108,8 @@ struct KidsReminderSettingsView: View {
         return formatter
     }()
 
+    private static let defaultReminderTimeZone = "Australia/Adelaide"
+
     private static func BuildTimeDate(_ value: String) -> Date? {
         Self.apiTimeFormatter.date(from: value)
     }
@@ -118,12 +122,10 @@ struct KidsReminderSettingsView: View {
         List {
             dailyJobsSection
             habitsSection
+            timeZoneSection
             errorSection
         }
         .listStyle(.insetGrouped)
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            timezoneBottomFooter
-        }
         .navigationTitle("Reminder settings")
         .navigationBarTitleDisplayMode(.large)
         .alert("Notifications are disabled for this app.", isPresented: $showNotificationsDisabledAlert) {
@@ -136,6 +138,9 @@ struct KidsReminderSettingsView: View {
             if loadState == .idle {
                 await loadSettings()
             }
+        }
+        .onChange(of: reminderTimeZone) { oldValue, newValue in
+            handleTimeZoneChange(oldValue: oldValue, newValue: newValue)
         }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
             Task { @MainActor in
@@ -241,6 +246,30 @@ struct KidsReminderSettingsView: View {
         }
     }
 
+    private var timeZoneSection: some View {
+        Section {
+            NavigationLink {
+                KidsReminderTimeZonePickerView(selection: $reminderTimeZone)
+            } label: {
+                HStack {
+                    Text("Global time zone")
+                    Spacer()
+                    if isSavingTimeZone {
+                        ProgressView()
+                            .controlSize(.small)
+                    } else {
+                        Text(reminderTimeZone)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+        } header: {
+            Text("General")
+        } footer: {
+            Text("This time zone applies to reminders across Health, Tasks, and Kids.")
+        }
+    }
+
     @ViewBuilder
     private var errorSection: some View {
         if !errorMessage.isEmpty {
@@ -257,19 +286,6 @@ struct KidsReminderSettingsView: View {
         if !systemNotificationsEnabled {
             Text("Notifications are turned off in iOS Settings.")
         }
-    }
-
-    private var timezoneBottomFooter: some View {
-        HStack {
-            Text("Timezone: \(reminderTimeZone)")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-            Spacer()
-        }
-        .padding(.horizontal, 20)
-        .padding(.top, 8)
-        .padding(.bottom, 8)
-        .background(Color(.systemGroupedBackground))
     }
 
     @ViewBuilder
@@ -311,7 +327,8 @@ struct KidsReminderSettingsView: View {
             habitsEnabled = settings.HabitsRemindersEnabled
             dailyJobsTime = Self.BuildTimeDate(settings.DailyJobsReminderTime) ?? Self.defaultReminderDate
             habitsTime = Self.BuildTimeDate(settings.HabitsReminderTime) ?? Self.defaultReminderDate
-            reminderTimeZone = settings.ReminderTimeZone
+            reminderTimeZone = normalizeReminderTimeZone(settings.ReminderTimeZone)
+            lastPersistedTimeZone = reminderTimeZone
             systemNotificationsEnabled = notificationsEnabled
             lastPersistedSnapshot = BuildSnapshot()
             loadState = .ready
@@ -377,7 +394,8 @@ struct KidsReminderSettingsView: View {
             habitsEnabled = updated.HabitsRemindersEnabled
             dailyJobsTime = Self.BuildTimeDate(updated.DailyJobsReminderTime) ?? Self.defaultReminderDate
             habitsTime = Self.BuildTimeDate(updated.HabitsReminderTime) ?? Self.defaultReminderDate
-            reminderTimeZone = updated.ReminderTimeZone
+            reminderTimeZone = normalizeReminderTimeZone(updated.ReminderTimeZone)
+            lastPersistedTimeZone = reminderTimeZone
             lastPersistedSnapshot = BuildSnapshot()
             systemNotificationsEnabled = await querySystemNotificationsEnabled()
             errorMessage = ""
@@ -403,6 +421,47 @@ struct KidsReminderSettingsView: View {
             return fallback
         }
         return raw
+    }
+
+    private func handleTimeZoneChange(oldValue: String, newValue: String) {
+        let normalized = normalizeReminderTimeZone(newValue)
+        if normalized != newValue {
+            reminderTimeZone = normalized
+            return
+        }
+        if loadState == .loading || normalized == lastPersistedTimeZone {
+            return
+        }
+        Task { await persistTimeZone(normalized) }
+    }
+
+    private func persistTimeZone(_ value: String) async {
+        isSavingTimeZone = true
+        defer { isSavingTimeZone = false }
+        do {
+            let updated = try await SettingsApi.updateTaskSettings(
+                TaskSettingsUpdateRequest(
+                    OverdueReminderTime: nil,
+                    OverdueReminderTimeZone: value,
+                    OverdueRemindersEnabled: nil
+                )
+            )
+            let normalized = normalizeReminderTimeZone(updated.OverdueReminderTimeZone ?? value)
+            reminderTimeZone = normalized
+            lastPersistedTimeZone = normalized
+            errorMessage = ""
+        } catch {
+            reminderTimeZone = lastPersistedTimeZone
+            errorMessage = BuildApiErrorMessage(error, fallback: "Failed to save reminder settings.")
+        }
+    }
+
+    private func normalizeReminderTimeZone(_ value: String) -> String {
+        let cleaned = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        if TimeZone(identifier: cleaned) != nil {
+            return cleaned
+        }
+        return Self.defaultReminderTimeZone
     }
 
     private func BuildSnapshot() -> ReminderSnapshot {
@@ -466,6 +525,71 @@ struct KidsReminderSettingsView: View {
     private func openSystemSettings() {
         guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
         openURL(url)
+    }
+}
+
+private struct KidsReminderTimeZonePickerView: View {
+    @Binding var selection: String
+    @Environment(\.dismiss) private var dismiss
+    @State private var query = ""
+
+    private static let suggestedIds = [
+        "Australia/Adelaide",
+        "Australia/Sydney",
+        "UTC"
+    ]
+
+    private var suggestedTimeZones: [String] {
+        Self.suggestedIds.filter { TimeZone(identifier: $0) != nil }
+    }
+
+    private var allTimeZones: [String] {
+        TimeZone.knownTimeZoneIdentifiers.sorted()
+    }
+
+    private var filteredTimeZones: [String] {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return allTimeZones }
+        let needle = trimmed.lowercased()
+        return allTimeZones.filter { $0.lowercased().contains(needle) }
+    }
+
+    var body: some View {
+        List {
+            if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                Section("Suggested") {
+                    ForEach(suggestedTimeZones, id: \.self) { identifier in
+                        timeZoneRow(identifier)
+                    }
+                }
+            }
+            Section("All time zones") {
+                ForEach(filteredTimeZones, id: \.self) { identifier in
+                    timeZoneRow(identifier)
+                }
+            }
+        }
+        .navigationTitle("Time zone")
+        .navigationBarTitleDisplayMode(.inline)
+        .searchable(text: $query, prompt: "Search time zones")
+    }
+
+    @ViewBuilder
+    private func timeZoneRow(_ identifier: String) -> some View {
+        Button {
+            selection = identifier
+            dismiss()
+        } label: {
+            HStack {
+                Text(identifier)
+                    .foregroundStyle(.primary)
+                Spacer()
+                if selection == identifier {
+                    Image(systemName: "checkmark")
+                        .foregroundStyle(.blue)
+                }
+            }
+        }
     }
 }
 
