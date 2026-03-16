@@ -10,23 +10,18 @@ struct DashboardView: View {
 
     let visibleModules: [DashboardModule]
     let onSelectModule: (DashboardModule) -> Void
-    let onQuickAction: (DashboardQuickAction) -> Void
 
     init(
         visibleModules: [DashboardModule] = DashboardModule.defaultOrder,
-        onSelectModule: @escaping (DashboardModule) -> Void,
-        onQuickAction: @escaping (DashboardQuickAction) -> Void
+        onSelectModule: @escaping (DashboardModule) -> Void
     ) {
         self.visibleModules = visibleModules
         self.onSelectModule = onSelectModule
-        self.onQuickAction = onQuickAction
     }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                heroCard
-                quickActionsCard
                 progressCard
                 weeklySummaryCard
 
@@ -58,73 +53,6 @@ struct DashboardView: View {
         .task {
             if status == .idle {
                 await load()
-            }
-        }
-    }
-
-    private var heroCard: some View {
-        HealthSectionCard {
-            HStack(alignment: .top, spacing: 12) {
-                Image(systemName: "heart.text.square.fill")
-                    .font(.title2)
-                    .foregroundStyle(.white)
-                    .frame(width: 44, height: 44)
-                    .background(Color.teal, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    .accessibilityHidden(true)
-
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Health")
-                        .font(.headline)
-                    Text(heroTitle)
-                        .font(.title3.weight(.semibold))
-                    Text(heroSubtitle)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-
-                Spacer(minLength: 0)
-            }
-
-            let columns = Array(
-                repeating: GridItem(.flexible(), spacing: 12),
-                count: horizontalSizeClass == .regular ? 4 : 2
-            )
-
-            LazyVGrid(columns: columns, spacing: 12) {
-                ForEach(metricTiles, id: \.title) { tile in
-                    HealthMetricTile(title: tile.title, value: tile.value, detail: tile.detail)
-                }
-            }
-
-            VStack(alignment: .leading, spacing: 10) {
-                Button(heroPrimaryAction.title) {
-                    onQuickAction(heroPrimaryAction.action)
-                }
-                .buttonStyle(.borderedProminent)
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-                Button {
-                    onSelectModule(.health)
-                } label: {
-                    Label("Open full health view", systemImage: "arrow.right.circle")
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .buttonStyle(.bordered)
-            }
-        }
-    }
-
-    private var quickActionsCard: some View {
-        HealthSectionCard {
-            HealthSectionHeader(
-                title: "Quick actions",
-                subtitle: "Capture today without opening the full module."
-            )
-
-            LazyVGrid(columns: quickActionColumns, spacing: 12) {
-                ForEach(quickActions) { item in
-                    quickActionButton(item)
-                }
             }
         }
     }
@@ -202,113 +130,6 @@ struct DashboardView: View {
                 }
             }
         }
-    }
-
-    private var quickActions: [TodayQuickActionItem] {
-        [
-            TodayQuickActionItem(
-                title: "Log meal",
-                subtitle: "Capture your next meal quickly.",
-                systemImage: "fork.knife",
-                action: .logMeal,
-                isPrimary: true,
-                tint: .teal
-            ),
-            TodayQuickActionItem(
-                title: "Log steps",
-                subtitle: "Update steps for today.",
-                systemImage: "figure.walk",
-                action: .logSteps
-            ),
-            TodayQuickActionItem(
-                title: "Log weight",
-                subtitle: "Add a weight check-in.",
-                systemImage: "scalemass",
-                action: .logWeight
-            ),
-            TodayQuickActionItem(
-                title: "Meal log",
-                subtitle: "Review what you already logged.",
-                systemImage: "list.bullet",
-                action: .openMealLog
-            ),
-            TodayQuickActionItem(
-                title: "Foods",
-                subtitle: "Browse saved foods and portions.",
-                systemImage: "fork.knife.circle",
-                action: .openFoods
-            ),
-        ]
-    }
-
-    private var quickActionColumns: [GridItem] {
-        let columnCount = horizontalSizeClass == .regular ? 3 : 2
-        return Array(repeating: GridItem(.flexible(), spacing: 12), count: columnCount)
-    }
-
-    private var heroTitle: String {
-        guard status != .loading else { return "Loading your health summary" }
-        guard let response = logResponse else { return "Start with health today" }
-
-        let remainingCalories = response.Totals.RemainingCalories
-        if response.Entries.isEmpty {
-            return "Start your food log for today"
-        }
-        if remainingCalories > 0 {
-            return "\(HealthFormatters.formatCalories(remainingCalories)) remaining"
-        }
-        if remainingCalories < 0 {
-            return "You are \(HealthFormatters.formatCalories(abs(remainingCalories))) over target"
-        }
-        return "You are right on today's target"
-    }
-
-    private var heroSubtitle: String {
-        if status == .loading {
-            return "Pulling together today's health view."
-        }
-        if let logDate = logResponse?.Summary.LogDate, !logDate.isEmpty {
-            return "\(HealthFormatters.formatLongDate(logDate)). Use quick actions when you need to update something fast."
-        }
-        return "Meals, steps, and weight stay one tap away."
-    }
-
-    private var heroPrimaryAction: (title: String, action: DashboardQuickAction) {
-        guard let response = logResponse else {
-            return ("Log meal", .logMeal)
-        }
-        if response.Entries.isEmpty {
-            return ("Log meal", .logMeal)
-        }
-        if currentSteps == 0 {
-            return ("Log steps", .logSteps)
-        }
-        if currentWeight == nil {
-            return ("Log weight", .logWeight)
-        }
-        return ("Open meal log", .openMealLog)
-    }
-
-    private var metricTiles: [TodayMetricTileModel] {
-        guard let response = logResponse else {
-            return [
-                TodayMetricTileModel(title: "Calories", value: "-", detail: nil),
-                TodayMetricTileModel(title: "Protein", value: "-", detail: nil),
-                TodayMetricTileModel(title: "Steps", value: "-", detail: nil),
-                TodayMetricTileModel(title: "Weight", value: "-", detail: nil),
-            ]
-        }
-
-        return [
-            TodayMetricTileModel(title: "Calories", value: HealthFormatters.formatCalories(response.Totals.TotalCalories), detail: nil),
-            TodayMetricTileModel(title: "Protein", value: HealthFormatters.formatGrams(response.Totals.TotalProtein), detail: nil),
-            TodayMetricTileModel(title: "Steps", value: HealthFormatters.formatInteger(currentSteps), detail: "today"),
-            TodayMetricTileModel(
-                title: "Weight",
-                value: currentWeight.map { "\(HealthFormatters.formatNumber($0, decimals: 1)) kg" } ?? "-",
-                detail: currentWeight == nil ? "not logged" : nil
-            ),
-        ]
     }
 
     private var progressSubtitle: String {
@@ -434,47 +255,6 @@ struct DashboardView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
-
-    @ViewBuilder
-    private func quickActionButton(_ item: TodayQuickActionItem) -> some View {
-        let button = Button {
-            if let module = item.module {
-                onSelectModule(module)
-            } else if let action = item.action {
-                onQuickAction(action)
-            }
-        } label: {
-            VStack(alignment: .leading, spacing: 8) {
-                Label(item.title, systemImage: item.systemImage)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.primary)
-                    .labelStyle(.titleAndIcon)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                Text(item.subtitle)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .padding(14)
-            .frame(maxWidth: .infinity, minHeight: 88, alignment: .topLeading)
-        }
-        .tint(item.tint)
-
-        if item.isPrimary {
-            button.buttonStyle(.borderedProminent)
-        } else {
-            button.buttonStyle(.bordered)
-        }
-    }
-}
-
-enum DashboardQuickAction {
-    case logMeal
-    case logSteps
-    case logWeight
-    case openMealLog
-    case openFoods
 }
 
 enum DashboardModule: String, CaseIterable, Identifiable {
@@ -605,12 +385,6 @@ private enum TodayLoadState {
     case error
 }
 
-private struct TodayMetricTileModel {
-    let title: String
-    let value: String
-    let detail: String?
-}
-
 private struct TodayProgressRowModel {
     let title: String
     let value: Double
@@ -624,34 +398,4 @@ private struct TodayWeeklyPoint: Identifiable {
     let date: Date
     let calories: Double
     let steps: Int
-}
-
-private struct TodayQuickActionItem: Identifiable {
-    let id: String
-    let title: String
-    let subtitle: String
-    let systemImage: String
-    let action: DashboardQuickAction?
-    let module: DashboardModule?
-    var isPrimary = false
-    var tint: Color = .accentColor
-
-    init(
-        title: String,
-        subtitle: String,
-        systemImage: String,
-        action: DashboardQuickAction? = nil,
-        module: DashboardModule? = nil,
-        isPrimary: Bool = false,
-        tint: Color = .accentColor
-    ) {
-        self.id = title
-        self.title = title
-        self.subtitle = subtitle
-        self.systemImage = systemImage
-        self.action = action
-        self.module = module
-        self.isPrimary = isPrimary
-        self.tint = tint
-    }
 }

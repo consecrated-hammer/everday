@@ -45,8 +45,7 @@ struct RootView: View {
             NavigationStack(path: $dashboardPath) {
                 DashboardView(
                     visibleModules: visibleDashboardModules,
-                    onSelectModule: handleDashboardModuleSelection,
-                    onQuickAction: handleDashboardQuickAction
+                    onSelectModule: handleDashboardModuleSelection
                 )
                     .navigationDestination(for: ParentRoute.self) { route in
                         route.destination
@@ -178,51 +177,6 @@ struct RootView: View {
 
     private func navigateToSettings() {
         appendRoute(.settings)
-    }
-
-    private func triggerQuickLogMealShortcut() {
-        selection = .health
-        resetPath(for: .health)
-        healthQuickLogMealRequestNonce += 1
-    }
-
-    private func triggerQuickLogStepsShortcut() {
-        selection = .health
-        resetPath(for: .health)
-        healthQuickLogStepsRequestNonce += 1
-    }
-
-    private func triggerQuickLogWeightShortcut() {
-        selection = .health
-        resetPath(for: .health)
-        healthQuickLogWeightRequestNonce += 1
-    }
-
-    private func triggerOpenHealthLogShortcut() {
-        selection = .health
-        resetPath(for: .health)
-        healthOpenLogRequestNonce += 1
-    }
-
-    private func triggerOpenHealthFoodsShortcut() {
-        selection = .health
-        resetPath(for: .health)
-        healthOpenFoodsRequestNonce += 1
-    }
-
-    private func handleDashboardQuickAction(_ action: DashboardQuickAction) {
-        switch action {
-        case .logMeal:
-            triggerQuickLogMealShortcut()
-        case .logSteps:
-            triggerQuickLogStepsShortcut()
-        case .logWeight:
-            triggerQuickLogWeightShortcut()
-        case .openMealLog:
-            triggerOpenHealthLogShortcut()
-        case .openFoods:
-            triggerOpenHealthFoodsShortcut()
-        }
     }
 
     private func handleDashboardModuleSelection(_ module: DashboardModule) {
