@@ -54,7 +54,7 @@ struct RootView: View {
                     .toolbar { parentToolbar }
             }
             .tabItem {
-                Label("Dashboard", systemImage: "square.grid.2x2")
+                Label("Today", systemImage: "sun.max.fill")
             }
             .tag(ParentTab.dashboard)
 
@@ -228,8 +228,6 @@ struct RootView: View {
     private func handleDashboardModuleSelection(_ module: DashboardModule) {
         switch module {
         case .health:
-            // Opening Health from the main module list should always land on Health,
-            // not replay a previous quick-log request.
             healthQuickLogMealRequestNonce = 0
             healthQuickLogStepsRequestNonce = 0
             healthQuickLogWeightRequestNonce = 0
