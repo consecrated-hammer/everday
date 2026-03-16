@@ -73,7 +73,6 @@ struct KidsReminderSettingsView: View {
 
     @State private var loadState: LoadState = .idle
     @State private var errorMessage = ""
-    @State private var reminderTimeZone = "Australia/Adelaide"
     @State private var systemNotificationsEnabled = true
 
     @State private var dailyJobsEnabled = true
@@ -121,9 +120,6 @@ struct KidsReminderSettingsView: View {
             errorSection
         }
         .listStyle(.insetGrouped)
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            timezoneBottomFooter
-        }
         .navigationTitle("Reminder settings")
         .navigationBarTitleDisplayMode(.large)
         .alert("Notifications are disabled for this app.", isPresented: $showNotificationsDisabledAlert) {
@@ -259,19 +255,6 @@ struct KidsReminderSettingsView: View {
         }
     }
 
-    private var timezoneBottomFooter: some View {
-        HStack {
-            Text("Timezone: \(reminderTimeZone)")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-            Spacer()
-        }
-        .padding(.horizontal, 20)
-        .padding(.top, 8)
-        .padding(.bottom, 8)
-        .background(Color(.systemGroupedBackground))
-    }
-
     @ViewBuilder
     private func reminderTimeRow(enabled: Bool, time: Date, onTap: @escaping () -> Void) -> some View {
         if enabled {
@@ -311,7 +294,6 @@ struct KidsReminderSettingsView: View {
             habitsEnabled = settings.HabitsRemindersEnabled
             dailyJobsTime = Self.BuildTimeDate(settings.DailyJobsReminderTime) ?? Self.defaultReminderDate
             habitsTime = Self.BuildTimeDate(settings.HabitsReminderTime) ?? Self.defaultReminderDate
-            reminderTimeZone = settings.ReminderTimeZone
             systemNotificationsEnabled = notificationsEnabled
             lastPersistedSnapshot = BuildSnapshot()
             loadState = .ready
@@ -377,7 +359,6 @@ struct KidsReminderSettingsView: View {
             habitsEnabled = updated.HabitsRemindersEnabled
             dailyJobsTime = Self.BuildTimeDate(updated.DailyJobsReminderTime) ?? Self.defaultReminderDate
             habitsTime = Self.BuildTimeDate(updated.HabitsReminderTime) ?? Self.defaultReminderDate
-            reminderTimeZone = updated.ReminderTimeZone
             lastPersistedSnapshot = BuildSnapshot()
             systemNotificationsEnabled = await querySystemNotificationsEnabled()
             errorMessage = ""

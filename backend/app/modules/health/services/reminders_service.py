@@ -4,6 +4,7 @@ import json
 import logging
 import re
 from datetime import date, datetime
+from zoneinfo import ZoneInfo
 
 from sqlalchemy.orm import Session
 
@@ -11,9 +12,11 @@ from app.modules.auth.deps import NowUtc
 from app.modules.auth.models import User
 from app.modules.health.models import DailyLog, HealthReminderRun, MealEntry
 from app.modules.health.services.settings_service import EnsureSettingsForUser
+from app.modules.tasks.models import TaskSettings
 from app.modules.health.utils.defaults import (
     DefaultFoodReminderSlots,
     DefaultFoodReminderTimes,
+    DefaultReminderTimeZone,
     DefaultWeightReminderTime,
 )
 from app.modules.notifications.services import CreateNotification
@@ -28,6 +31,7 @@ MealTypeLabels = {
     "Dinner": "Dinner",
     "Snack3": "Snack 3",
 }
+DefaultReminderZone = ZoneInfo(DefaultReminderTimeZone)
 
 
 def _IsValidTime(value: str | None) -> bool:
@@ -54,6 +58,30 @@ def _TimeMatches(run_time: str, target_time: str | None) -> bool:
     if not normalized_run or not normalized_target:
         return False
     return normalized_run == normalized_target
+
+
+def _ResolveEffectiveRunDateTime(
+    now_utc: datetime,
+    run_date: date | None,
+    run_time: str | None,
+    run_zone: ZoneInfo | None = None,
+) -> tuple[date, str]:
+    if run_time is not None and not _IsValidTime(run_time):
+        raise ValueError("Run time must be in HH:MM format.")
+    now_local = now_utc.astimezone(run_zone or DefaultReminderZone)
+    effective_date = run_date or now_local.date()
+    effective_time = _NormalizeTime(run_time) if run_time else now_local.strftime("%H:%M")
+    if not _IsValidTime(effective_time):
+        raise ValueError("Run time must be in HH:MM format.")
+    return effective_date, effective_time
+
+
+def _ResolveRunZone(value: str | None) -> ZoneInfo:
+    candidate = (value or "").strip() or DefaultReminderTimeZone
+    try:
+        return ZoneInfo(candidate)
+    except Exception:  # noqa: BLE001
+        return DefaultReminderZone
 
 
 def _ParseFoodReminderTimes(value: str | None) -> dict[str, str]:
@@ -260,15 +288,18 @@ def RunDailyHealthReminders(
     run_time: str | None = None,
 ) -> dict:
     now = NowUtc()
-    effective_date = run_date or now.date()
-    if run_time is not None and not _IsValidTime(run_time):
-        raise ValueError("Run time must be in HH:MM format.")
-    effective_time = _NormalizeTime(run_time) if run_time else now.strftime("%H:%M")
-
-    if not _IsValidTime(effective_time):
-        raise ValueError("Run time must be in HH:MM format.")
-
     parent_users = db.query(User).filter(User.Role == "Parent").all()
+    parent_ids = [user.Id for user in parent_users]
+    settings_rows = (
+        db.query(TaskSettings)
+        .filter(TaskSettings.UserId.in_(parent_ids))
+        .all()
+        if parent_ids
+        else []
+    )
+    timezone_by_user_id = {
+        row.UserId: row.OverdueReminderTimeZone for row in settings_rows if row.OverdueReminderTimeZone
+    }
 
     eligible_users = 0
     processed_users = 0
@@ -278,6 +309,15 @@ def RunDailyHealthReminders(
 
     for user in parent_users:
         settings = EnsureSettingsForUser(db, user.Id)
+        effective_zone = _ResolveRunZone(
+            timezone_by_user_id.get(user.Id) or settings.ReminderTimeZone
+        )
+        effective_date, effective_time = _ResolveEffectiveRunDateTime(
+            now_utc=now,
+            run_date=run_date,
+            run_time=run_time,
+            run_zone=effective_zone,
+        )
         legacy_times = _ParseFoodReminderTimes(settings.FoodReminderTimes)
         food_slots = _ParseFoodReminderSlots(
             settings.FoodReminderSlots,

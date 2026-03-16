@@ -19,6 +19,7 @@ struct HealthMealEntrySheet: View {
     @State private var selectionMode: SelectionMode
     @State private var browseTab: EntryBrowseTab = .recent
     @State private var selectedMealType: HealthMealType
+    @State private var selectedLogDate: Date
     @State private var selectedFoodId: String?
     @State private var selectedTemplateId: String?
     @State private var searchText = ""
@@ -71,9 +72,11 @@ struct HealthMealEntrySheet: View {
         self.nextSortOrder = nextSortOrder
         self.flowMode = flowMode
         self.onSaved = onSaved
+        let parsedLogDate = HealthFormatters.date(from: logDate) ?? Date()
         let initialMode: SelectionMode = existingEntry?.MealTemplateId != nil ? .template : .food
         _selectionMode = State(initialValue: initialMode)
         _selectedMealType = State(initialValue: existingEntry?.MealType ?? initialMealType)
+        _selectedLogDate = State(initialValue: Calendar.current.startOfDay(for: parsedLogDate))
         _selectedFoodId = State(initialValue: existingEntry?.FoodId)
         _selectedTemplateId = State(initialValue: existingEntry?.MealTemplateId)
         _quantityText = State(initialValue: existingEntry.map { HealthFormatters.formatNumber($0.Quantity, decimals: 2) } ?? "1")
@@ -84,6 +87,9 @@ struct HealthMealEntrySheet: View {
     var body: some View {
         NavigationStack {
             List {
+                if existingEntry == nil {
+                    logDateSection
+                }
                 if !isQuickAddFlow {
                     mealSection
                 }
@@ -155,6 +161,14 @@ struct HealthMealEntrySheet: View {
                     aiScanModal
                 }
             }
+        }
+    }
+
+    @ViewBuilder
+    private var logDateSection: some View {
+        Section("Date") {
+            DatePicker("Date", selection: $selectedLogDate, in: ...Date(), displayedComponents: .date)
+                .datePickerStyle(.compact)
         }
     }
 
@@ -626,7 +640,7 @@ struct HealthMealEntrySheet: View {
     }
 
     private var recentTaskKey: String {
-        "\(logDate)-\(selectedMealType.rawValue)-\(existingEntry == nil ? "add" : "edit")"
+        "\(selectedLogDateKey)-\(selectedMealType.rawValue)-\(existingEntry == nil ? "add" : "edit")"
     }
 
     private var isQuickAddFlow: Bool {
@@ -656,6 +670,10 @@ struct HealthMealEntrySheet: View {
 
     private var navigationTitleText: String {
         isQuickAddFlow ? "Add entry" : sheetTitle
+    }
+
+    private var selectedLogDateKey: String {
+        HealthFormatters.dateKey(from: selectedLogDate)
     }
 
     private var trimmedSearchText: String {
@@ -790,7 +808,10 @@ struct HealthMealEntrySheet: View {
 
     private var isDirty: Bool {
         if existingEntry == nil {
-            return selectedFoodId != nil || selectedTemplateId != nil || !notesText.isEmpty
+            return selectedFoodId != nil
+                || selectedTemplateId != nil
+                || !notesText.isEmpty
+                || selectedLogDateKey != logDate
         }
         let mealChanged = selectedMealType != existingEntry?.MealType
         let notesChanged = notesText != (existingEntry?.EntryNotes ?? "")
@@ -802,8 +823,16 @@ struct HealthMealEntrySheet: View {
         if selectionMode == .food && selectedFoodId == nil { return false }
         if selectionMode == .template && selectedTemplateId == nil { return false }
         if Double(quantityText) == nil || (Double(quantityText) ?? 0) <= 0 { return false }
-        if selectionMode == .food && portionChoices.isEmpty { return false }
+        if selectionMode == .food && portionChoices.isEmpty && !hasExistingPortionFallback { return false }
         return true
+    }
+
+    private var hasExistingPortionFallback: Bool {
+        guard selectionMode == .food, let existingEntry else { return false }
+        let label = (existingEntry.PortionLabel ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let baseUnit = (existingEntry.PortionBaseUnit ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let baseAmount = existingEntry.PortionBaseAmount ?? 0
+        return !label.isEmpty && !baseUnit.isEmpty && baseAmount > 0
     }
 
     private func templateSubtitle(_ template: HealthMealTemplateWithItems) -> String {
@@ -827,7 +856,7 @@ struct HealthMealEntrySheet: View {
         recentFoodIds = []
         recentTemplateIds = []
 
-        let dates = buildRecentDates(anchor: logDate, days: 14)
+        let dates = buildRecentDates(anchor: selectedLogDateKey, days: 14)
         var logs: [HealthDailyLogResponse] = []
 
         await withTaskGroup(of: HealthDailyLogResponse?.self) { group in
@@ -964,7 +993,7 @@ struct HealthMealEntrySheet: View {
                 _ = try await HealthApi.createMealEntry(request)
                 if let shareUserId {
                     let shareRequest = HealthShareMealEntryRequest(
-                        LogDate: logDate,
+                        LogDate: selectedLogDateKey,
                         TargetUserId: shareUserId,
                         MealType: selectedMealType,
                         FoodId: selectionMode == .food ? selectedFoodId : nil,
@@ -1258,7 +1287,7 @@ struct HealthMealEntrySheet: View {
         if let shareUserId {
             _ = try await HealthApi.shareMealEntry(
                 HealthShareMealEntryRequest(
-                    LogDate: logDate,
+                    LogDate: selectedLogDateKey,
                     TargetUserId: shareUserId,
                     MealType: selectedMealType,
                     FoodId: food.FoodId,
@@ -1283,12 +1312,12 @@ struct HealthMealEntrySheet: View {
     }
 
     private func ensureDailyLogId() async throws -> String {
-        if let logId = dailyLogId {
+        if let logId = dailyLogId, selectedLogDateKey == logDate {
             return logId
         }
         let created = try await HealthApi.createDailyLog(
             HealthCreateDailyLogRequest(
-                LogDate: logDate,
+                LogDate: selectedLogDateKey,
                 Steps: 0,
                 StepKcalFactorOverride: nil,
                 WeightKg: nil,
@@ -1302,10 +1331,18 @@ struct HealthMealEntrySheet: View {
         if selectionMode == .template {
             return PortionPayload(optionId: nil, label: "serving", baseUnit: "each", baseAmount: 1)
         }
-        guard let choice = portionChoices.first(where: { $0.id == selectedPortionId }) ?? portionChoices.first else {
-            throw ApiError(message: "Select a serving size")
+        if let choice = portionChoices.first(where: { $0.id == selectedPortionId }) ?? portionChoices.first {
+            return PortionPayload(optionId: choice.optionId, label: choice.label, baseUnit: choice.baseUnit, baseAmount: choice.baseAmount)
         }
-        return PortionPayload(optionId: choice.optionId, label: choice.label, baseUnit: choice.baseUnit, baseAmount: choice.baseAmount)
+        if let existingEntry, hasExistingPortionFallback {
+            return PortionPayload(
+                optionId: existingEntry.PortionOptionId,
+                label: existingEntry.PortionLabel ?? "serving",
+                baseUnit: existingEntry.PortionBaseUnit ?? "each",
+                baseAmount: max(existingEntry.PortionBaseAmount ?? 1, 0.0001)
+            )
+        }
+        throw ApiError(message: "Select a serving size")
     }
 
     private func trimmedOrNil(_ value: String?) -> String? {

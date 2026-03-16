@@ -34,6 +34,14 @@ enum NotificationsApi {
         )
     }
 
+    static func dismissAll() async throws -> NotificationsBulkUpdateResponse {
+        try await ApiClient.shared.request(
+            path: "notifications/dismiss-all",
+            method: "POST",
+            requiresAuth: true
+        )
+    }
+
     static func fetchBadgeCount() async throws -> NotificationBadgeCountResponse {
         try await ApiClient.shared.request(
             path: "notifications/badge-count",

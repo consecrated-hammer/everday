@@ -10,7 +10,7 @@ DefaultTargets = Targets(
 
 DefaultTodayLayout = ["snapshot", "checkins", "quickadd"]
 
-DefaultReminderTimeZone = "UTC"
+DefaultReminderTimeZone = "Australia/Adelaide"
 DefaultFoodReminderTimes = {
     "Breakfast": "08:00",
     "Snack1": "10:30",

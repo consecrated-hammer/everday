@@ -538,6 +538,7 @@ def GetKidsOverview(
             month_start=month_start,
             month_end=month_end,
             daily_slice_cents=daily_slice_cents,
+            monthly_allowance_cents=monthly_allowance_cents,
             chores=chores,
             assignments=assignments,
             entries=month_entries,
@@ -1473,12 +1474,11 @@ def GetKidMonthSummary(
             month_start=month_start,
             month_end=month_end,
             daily_slice_cents=daily_slice_cents,
+            monthly_allowance_cents=monthly_allowance_cents,
             chores=chores,
             assignments=assignments,
             entries=entries,
         )
-
-        missed_deduction_cents = summary.MissedDays * daily_slice_cents
 
         return KidsMonthSummaryResponse(
             MonthStart=month_start,
@@ -1486,7 +1486,7 @@ def GetKidMonthSummary(
             MonthlyAllowance=CentsToAmount(monthly_allowance_cents),
             DailySlice=CentsToAmount(daily_slice_cents),
             MissedDays=summary.MissedDays,
-            MissedDeduction=CentsToAmount(missed_deduction_cents),
+            MissedDeduction=CentsToAmount(summary.MissedDeductionCents),
             ApprovedBonusTotal=CentsToAmount(summary.ApprovedBonusCents),
             PendingBonusTotal=CentsToAmount(summary.PendingBonusCents),
             ProjectedPayout=CentsToAmount(summary.ProjectedPayoutCents),

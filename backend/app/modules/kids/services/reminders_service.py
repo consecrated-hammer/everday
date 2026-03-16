@@ -4,12 +4,14 @@ import logging
 import random
 import re
 from datetime import date, datetime
+from zoneinfo import ZoneInfo
 
 from sqlalchemy.orm import Session
 
 from app.modules.auth.deps import NowUtc
 from app.modules.auth.models import User
 from app.modules.kids.models import Chore, ChoreAssignment, ChoreEntry, ReminderRun, ReminderSettings
+from app.modules.tasks.models import TaskSettings
 from app.modules.kids.services.chores_v2_service import (
     ADL_TZ,
     CHORE_TYPE_DAILY,
@@ -17,7 +19,6 @@ from app.modules.kids.services.chores_v2_service import (
     IsAssignmentActiveOnDate,
     IsChoreActiveOnDate,
     STATUS_APPROVED,
-    TodayAdelaide,
 )
 from app.modules.notifications.services import CreateNotification
 
@@ -67,6 +68,30 @@ def _TimeMatches(run_time: str, target_time: str | None) -> bool:
     if not normalized_run or not normalized_target:
         return False
     return normalized_run == normalized_target
+
+
+def _ResolveReminderZone(value: str | None) -> ZoneInfo:
+    candidate = (value or "").strip() or DEFAULT_REMINDER_TIMEZONE
+    try:
+        return ZoneInfo(candidate)
+    except Exception:  # noqa: BLE001
+        return ADL_TZ
+
+
+def _ResolveEffectiveRunDateTime(
+    now_utc: datetime,
+    run_date: date | None,
+    run_time: str | None,
+    run_zone: ZoneInfo,
+) -> tuple[date, str]:
+    if run_time is not None and not _IsValidTime(run_time):
+        raise ValueError("Run time must be in HH:MM format.")
+    now_local = now_utc.astimezone(run_zone)
+    effective_date = run_date or now_local.date()
+    effective_time = _NormalizeTime(run_time) if run_time else now_local.strftime("%H:%M")
+    if not _IsValidTime(effective_time):
+        raise ValueError("Run time must be in HH:MM format.")
+    return effective_date, effective_time
 
 
 def EnsureReminderSettings(db: Session, kid_user_id: int) -> ReminderSettings:
@@ -249,15 +274,22 @@ def RunDailyKidsReminders(
     run_date: date | None = None,
     run_time: str | None = None,
 ) -> dict:
-    today = run_date or TodayAdelaide()
-    if run_time is not None and not _IsValidTime(run_time):
-        raise ValueError("Run time must be in HH:MM format.")
-    current_adelaide_time = datetime.now(tz=ADL_TZ).strftime("%H:%M")
-    effective_time = _NormalizeTime(run_time) if run_time else current_adelaide_time
-    if not _IsValidTime(effective_time):
-        raise ValueError("Run time must be in HH:MM format.")
+    now_utc = NowUtc()
 
     kids = db.query(User).filter(User.Role == "Kid").all()
+    kid_ids = [kid.Id for kid in kids]
+    task_settings_rows = (
+        db.query(TaskSettings)
+        .filter(TaskSettings.UserId.in_(kid_ids))
+        .all()
+        if kid_ids
+        else []
+    )
+    task_timezone_by_kid = {
+        row.UserId: row.OverdueReminderTimeZone
+        for row in task_settings_rows
+        if row.OverdueReminderTimeZone
+    }
 
     eligible_kids = 0
     processed_kids = 0
@@ -267,6 +299,15 @@ def RunDailyKidsReminders(
 
     for kid in kids:
         settings = EnsureReminderSettings(db, kid.Id)
+        effective_zone = _ResolveReminderZone(
+            task_timezone_by_kid.get(kid.Id) or settings.ReminderTimeZone
+        )
+        today, effective_time = _ResolveEffectiveRunDateTime(
+            now_utc=now_utc,
+            run_date=run_date,
+            run_time=run_time,
+            run_zone=effective_zone,
+        )
         completed_ids = _LoadCompletedChoreIds(db, kid.Id, today)
 
         kid_eligible = False

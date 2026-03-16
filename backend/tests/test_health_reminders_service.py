@@ -1,9 +1,11 @@
 import json
+from datetime import date, datetime, timezone
 
 from app.modules.health.services.reminders_service import (
     _IsValidTime,
     _ParseFoodReminderSlots,
     _ParseFoodReminderTimes,
+    _ResolveEffectiveRunDateTime,
     _TimeMatches,
 )
 from app.modules.health.utils.defaults import DefaultFoodReminderSlots, DefaultFoodReminderTimes
@@ -50,3 +52,16 @@ def test_parse_food_reminder_slots_honors_per_slot_enabled_and_time():
     assert slots["Breakfast"]["Time"] == "09:15"
     assert slots["Snack1"]["Enabled"] is False
     assert slots["Snack1"]["Time"] == DefaultFoodReminderSlots["Snack1"]["Time"]
+
+
+def test_resolve_effective_run_date_time_uses_adelaide_for_scheduler_defaults():
+    now_utc = datetime(2026, 3, 8, 16, 0, tzinfo=timezone.utc)
+
+    effective_date, effective_time = _ResolveEffectiveRunDateTime(
+        now_utc=now_utc,
+        run_date=None,
+        run_time=None,
+    )
+
+    assert effective_date == date(2026, 3, 9)
+    assert effective_time == "02:30"

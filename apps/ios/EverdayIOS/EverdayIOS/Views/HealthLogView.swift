@@ -11,6 +11,8 @@ struct HealthLogView: View {
     @State private var activeMealType: HealthMealType = .Breakfast
     @State private var editingEntry: HealthMealEntryWithFood?
     @State private var showEntrySheet = false
+    @State private var showStepsSheet = false
+    @State private var showWeightSheet = false
     @State private var entryToDelete: HealthMealEntryWithFood?
 
     @State private var mealActionLoading = false
@@ -38,6 +40,7 @@ struct HealthLogView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 compactDateRow
+                metricsCard
 
                 ForEach(mealOrder, id: \.self) { meal in
                     mealSection(meal)
@@ -68,7 +71,25 @@ struct HealthLogView: View {
                 shareUsers: shareUsers,
                 nextSortOrder: nextSortOrder,
                 flowMode: editingEntry == nil ? .quickAdd : .detailed,
-                onSaved: { Task { await load() } }
+                onSaved: { Task { await load(forceCatalogRefresh: true) } }
+            )
+        }
+        .sheet(isPresented: $showStepsSheet) {
+            HealthLogStepsSheet(
+                logDate: logDateKey,
+                initialSteps: currentSteps,
+                onSave: { steps in
+                    Task { await updateStepsValue(steps) }
+                }
+            )
+        }
+        .sheet(isPresented: $showWeightSheet) {
+            HealthLogWeightSheet(
+                logDate: logDateKey,
+                initialWeight: currentWeight,
+                onSave: { weight in
+                    Task { await updateWeightValue(weight) }
+                }
             )
         }
         .alert("Delete entry", isPresented: Binding(
@@ -194,6 +215,73 @@ struct HealthLogView: View {
         }
     }
 
+    private var metricsCard: some View {
+        HealthSectionCard {
+            HealthSectionHeader(
+                title: "Daily metrics",
+                subtitle: HealthFormatters.formatLongDate(logDateKey)
+            )
+
+            ViewThatFits {
+                HStack(spacing: 12) {
+                    HealthMetricTile(
+                        title: "Steps",
+                        value: HealthFormatters.formatInteger(currentSteps),
+                        detail: "steps"
+                    )
+                    HealthMetricTile(
+                        title: "Weight",
+                        value: weightDisplayValue,
+                        detail: currentWeight == nil ? nil : "kg"
+                    )
+                }
+                VStack(alignment: .leading, spacing: 12) {
+                    HealthMetricTile(
+                        title: "Steps",
+                        value: HealthFormatters.formatInteger(currentSteps),
+                        detail: "steps"
+                    )
+                    HealthMetricTile(
+                        title: "Weight",
+                        value: weightDisplayValue,
+                        detail: currentWeight == nil ? nil : "kg"
+                    )
+                }
+            }
+
+            ViewThatFits {
+                HStack(spacing: 10) {
+                    Button("Log steps") {
+                        showStepsSheet = true
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(status == .loading)
+
+                    Button("Log weight") {
+                        showWeightSheet = true
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(status == .loading)
+
+                    Spacer(minLength: 0)
+                }
+                VStack(alignment: .leading, spacing: 8) {
+                    Button("Log steps") {
+                        showStepsSheet = true
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(status == .loading)
+
+                    Button("Log weight") {
+                        showWeightSheet = true
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(status == .loading)
+                }
+            }
+        }
+    }
+
     private var mealOrder: [HealthMealType] {
         [.Breakfast, .Snack1, .Lunch, .Snack2, .Dinner, .Snack3]
     }
@@ -206,6 +294,23 @@ struct HealthLogView: View {
 
     private var logDateKey: String {
         HealthFormatters.dateKey(from: logDate)
+    }
+
+    private var currentSteps: Int {
+        logResponse?.DailyLog?.Steps ?? logResponse?.Summary.Steps ?? 0
+    }
+
+    private var currentWeight: Double? {
+        logResponse?.DailyLog?.WeightKg
+    }
+
+    private var currentStepFactor: Double? {
+        logResponse?.DailyLog?.StepKcalFactorOverride ?? logResponse?.Targets.StepKcalFactor
+    }
+
+    private var weightDisplayValue: String {
+        guard let currentWeight else { return "Not logged" }
+        return HealthFormatters.formatNumber(currentWeight, decimals: 1)
     }
 
     private var isNextDisabled: Bool {
@@ -227,19 +332,48 @@ struct HealthLogView: View {
         }
     }
 
-    private func load() async {
+    private func updateStepsValue(_ steps: Int) async {
+        await updateMetricsForSelectedDate(steps: steps, weight: currentWeight)
+    }
+
+    private func updateWeightValue(_ weight: Double) async {
+        await updateMetricsForSelectedDate(steps: currentSteps, weight: weight)
+    }
+
+    private func updateMetricsForSelectedDate(steps: Int, weight: Double?) async {
+        do {
+            status = .loading
+            errorMessage = ""
+            _ = try await HealthApi.updateDailySteps(
+                date: logDateKey,
+                request: HealthStepUpdateRequest(
+                    Steps: steps,
+                    StepKcalFactorOverride: currentStepFactor,
+                    WeightKg: weight
+                )
+            )
+            showStepsSheet = false
+            showWeightSheet = false
+            await load()
+        } catch {
+            status = .error
+            errorMessage = (error as? ApiError)?.message ?? "Unable to update log."
+        }
+    }
+
+    private func load(forceCatalogRefresh: Bool = false) async {
         status = .loading
         errorMessage = ""
         do {
             async let logResult = HealthApi.fetchDailyLog(date: logDateKey)
-            if foods.isEmpty {
+            if forceCatalogRefresh || foods.isEmpty {
                 foods = try await HealthApi.fetchFoods()
             }
-            if templates.isEmpty {
+            if forceCatalogRefresh || templates.isEmpty {
                 let response = try await HealthApi.fetchMealTemplates()
                 templates = response.Templates
             }
-            if shareUsers.isEmpty {
+            if forceCatalogRefresh || shareUsers.isEmpty {
                 do {
                     shareUsers = try await SettingsApi.fetchUsers()
                 } catch {
@@ -276,6 +410,7 @@ struct HealthLogView: View {
 
     private func handleQuickAddMealIfNeeded() {
         guard quickAddMealNonce > consumedQuickAddMealNonce else { return }
+        logDate = Date()
         activeMealType = defaultMealTypeForCurrentTime()
         editingEntry = nil
         showEntrySheet = true
@@ -453,6 +588,117 @@ private struct HealthEntryRow: View {
         let quantity = HealthFormatters.formatNumber(entry.Quantity, decimals: 2)
         let unit = entry.PortionLabel ?? "serving"
         return "\(quantity) \(unit)"
+    }
+}
+
+private struct HealthLogStepsSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let logDate: String
+    let initialSteps: Int
+    let onSave: (Int) -> Void
+
+    @State private var stepsText: String
+
+    init(logDate: String, initialSteps: Int, onSave: @escaping (Int) -> Void) {
+        self.logDate = logDate
+        self.initialSteps = initialSteps
+        self.onSave = onSave
+        _stepsText = State(initialValue: String(initialSteps))
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Date") {
+                    Text(HealthFormatters.formatLongDate(logDate))
+                }
+                Section("Steps") {
+                    TextField("Steps", text: $stepsText)
+                        .keyboardType(.numberPad)
+                }
+            }
+            .navigationTitle("Log steps")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        onSave(parsedSteps)
+                    }
+                    .disabled(!isDirty || !isValid)
+                }
+            }
+        }
+    }
+
+    private var parsedSteps: Int {
+        Int(stepsText) ?? 0
+    }
+
+    private var isDirty: Bool {
+        stepsText != String(initialSteps)
+    }
+
+    private var isValid: Bool {
+        guard let steps = Int(stepsText) else { return false }
+        return steps >= 0
+    }
+}
+
+private struct HealthLogWeightSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let logDate: String
+    let initialWeight: Double?
+    let onSave: (Double) -> Void
+
+    @State private var weightText: String
+
+    init(logDate: String, initialWeight: Double?, onSave: @escaping (Double) -> Void) {
+        self.logDate = logDate
+        self.initialWeight = initialWeight
+        self.onSave = onSave
+        _weightText = State(initialValue: initialWeight.map { String($0) } ?? "")
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Date") {
+                    Text(HealthFormatters.formatLongDate(logDate))
+                }
+                Section("Weight") {
+                    TextField("Weight (kg)", text: $weightText)
+                        .keyboardType(.decimalPad)
+                }
+            }
+            .navigationTitle("Log weight")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        guard let parsedWeight else { return }
+                        onSave(parsedWeight)
+                    }
+                    .disabled(!isDirty || !isValid)
+                }
+            }
+        }
+    }
+
+    private var parsedWeight: Double? {
+        Double(weightText)
+    }
+
+    private var isDirty: Bool {
+        weightText != (initialWeight.map { String($0) } ?? "")
+    }
+
+    private var isValid: Bool {
+        guard let weight = parsedWeight else { return false }
+        return weight > 0
     }
 }
 

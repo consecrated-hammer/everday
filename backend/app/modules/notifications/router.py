@@ -23,6 +23,7 @@ from app.modules.notifications.services import (
     BuildNotificationPayload,
     CountUnread,
     CreateNotificationsForUsers,
+    DismissAll,
     DismissNotification,
     IsSystemNotificationType,
     ListNotifications,
@@ -269,6 +270,18 @@ def MarkAllReadRoute(
 ) -> NotificationBulkUpdateResponse:
     try:
         updated = MarkAllRead(db, user_id=user.Id)
+        return NotificationBulkUpdateResponse(UpdatedCount=updated)
+    except ProgrammingError as exc:
+        _handle_db_error(exc)
+
+
+@router.post("/dismiss-all", response_model=NotificationBulkUpdateResponse)
+def DismissAllRoute(
+    db: Session = Depends(GetDb),
+    user: UserContext = Depends(RequireAuthenticated),
+) -> NotificationBulkUpdateResponse:
+    try:
+        updated = DismissAll(db, user_id=user.Id)
         return NotificationBulkUpdateResponse(UpdatedCount=updated)
     except ProgrammingError as exc:
         _handle_db_error(exc)

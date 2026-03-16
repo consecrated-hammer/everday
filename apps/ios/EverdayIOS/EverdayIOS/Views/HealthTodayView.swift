@@ -44,17 +44,19 @@ struct HealthTodayView: View {
         }
         .sheet(isPresented: $showStepsSheet) {
             HealthTodayStepsSheet(
+                initialDate: Date(),
                 initialSteps: currentSteps,
-                onSave: { steps in
-                    Task { await updateStepsValue(steps) }
+                onSave: { date, steps in
+                    Task { await updateStepsValue(steps, on: date) }
                 }
             )
         }
         .sheet(isPresented: $showWeightSheet) {
             HealthTodayWeightSheet(
+                initialDate: Date(),
                 initialWeight: currentWeight,
-                onSave: { weight in
-                    Task { await updateWeightValue(weight) }
+                onSave: { date, weight in
+                    Task { await updateWeightValue(weight, on: date) }
                 }
             )
         }
@@ -327,12 +329,12 @@ struct HealthTodayView: View {
         }
     }
 
-    private func updateStepsValue(_ steps: Int) async {
-        await updateTodayMetrics(steps: steps, weight: currentWeight)
+    private func updateStepsValue(_ steps: Int, on date: Date) async {
+        await updateMetrics(steps: steps, weight: currentWeight, logDateKey: HealthFormatters.dateKey(from: date))
     }
 
-    private func updateWeightValue(_ weight: Double) async {
-        await updateTodayMetrics(steps: currentSteps, weight: weight)
+    private func updateWeightValue(_ weight: Double, on date: Date) async {
+        await updateMetrics(steps: currentSteps, weight: weight, logDateKey: HealthFormatters.dateKey(from: date))
     }
 
     private func handleQuickLogStepsRequest(_ nonce: Int) {
@@ -349,12 +351,11 @@ struct HealthTodayView: View {
         showWeightSheet = true
     }
 
-    private func updateTodayMetrics(steps: Int, weight: Double?) async {
-        guard logResponse != nil else { return }
+    private func updateMetrics(steps: Int, weight: Double?, logDateKey: String) async {
         do {
             status = .loading
             errorMessage = ""
-            _ = try await HealthApi.updateDailySteps(date: todayKey, request: HealthStepUpdateRequest(
+            _ = try await HealthApi.updateDailySteps(date: logDateKey, request: HealthStepUpdateRequest(
                 Steps: steps,
                 StepKcalFactorOverride: currentStepFactor,
                 WeightKg: weight
@@ -397,20 +398,28 @@ private enum LoadState {
 
 private struct HealthTodayStepsSheet: View {
     @Environment(\.dismiss) private var dismiss
+    let initialDate: Date
     let initialSteps: Int
-    let onSave: (Int) -> Void
+    let onSave: (Date, Int) -> Void
 
+    @State private var logDate: Date
     @State private var stepsText: String
 
-    init(initialSteps: Int, onSave: @escaping (Int) -> Void) {
+    init(initialDate: Date, initialSteps: Int, onSave: @escaping (Date, Int) -> Void) {
+        self.initialDate = Calendar.current.startOfDay(for: initialDate)
         self.initialSteps = initialSteps
         self.onSave = onSave
+        _logDate = State(initialValue: Calendar.current.startOfDay(for: initialDate))
         _stepsText = State(initialValue: String(initialSteps))
     }
 
     var body: some View {
         NavigationStack {
             Form {
+                Section("Date") {
+                    DatePicker("Date", selection: $logDate, in: ...Date(), displayedComponents: .date)
+                        .datePickerStyle(.compact)
+                }
                 Section("Steps") {
                     TextField("Steps", text: $stepsText)
                         .keyboardType(.numberPad)
@@ -423,7 +432,7 @@ private struct HealthTodayStepsSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
-                        onSave(parsedSteps)
+                        onSave(logDate, parsedSteps)
                     }
                     .disabled(!isDirty || !isValid)
                 }
@@ -436,7 +445,7 @@ private struct HealthTodayStepsSheet: View {
     }
 
     private var isDirty: Bool {
-        stepsText != String(initialSteps)
+        stepsText != String(initialSteps) || !Calendar.current.isDate(logDate, inSameDayAs: initialDate)
     }
 
     private var isValid: Bool {
@@ -447,20 +456,28 @@ private struct HealthTodayStepsSheet: View {
 
 private struct HealthTodayWeightSheet: View {
     @Environment(\.dismiss) private var dismiss
+    let initialDate: Date
     let initialWeight: Double?
-    let onSave: (Double) -> Void
+    let onSave: (Date, Double) -> Void
 
+    @State private var logDate: Date
     @State private var weightText: String
 
-    init(initialWeight: Double?, onSave: @escaping (Double) -> Void) {
+    init(initialDate: Date, initialWeight: Double?, onSave: @escaping (Date, Double) -> Void) {
+        self.initialDate = Calendar.current.startOfDay(for: initialDate)
         self.initialWeight = initialWeight
         self.onSave = onSave
+        _logDate = State(initialValue: Calendar.current.startOfDay(for: initialDate))
         _weightText = State(initialValue: initialWeight.map { String($0) } ?? "")
     }
 
     var body: some View {
         NavigationStack {
             Form {
+                Section("Date") {
+                    DatePicker("Date", selection: $logDate, in: ...Date(), displayedComponents: .date)
+                        .datePickerStyle(.compact)
+                }
                 Section("Weight") {
                     TextField("Weight (kg)", text: $weightText)
                         .keyboardType(.decimalPad)
@@ -474,7 +491,7 @@ private struct HealthTodayWeightSheet: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
                         guard let parsedWeight else { return }
-                        onSave(parsedWeight)
+                        onSave(logDate, parsedWeight)
                     }
                     .disabled(!isDirty || !isValid)
                 }
@@ -487,7 +504,7 @@ private struct HealthTodayWeightSheet: View {
     }
 
     private var isDirty: Bool {
-        weightText != (initialWeight.map { String($0) } ?? "")
+        weightText != (initialWeight.map { String($0) } ?? "") || !Calendar.current.isDate(logDate, inSameDayAs: initialDate)
     }
 
     private var isValid: Bool {

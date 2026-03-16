@@ -306,6 +306,29 @@ def MarkAllRead(db: Session, *, user_id: int) -> int:
     return int(updated or 0)
 
 
+def DismissAll(db: Session, *, user_id: int) -> int:
+    now = NowUtc()
+    updated = (
+        db.query(Notification)
+        .filter(
+            Notification.UserId == user_id,
+            Notification.IsDismissed == False,  # noqa: E712
+        )
+        .update(
+            {
+                Notification.IsDismissed: True,
+                Notification.DismissedAt: now,
+                Notification.IsRead: True,
+                Notification.ReadAt: now,
+                Notification.UpdatedAt: now,
+            },
+            synchronize_session=False,
+        )
+    )
+    db.commit()
+    return int(updated or 0)
+
+
 def RegisterUserNotificationDevice(
     db: Session,
     *,
