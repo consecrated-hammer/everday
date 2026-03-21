@@ -6,6 +6,7 @@ from fastapi import APIRouter, Request
 from pydantic import BaseModel, Field
 
 from app.core.logging import format_frontend_message
+from app.modules.notifications.push_service import GetApnsHealthStatus
 
 router = APIRouter(prefix="/api", tags=["health"])
 logger = logging.getLogger("core.health")
@@ -61,6 +62,21 @@ async def api_health_db() -> dict:
     except Exception as exc:  # noqa: BLE001
         logger.exception("db check failed")
         return {"status": "error", "detail": "database unavailable"}
+
+
+@router.get("/health/push")
+async def api_health_push() -> dict:
+    health = GetApnsHealthStatus()
+    if not health["enabled"]:
+        return {"status": "error", "detail": "push notifications disabled"}
+    if health["configured"]:
+        return {"status": "ok"}
+
+    missing = ", ".join(health["missing"])
+    return {
+        "status": "error",
+        "detail": f"push notifications unavailable: missing {missing}",
+    }
 
 
 class FrontendLogPayload(BaseModel):
