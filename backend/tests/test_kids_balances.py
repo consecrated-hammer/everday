@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime, timezone
 
 import pytest
 from fastapi import HTTPException
@@ -13,6 +13,7 @@ class _FakeDb:
         self.added = []
         self.commit_called = False
         self.refresh_called = False
+        self._next_id = 1
 
     def add(self, entry):
         self.added.append(entry)
@@ -20,7 +21,15 @@ class _FakeDb:
     def commit(self):
         self.commit_called = True
 
-    def refresh(self, _entry):
+    def refresh(self, entry):
+        if getattr(entry, "Id", None) is None:
+            entry.Id = self._next_id
+            self._next_id += 1
+        now = datetime.now(timezone.utc)
+        if getattr(entry, "CreatedAt", None) is None:
+            entry.CreatedAt = now
+        if getattr(entry, "UpdatedAt", None) is None:
+            entry.UpdatedAt = now
         self.refresh_called = True
 
 
@@ -91,3 +100,60 @@ def test_add_withdrawal_allows_amount_within_available_balance(monkeypatch):
     assert db.refresh_called is True
     assert result.Amount == -12.34
     assert result.CreatedByName == "Parent User"
+
+
+def test_add_withdrawal_uses_requested_entry_date_for_balance_check(monkeypatch):
+    db = _FakeDb()
+    payload = LedgerEntryCreate(
+        Amount=8.00,
+        EntryDate=date(2026, 3, 5),
+        Narrative="Backdated spend",
+        Notes=None,
+    )
+    user = UserContext(Id=1, Username="parent", Role="Parent")
+    captured: dict[str, object] = {}
+
+    monkeypatch.setattr(kids_router, "_EnsureParentKidAccess", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(kids_router, "EnsurePocketMoneyCredits", lambda *_args, **_kwargs: None)
+
+    def _fake_kid_balance(_db, _kid_id, anchor_date=None):
+        captured["anchor_date"] = anchor_date
+        return 12.0
+
+    monkeypatch.setattr(kids_router, "_KidBalance", _fake_kid_balance)
+    monkeypatch.setattr(kids_router, "_LoadUserNames", lambda *_args, **_kwargs: {1: "Parent User"})
+
+    result = kids_router.AddWithdrawal(3, payload, db=db, user=user)
+
+    assert captured["anchor_date"] == payload.EntryDate
+    assert result.Amount == -8.0
+
+
+def test_add_starting_balance_uses_raw_ledger_total(monkeypatch):
+    db = _FakeDb()
+    payload = LedgerEntryCreate(
+        Amount=10.0,
+        EntryDate=date(2026, 3, 21),
+        Narrative="Set current balance",
+        Notes=None,
+    )
+    user = UserContext(Id=1, Username="parent", Role="Parent")
+    called: dict[str, object] = {"display_balance_used": False}
+
+    monkeypatch.setattr(kids_router, "_EnsureParentKidAccess", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(kids_router, "EnsurePocketMoneyCredits", lambda *_args, **_kwargs: None)
+
+    def _fail_if_display_balance_used(*_args, **_kwargs):
+        called["display_balance_used"] = True
+        raise AssertionError("_KidBalance should not be used for starting balance adjustments")
+
+    monkeypatch.setattr(kids_router, "_KidBalance", _fail_if_display_balance_used)
+    monkeypatch.setattr(kids_router, "_KidRawBalance", lambda *_args, **_kwargs: -15.0)
+    monkeypatch.setattr(kids_router, "_LoadUserNames", lambda *_args, **_kwargs: {1: "Parent User"})
+
+    result = kids_router.AddStartingBalance(3, payload, db=db, user=user)
+
+    assert called["display_balance_used"] is False
+    assert len(db.added) == 1
+    assert float(db.added[0].Amount) == 25.0
+    assert result.Amount == 25.0

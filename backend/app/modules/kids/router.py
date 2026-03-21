@@ -421,6 +421,10 @@ def _KidLedgerTotal(
     return float(total or 0)
 
 
+def _KidRawBalance(db: Session, kid_user_id: int, anchor_date: date | None = None) -> float:
+    return _KidLedgerTotal(db, kid_user_id, end_date=anchor_date)
+
+
 def _KidBalance(db: Session, kid_user_id: int, anchor_date: date | None = None) -> float:
     today = anchor_date or TodayAdelaide()
     month_start, month_end = MonthRange(today)
@@ -1622,7 +1626,7 @@ def AddWithdrawal(
     try:
         _EnsureParentKidAccess(db, user.Id, kid_id)
         EnsurePocketMoneyCredits(db, kid_id, date.today())
-        amount = _BuildWithdrawalAmount(_KidBalance(db, kid_id), payload.Amount)
+        amount = _BuildWithdrawalAmount(_KidBalance(db, kid_id, payload.EntryDate), payload.Amount)
         entry = LedgerEntry(
             KidUserId=kid_id,
             EntryType="Withdrawal",
@@ -1654,7 +1658,7 @@ def AddStartingBalance(
     try:
         _EnsureParentKidAccess(db, user.Id, kid_id)
         EnsurePocketMoneyCredits(db, kid_id, date.today())
-        current_balance = _KidBalance(db, kid_id)
+        current_balance = _KidRawBalance(db, kid_id, payload.EntryDate)
         adjustment = payload.Amount - current_balance
         entry = LedgerEntry(
             KidUserId=kid_id,
