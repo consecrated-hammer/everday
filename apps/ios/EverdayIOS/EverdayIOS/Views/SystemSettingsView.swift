@@ -8,6 +8,7 @@ struct SystemSettingsView: View {
     @State private var showEnvironmentAlert = false
     @State private var apiStatus: SystemStatusState = .idle
     @State private var dbStatus: SystemStatusState = .idle
+    @State private var pushStatus: SystemStatusState = .idle
     @State private var lastChecked: Date?
     @State private var statusMessage = ""
     @State private var isRefreshing = false
@@ -24,6 +25,11 @@ struct SystemSettingsView: View {
                     title: "Database",
                     value: statusLabel(for: dbStatus),
                     valueColor: statusColor(for: dbStatus)
+                )
+                settingsRow(
+                    title: "Push",
+                    value: statusLabel(for: pushStatus),
+                    valueColor: statusColor(for: pushStatus)
                 )
 
                 Button {
@@ -92,7 +98,7 @@ struct SystemSettingsView: View {
             }
         }
         .task {
-            if apiStatus == .idle && dbStatus == .idle {
+            if apiStatus == .idle && dbStatus == .idle && pushStatus == .idle {
                 await refreshStatus()
             }
         }
@@ -128,21 +134,28 @@ struct SystemSettingsView: View {
         statusMessage = ""
         apiStatus = .checking
         dbStatus = .checking
+        pushStatus = .checking
         do {
             async let apiResponse: SystemStatusResponse = ApiClient.shared.request(path: "health", requiresAuth: false)
             async let dbResponse: SystemStatusResponse = ApiClient.shared.request(path: "health/db", requiresAuth: false)
-            let (api, db) = try await (apiResponse, dbResponse)
+            async let pushResponse: SystemStatusResponse = ApiClient.shared.request(path: "health/push", requiresAuth: false)
+            let (api, db, push) = try await (apiResponse, dbResponse, pushResponse)
             apiStatus = api.status.lowercased() == "ok" ? .ok : .error
             dbStatus = db.status.lowercased() == "ok" ? .ok : .error
+            pushStatus = push.status.lowercased() == "ok" ? .ok : .error
             if api.status.lowercased() != "ok", let detail = api.detail, !detail.isEmpty {
                 statusMessage = detail
             }
             if db.status.lowercased() != "ok", let detail = db.detail, !detail.isEmpty {
                 statusMessage = detail
             }
+            if push.status.lowercased() != "ok", let detail = push.detail, !detail.isEmpty {
+                statusMessage = detail
+            }
         } catch {
             apiStatus = .error
             dbStatus = .error
+            pushStatus = .error
             statusMessage = (error as? ApiError)?.message ?? "Failed to check system status."
         }
         lastChecked = Date()

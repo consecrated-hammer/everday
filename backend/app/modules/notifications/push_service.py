@@ -17,6 +17,12 @@ from app.modules.notifications.utils.text import NormalizeNotificationTitle
 logger = logging.getLogger("notifications.push")
 
 _APNS_DEACTIVATE_REASONS = {"BadDeviceToken", "Unregistered", "DeviceTokenNotForTopic"}
+_APNS_REQUIRED_ENV_VARS = (
+    "APNS_TEAM_ID",
+    "APNS_KEY_ID",
+    "APNS_BUNDLE_ID",
+    "APNS_PRIVATE_KEY",
+)
 
 
 @dataclass(frozen=True)
@@ -76,6 +82,37 @@ def _LoadApnsConfig() -> _ApnsConfig | None:
         private_key=private_key,
         timeout_seconds=timeout_seconds,
     )
+
+
+def GetApnsHealthStatus() -> dict[str, object]:
+    enabled = _ReadBoolEnv("APNS_ENABLED", default=False)
+    if not enabled:
+        return {
+            "enabled": False,
+            "configured": False,
+            "missing": [],
+        }
+
+    team_id = os.getenv("APNS_TEAM_ID", "").strip()
+    key_id = os.getenv("APNS_KEY_ID", "").strip()
+    bundle_id = os.getenv("APNS_BUNDLE_ID", "").strip()
+    private_key = _NormalizePrivateKey(os.getenv("APNS_PRIVATE_KEY"))
+    missing = [
+        name
+        for name, value in (
+            ("APNS_TEAM_ID", team_id),
+            ("APNS_KEY_ID", key_id),
+            ("APNS_BUNDLE_ID", bundle_id),
+            ("APNS_PRIVATE_KEY", private_key),
+        )
+        if not value
+    ]
+    return {
+        "enabled": True,
+        "configured": not missing,
+        "missing": missing,
+        "bundle_id": bundle_id or None,
+    }
 
 
 class _ApnsTokenProvider:

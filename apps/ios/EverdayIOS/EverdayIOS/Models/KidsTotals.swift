@@ -14,6 +14,16 @@ struct KidsTotalsSeriesPoint: Identifiable {
 }
 
 enum KidsTotals {
+    private static func clampNonNegative(_ value: Double) -> Double {
+        max(value, 0)
+    }
+
+    private static func shiftDateKey(_ dateKey: String, by days: Int) -> String {
+        guard let date = KidsFormatters.parseDate(dateKey) else { return "" }
+        guard let shifted = Calendar.current.date(byAdding: .day, value: days, to: date) else { return "" }
+        return KidsFormatters.dateKey(from: shifted)
+    }
+
     static func build(
         todayKey: String,
         monthStartKey: String,
@@ -26,13 +36,17 @@ enum KidsTotals {
     ) -> KidsTotalsResult {
         let cutoffKey = isCurrentMonth ? todayKey : monthEndKey
         let balanceAsOf = buildBalanceAsOf(entries: ledgerEntries)
+        let openingBalanceKey = shiftDateKey(monthStartKey, by: -1)
+        let balanceBeforeMonth = balanceAsOf(openingBalanceKey)
+        let openingBalance = clampNonNegative(balanceBeforeMonth)
         let balanceAtCutoff = balanceAsOf(cutoffKey)
+        let monthLedgerTotal = balanceAtCutoff - balanceBeforeMonth
         let projectionAtCutoff = projectionAtCutoff(
             projectionPoints: projectionPoints,
             cutoffKey: cutoffKey,
             dailySlice: dailySlice
         )
-        let currentTotal = balanceAtCutoff + projectionAtCutoff
+        let currentTotal = clampNonNegative(openingBalance + monthLedgerTotal + projectionAtCutoff)
         let daysInMonth = dayDiff(startKey: monthStartKey, endKey: monthEndKey) + 1
         let remainingDays = isCurrentMonth ? max(0, dayDiff(startKey: cutoffKey, endKey: monthEndKey)) : 0
         let allowanceRemainder = max(0, monthlyAllowance - dailySlice * Double(daysInMonth))
@@ -61,9 +75,14 @@ enum KidsTotals {
                     : 0
                 let pointProjection = projectionByDate[pointDate] ?? point.Amount
                 let balanceAtPoint = balanceAsOf(pointDate)
-                let actualAmount = isOnOrBeforeCutoff ? balanceAtPoint + pointProjection : nil
+                let monthLedgerAtPoint = balanceAtPoint - balanceBeforeMonth
+                let actualAmount = isOnOrBeforeCutoff
+                    ? clampNonNegative(openingBalance + monthLedgerAtPoint + pointProjection)
+                    : nil
                 let projectedAmount = isOnOrAfterCutoff
-                    ? currentTotal + dailySlice * Double(daysAhead) + remainderPerDay * Double(daysAhead)
+                    ? clampNonNegative(
+                        currentTotal + dailySlice * Double(daysAhead) + remainderPerDay * Double(daysAhead)
+                    )
                     : nil
                 return KidsTotalsSeriesPoint(
                     DateKey: pointDate,
