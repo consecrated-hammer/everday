@@ -22,6 +22,27 @@ const BuildDayDiff = (startKey, endKey) => {
   return Math.round((end.getTime() - start.getTime()) / 86400000);
 };
 
+const BuildDateKey = (date) => {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+    return "";
+  }
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const ShiftDateKey = (dateKey, dayOffset) => {
+  const date = ParseDateValue(dateKey);
+  if (!date) {
+    return "";
+  }
+  date.setDate(date.getDate() + dayOffset);
+  return BuildDateKey(date);
+};
+
+const ClampNonNegative = (value) => Math.max(Number(value || 0), 0);
+
 const BuildBalanceAsOf = (entries) => {
   if (!Array.isArray(entries) || entries.length === 0) {
     return () => 0;
@@ -89,7 +110,10 @@ export const BuildKidsTotals = ({
 }) => {
   const cutoffKey = IsCurrentMonth ? TodayKey : MonthEndKey;
   const balanceAsOf = BuildBalanceAsOf(LedgerEntries);
+  const openingBalanceKey = ShiftDateKey(MonthStartKey, -1);
+  const openingBalance = ClampNonNegative(balanceAsOf(openingBalanceKey) ?? 0);
   const balanceAtCutoff = balanceAsOf(cutoffKey) ?? 0;
+  const monthLedgerTotal = balanceAtCutoff - (balanceAsOf(openingBalanceKey) ?? 0);
   const dailySliceValue = Number(DailySlice || 0);
   const projectionAtCutoff = BuildProjectionAtCutoff({
     ProjectionPoints,
@@ -97,7 +121,7 @@ export const BuildKidsTotals = ({
     CutoffKey: cutoffKey,
     DailySlice: dailySliceValue
   });
-  const currentTotal = balanceAtCutoff + projectionAtCutoff;
+  const currentTotal = ClampNonNegative(openingBalance + monthLedgerTotal + projectionAtCutoff);
   const daysInMonth = BuildDayDiff(MonthStartKey, MonthEndKey) + 1;
   const remainingDays = IsCurrentMonth ? Math.max(0, BuildDayDiff(cutoffKey, MonthEndKey)) : 0;
   const monthlyAllowanceValue = Number(MonthlyAllowance || 0);
@@ -140,11 +164,16 @@ export const BuildKidsTotals = ({
       const pointProjection =
         projectionByDate.get(pointDate) ?? Number(point.Amount || 0);
       const balanceAtPoint = balanceAsOf(pointDate) ?? 0;
+      const monthLedgerAtPoint = balanceAtPoint - (balanceAsOf(openingBalanceKey) ?? 0);
       return {
         DateKey: pointDate,
-        ActualAmount: isOnOrBeforeCutoff ? balanceAtPoint + pointProjection : null,
+        ActualAmount: isOnOrBeforeCutoff
+          ? ClampNonNegative(openingBalance + monthLedgerAtPoint + pointProjection)
+          : null,
         ProjectedAmount: isOnOrAfterCutoff
-          ? currentTotal + dailySliceValue * daysAhead + remainderPerDay * daysAhead
+          ? ClampNonNegative(
+              currentTotal + dailySliceValue * daysAhead + remainderPerDay * daysAhead
+            )
           : null
       };
     });

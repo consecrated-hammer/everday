@@ -1707,9 +1707,13 @@ struct KidsAdminView: View {
         let monthlyAllowanceValue = monthSummary?.MonthlyAllowance ?? 0
         let cutoffKey = isCurrentMonth ? todayKey : monthEndKey
         let balanceAsOf = KidsTotalsBalance(entries: ledgerEntries)
+        let openingBalanceKey = shiftDateKey(monthStartKey, by: -1)
+        let balanceBeforeMonth = balanceAsOf.balance(at: openingBalanceKey)
+        let openingBalance = max(balanceBeforeMonth, 0)
         let balanceAtCutoff = balanceAsOf.balance(at: cutoffKey)
+        let monthLedgerTotal = balanceAtCutoff - balanceBeforeMonth
         let projectionAtCutoff = projectionAtCutoff(cutoffKey: cutoffKey, dailySlice: dailySliceValue)
-        let currentTotal = balanceAtCutoff + projectionAtCutoff
+        let currentTotal = max(openingBalance + monthLedgerTotal + projectionAtCutoff, 0)
         let daysInMonth = dayDiff(startKey: monthStartKey, endKey: monthEndKey) + 1
         let remainingDays = isCurrentMonth ? max(0, dayDiff(startKey: cutoffKey, endKey: monthEndKey)) : 0
         let allowanceRemainder = max(0, monthlyAllowanceValue - dailySliceValue * Double(daysInMonth))
@@ -1736,6 +1740,12 @@ struct KidsAdminView: View {
             return 0
         }
         return Int(round(end.timeIntervalSince(start) / 86400))
+    }
+
+    private func shiftDateKey(_ dateKey: String, by days: Int) -> String {
+        guard let date = KidsFormatters.parseDate(dateKey) else { return "" }
+        guard let shifted = Calendar.current.date(byAdding: .day, value: days, to: date) else { return "" }
+        return KidsFormatters.dateKey(from: shifted)
     }
 
     private func dayLabel(from dateKey: String) -> String {

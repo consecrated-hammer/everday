@@ -1,5 +1,7 @@
 # Kids totals calculation
 
+See also: `docs/kids-money-rules.md` for the product rules this math must follow.
+
 This document defines how the Kids Portal computes current and projected totals.
 The frontend uses backend-provided summary/overview data and ledger entries to keep
 the calculation consistent across `/kids` and `/kids-admin`.
@@ -17,6 +19,8 @@ the calculation consistent across `/kids` and `/kids-admin`.
 ## Definitions
 
 - `LedgerBalanceAt(date)`: sum of all ledger entry amounts up to and including `date`.
+- `OpeningBalance`: `max(0, LedgerBalanceAt(MonthStart - 1 day))`.
+- `MonthLedgerDeltaAt(date)`: `LedgerBalanceAt(date) - LedgerBalanceAt(MonthStart - 1 day)`.
 - `ProjectionAt(date)`:
   - If projection points exist, use the projection amount for `date`
     (or the last point when `date` is beyond the list).
@@ -31,7 +35,8 @@ For the current month, the cutoff is `Today`. For past months, the cutoff is
 
 ```
 CurrentTotal =
-  LedgerBalanceAt(cutoff) +
+  OpeningBalance +
+  MonthLedgerDeltaAt(cutoff) +
   ProjectionAt(cutoff)
 ```
 
@@ -49,16 +54,18 @@ ProjectedTotal =
 
 For each date in the projection:
 
-- `ActualAmount` = `LedgerBalanceAt(date) + ProjectionAt(date)` for dates on or
-  before cutoff, otherwise `null`.
+- `ActualAmount` = `OpeningBalance + MonthLedgerDeltaAt(date) + ProjectionAt(date)`
+  for dates on or before cutoff, otherwise `null`.
 - `ProjectedAmount` = `CurrentTotal + DailySlice * daysAhead + remainderPerDay * daysAhead`
   for dates on or after cutoff, otherwise `null`.
 - `remainderPerDay` distributes `AllowanceRemainder` evenly across remaining days.
 
 ## Notes
 
-- Ledger entries are independent from chore earnings. Deposits/withdrawals and
-  starting balance adjustments are always included in `LedgerBalanceAt`.
+- Prior months cannot drag a new month below zero. Each month starts from
+  `OpeningBalance`, which floors the pre-month balance at zero.
+- Current-month deposits, withdrawals, and balance adjustments still affect the
+  current month via `MonthLedgerDeltaAt(date)`.
 - If you also post monthly allowance into the ledger (pocket money credits), the
   totals will include both the ledger credit and the chore-based projection.
   Use one source of allowance to avoid double counting.

@@ -1,5 +1,6 @@
 import json
 import logging
+from decimal import Decimal, ROUND_HALF_UP
 from datetime import date, datetime, timedelta
 from threading import Lock
 
@@ -369,13 +370,99 @@ def _EnsureKidHasChore(
     return chore, assignment
 
 
-def _KidBalance(db: Session, kid_user_id: int) -> float:
-    total = (
-        db.query(func.coalesce(func.sum(LedgerEntry.Amount), 0))
-        .filter(LedgerEntry.KidUserId == kid_user_id, LedgerEntry.IsDeleted == False)
-        .scalar()
+_MONEY_QUANTIZE = Decimal("0.01")
+
+
+def _MoneyAmount(value: float | Decimal | None) -> Decimal:
+    amount = Decimal(str(value or 0))
+    return amount.quantize(_MONEY_QUANTIZE, rounding=ROUND_HALF_UP)
+
+
+def _ClampNonNegativeBalance(value: float | Decimal | None) -> float:
+    return float(max(_MoneyAmount(value), Decimal("0.00")))
+
+
+def _BuildWithdrawalAmount(available_balance: float | Decimal | None, requested_amount: float | Decimal) -> Decimal:
+    balance = max(_MoneyAmount(available_balance), Decimal("0.00"))
+    amount = abs(_MoneyAmount(requested_amount))
+    if amount > balance:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Kid has reached their balance limit. Add a deposit or adjust the starting balance.",
+        )
+    return -amount
+
+
+def _BuildDisplayedBalance(
+    opening_balance: float | Decimal | None,
+    month_ledger_total: float | Decimal | None,
+    projected_earnings: float | Decimal | None,
+) -> float:
+    opening = max(_MoneyAmount(opening_balance), Decimal("0.00"))
+    total = opening + _MoneyAmount(month_ledger_total) + _MoneyAmount(projected_earnings)
+    return _ClampNonNegativeBalance(total)
+
+
+def _KidLedgerTotal(
+    db: Session,
+    kid_user_id: int,
+    start_date: date | None = None,
+    end_date: date | None = None,
+) -> float:
+    query = db.query(func.coalesce(func.sum(LedgerEntry.Amount), 0)).filter(
+        LedgerEntry.KidUserId == kid_user_id,
+        LedgerEntry.IsDeleted == False,
     )
+    if start_date is not None:
+        query = query.filter(LedgerEntry.EntryDate >= start_date)
+    if end_date is not None:
+        query = query.filter(LedgerEntry.EntryDate <= end_date)
+    total = query.scalar()
     return float(total or 0)
+
+
+def _KidBalance(db: Session, kid_user_id: int, anchor_date: date | None = None) -> float:
+    today = anchor_date or TodayAdelaide()
+    month_start, month_end = MonthRange(today)
+    opening_balance = _KidLedgerTotal(db, kid_user_id, end_date=month_start - timedelta(days=1))
+    month_ledger_total = _KidLedgerTotal(db, kid_user_id, start_date=month_start, end_date=today)
+
+    assignments = (
+        db.query(ChoreAssignment)
+        .filter(ChoreAssignment.KidUserId == kid_user_id)
+        .order_by(ChoreAssignment.CreatedAt.asc())
+        .all()
+    )
+    chore_ids = [assignment.ChoreId for assignment in assignments]
+    chores = db.query(Chore).filter(Chore.Id.in_(chore_ids)).all() if chore_ids else []
+    month_entries = (
+        db.query(ChoreEntry)
+        .filter(
+            ChoreEntry.KidUserId == kid_user_id,
+            ChoreEntry.EntryDate >= month_start,
+            ChoreEntry.EntryDate <= month_end,
+            ChoreEntry.IsDeleted == False,
+        )
+        .all()
+    )
+    rule = db.query(PocketMoneyRule).filter(PocketMoneyRule.KidUserId == kid_user_id).first()
+    monthly_allowance_cents = MonthlyAllowanceCents(rule.Amount if rule and rule.IsActive else None)
+    days_in_month = (month_end - month_start).days + 1
+    daily_slice_cents = RoundDailySlice(monthly_allowance_cents, days_in_month)
+    projection_points, _summary, _protected_by_date = BuildMonthProjection(
+        today=today,
+        month_start=month_start,
+        month_end=month_end,
+        daily_slice_cents=daily_slice_cents,
+        monthly_allowance_cents=monthly_allowance_cents,
+        chores=chores,
+        assignments=assignments,
+        entries=month_entries,
+    )
+    projected_earnings = CentsToAmount(
+        next((point.AmountCents for point in projection_points if point.Date == today), 0)
+    )
+    return _BuildDisplayedBalance(opening_balance, month_ledger_total, projected_earnings)
 
 
 @router.get("/me/summary", response_model=KidsSummaryResponse)
@@ -1534,7 +1621,8 @@ def AddWithdrawal(
 ) -> LedgerEntryOut:
     try:
         _EnsureParentKidAccess(db, user.Id, kid_id)
-        amount = -abs(payload.Amount)
+        EnsurePocketMoneyCredits(db, kid_id, date.today())
+        amount = _BuildWithdrawalAmount(_KidBalance(db, kid_id), payload.Amount)
         entry = LedgerEntry(
             KidUserId=kid_id,
             EntryType="Withdrawal",
