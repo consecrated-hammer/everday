@@ -6,12 +6,29 @@ if [ -z "${CI_BUILD_NUMBER:-}" ]; then
   exit 0
 fi
 
-PROJECT_PATH="${CI_WORKSPACE:-$PWD}/EverdayIOS.xcodeproj/project.pbxproj"
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
 
-if [ ! -f "$PROJECT_PATH" ]; then
-  echo "Xcode project not found at $PROJECT_PATH"
+for candidate in \
+  "$SCRIPT_DIR/../EverdayIOS.xcodeproj/project.pbxproj" \
+  "${CI_WORKSPACE:-}/apps/ios/EverdayIOS/EverdayIOS.xcodeproj/project.pbxproj" \
+  "${CI_WORKSPACE:-}/EverdayIOS.xcodeproj/project.pbxproj" \
+  "$PWD/EverdayIOS.xcodeproj/project.pbxproj"
+do
+  if [ -n "$candidate" ] && [ -f "$candidate" ]; then
+    PROJECT_PATH="$candidate"
+    break
+  fi
+done
+
+if [ -z "${PROJECT_PATH:-}" ]; then
+  echo "Xcode project not found."
+  echo "CI_WORKSPACE=${CI_WORKSPACE:-<unset>}"
+  echo "PWD=$PWD"
+  echo "SCRIPT_DIR=$SCRIPT_DIR"
   exit 1
 fi
+
+echo "Using project file: $PROJECT_PATH"
 
 python3 - "$PROJECT_PATH" "$CI_BUILD_NUMBER" <<'PY'
 from pathlib import Path
