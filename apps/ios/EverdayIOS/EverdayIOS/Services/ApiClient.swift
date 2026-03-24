@@ -5,6 +5,7 @@ final class ApiClient {
 
     var tokensProvider: (() -> AuthTokens?)?
     var tokensHandler: ((AuthTokens) -> Void)?
+    var authFailureHandler: (() -> Void)?
 
     private let jsonDecoder = JSONDecoder()
     private let jsonEncoder = JSONEncoder()
@@ -29,7 +30,12 @@ final class ApiClient {
 
         if requiresAuth {
             if let tokens = tokensProvider?(), JwtHelper.isTokenExpired(tokens.accessToken) {
-                _ = try? await refreshTokens(refreshToken: tokens.refreshToken)
+                do {
+                    _ = try await refreshTokens(refreshToken: tokens.refreshToken)
+                } catch {
+                    authFailureHandler?()
+                    throw error
+                }
             }
             if let token = tokensProvider?()?.accessToken {
                 request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
@@ -39,12 +45,18 @@ final class ApiClient {
         let (data, response) = try await URLSession.shared.data(for: request)
         if let http = response as? HTTPURLResponse, http.statusCode == 401, requiresAuth {
             if let refresh = tokensProvider?()?.refreshToken {
-                let refreshed = try await refreshTokens(refreshToken: refresh)
-                var retry = request
-                retry.setValue("Bearer \(refreshed.accessToken)", forHTTPHeaderField: "Authorization")
-                let (retryData, retryResponse) = try await URLSession.shared.data(for: retry)
-                return try decodeOrThrow(retryData, response: retryResponse)
+                do {
+                    let refreshed = try await refreshTokens(refreshToken: refresh)
+                    var retry = request
+                    retry.setValue("Bearer \(refreshed.accessToken)", forHTTPHeaderField: "Authorization")
+                    let (retryData, retryResponse) = try await URLSession.shared.data(for: retry)
+                    return try decodeOrThrow(retryData, response: retryResponse)
+                } catch {
+                    authFailureHandler?()
+                    throw error
+                }
             }
+            authFailureHandler?()
         }
 
         return try decodeOrThrow(data, response: response)
@@ -62,7 +74,12 @@ final class ApiClient {
 
         if requiresAuth {
             if let tokens = tokensProvider?(), JwtHelper.isTokenExpired(tokens.accessToken) {
-                _ = try? await refreshTokens(refreshToken: tokens.refreshToken)
+                do {
+                    _ = try await refreshTokens(refreshToken: tokens.refreshToken)
+                } catch {
+                    authFailureHandler?()
+                    throw error
+                }
             }
             if let token = tokensProvider?()?.accessToken {
                 request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
@@ -72,13 +89,19 @@ final class ApiClient {
         let (data, response) = try await URLSession.shared.data(for: request)
         if let http = response as? HTTPURLResponse, http.statusCode == 401, requiresAuth {
             if let refresh = tokensProvider?()?.refreshToken {
-                let refreshed = try await refreshTokens(refreshToken: refresh)
-                var retry = request
-                retry.setValue("Bearer \(refreshed.accessToken)", forHTTPHeaderField: "Authorization")
-                let (retryData, retryResponse) = try await URLSession.shared.data(for: retry)
-                try validateVoidResponse(retryData, response: retryResponse)
-                return
+                do {
+                    let refreshed = try await refreshTokens(refreshToken: refresh)
+                    var retry = request
+                    retry.setValue("Bearer \(refreshed.accessToken)", forHTTPHeaderField: "Authorization")
+                    let (retryData, retryResponse) = try await URLSession.shared.data(for: retry)
+                    try validateVoidResponse(retryData, response: retryResponse)
+                    return
+                } catch {
+                    authFailureHandler?()
+                    throw error
+                }
             }
+            authFailureHandler?()
         }
 
         try validateVoidResponse(data, response: response)

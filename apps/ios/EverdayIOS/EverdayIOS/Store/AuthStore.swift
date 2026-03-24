@@ -17,6 +17,11 @@ final class AuthStore: ObservableObject {
                 self?.save(tokens)
             }
         }
+        ApiClient.shared.authFailureHandler = { [weak self] in
+            Task { @MainActor in
+                await self?.handleInvalidSession()
+            }
+        }
         self.authService.tokensProvider = { [weak self] in self?.tokens }
         self.authService.tokensHandler = { [weak self] tokens in
             Task { @MainActor in
@@ -53,10 +58,11 @@ final class AuthStore: ObservableObject {
     }
 
     func logout() async {
-        await PushNotificationCoordinator.shared.unregisterCurrentDevice()
+        Task {
+            await PushNotificationCoordinator.shared.unregisterCurrentDevice()
+        }
+        clearLocalSession()
         await PushNotificationCoordinator.shared.clearBadge()
-        tokens = nil
-        tokenStore.clearTokens()
         await PushNotificationCoordinator.shared.handleAuthStateChanged(isAuthenticated: false)
     }
 
@@ -71,5 +77,17 @@ final class AuthStore: ObservableObject {
         Task {
             await PushNotificationCoordinator.shared.handleAuthStateChanged(isAuthenticated: true)
         }
+    }
+
+    private func clearLocalSession() {
+        tokens = nil
+        tokenStore.clearTokens()
+    }
+
+    private func handleInvalidSession() async {
+        guard tokens != nil else { return }
+        clearLocalSession()
+        await PushNotificationCoordinator.shared.clearBadge()
+        await PushNotificationCoordinator.shared.handleAuthStateChanged(isAuthenticated: false)
     }
 }
