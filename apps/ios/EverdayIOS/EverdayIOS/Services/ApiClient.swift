@@ -1,13 +1,39 @@
 import Foundation
 
+actor TokenRefreshCoordinator {
+    private var tasksByRefreshToken: [String: Task<AuthTokens, Error>] = [:]
+
+    func run(refreshToken: String, operation: @escaping @Sendable () async throws -> AuthTokens) async throws -> AuthTokens {
+        if let existing = tasksByRefreshToken[refreshToken] {
+            return try await existing.value
+        }
+
+        let task = Task {
+            try await operation()
+        }
+        tasksByRefreshToken[refreshToken] = task
+
+        do {
+            let result = try await task.value
+            tasksByRefreshToken[refreshToken] = nil
+            return result
+        } catch {
+            tasksByRefreshToken[refreshToken] = nil
+            throw error
+        }
+    }
+}
+
 final class ApiClient {
     static let shared = ApiClient()
 
     var tokensProvider: (() -> AuthTokens?)?
     var tokensHandler: ((AuthTokens) -> Void)?
+    var authFailureHandler: (() -> Void)?
 
     private let jsonDecoder = JSONDecoder()
     private let jsonEncoder = JSONEncoder()
+    private let tokenRefreshCoordinator = TokenRefreshCoordinator()
 
     private var baseUrl: URL {
         let environment = EnvironmentStore.resolvedEnvironment()
@@ -22,29 +48,42 @@ final class ApiClient {
         var request = URLRequest(url: url)
         request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        var currentTokens = tokensProvider?()
 
         if let body {
             request.httpBody = try jsonEncoder.encode(AnyEncodable(body))
         }
 
         if requiresAuth {
-            if let tokens = tokensProvider?(), JwtHelper.isTokenExpired(tokens.accessToken) {
-                _ = try? await refreshTokens(refreshToken: tokens.refreshToken)
+            if let tokens = currentTokens, JwtHelper.isTokenExpired(tokens.accessToken) {
+                do {
+                    currentTokens = try await ensureFreshTokens(using: tokens)
+                } catch {
+                    handleAuthFailureIfNeeded(for: error)
+                    throw error
+                }
             }
-            if let token = tokensProvider?()?.accessToken {
+            if let token = currentTokens?.accessToken {
                 request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
             }
         }
 
         let (data, response) = try await URLSession.shared.data(for: request)
         if let http = response as? HTTPURLResponse, http.statusCode == 401, requiresAuth {
-            if let refresh = tokensProvider?()?.refreshToken {
-                let refreshed = try await refreshTokens(refreshToken: refresh)
-                var retry = request
-                retry.setValue("Bearer \(refreshed.accessToken)", forHTTPHeaderField: "Authorization")
-                let (retryData, retryResponse) = try await URLSession.shared.data(for: retry)
-                return try decodeOrThrow(retryData, response: retryResponse)
+            if let refresh = currentTokens?.refreshToken ?? tokensProvider?()?.refreshToken {
+                do {
+                    let refreshed = try await refreshTokens(refreshToken: refresh)
+                    currentTokens = refreshed
+                    var retry = request
+                    retry.setValue("Bearer \(refreshed.accessToken)", forHTTPHeaderField: "Authorization")
+                    let (retryData, retryResponse) = try await URLSession.shared.data(for: retry)
+                    return try decodeOrThrow(retryData, response: retryResponse)
+                } catch {
+                    handleAuthFailureIfNeeded(for: error)
+                    throw error
+                }
             }
+            authFailureHandler?()
         }
 
         return try decodeOrThrow(data, response: response)
@@ -55,30 +94,43 @@ final class ApiClient {
         var request = URLRequest(url: url)
         request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        var currentTokens = tokensProvider?()
 
         if let body {
             request.httpBody = try jsonEncoder.encode(AnyEncodable(body))
         }
 
         if requiresAuth {
-            if let tokens = tokensProvider?(), JwtHelper.isTokenExpired(tokens.accessToken) {
-                _ = try? await refreshTokens(refreshToken: tokens.refreshToken)
+            if let tokens = currentTokens, JwtHelper.isTokenExpired(tokens.accessToken) {
+                do {
+                    currentTokens = try await ensureFreshTokens(using: tokens)
+                } catch {
+                    handleAuthFailureIfNeeded(for: error)
+                    throw error
+                }
             }
-            if let token = tokensProvider?()?.accessToken {
+            if let token = currentTokens?.accessToken {
                 request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
             }
         }
 
         let (data, response) = try await URLSession.shared.data(for: request)
         if let http = response as? HTTPURLResponse, http.statusCode == 401, requiresAuth {
-            if let refresh = tokensProvider?()?.refreshToken {
-                let refreshed = try await refreshTokens(refreshToken: refresh)
-                var retry = request
-                retry.setValue("Bearer \(refreshed.accessToken)", forHTTPHeaderField: "Authorization")
-                let (retryData, retryResponse) = try await URLSession.shared.data(for: retry)
-                try validateVoidResponse(retryData, response: retryResponse)
-                return
+            if let refresh = currentTokens?.refreshToken ?? tokensProvider?()?.refreshToken {
+                do {
+                    let refreshed = try await refreshTokens(refreshToken: refresh)
+                    currentTokens = refreshed
+                    var retry = request
+                    retry.setValue("Bearer \(refreshed.accessToken)", forHTTPHeaderField: "Authorization")
+                    let (retryData, retryResponse) = try await URLSession.shared.data(for: retry)
+                    try validateVoidResponse(retryData, response: retryResponse)
+                    return
+                } catch {
+                    handleAuthFailureIfNeeded(for: error)
+                    throw error
+                }
             }
+            authFailureHandler?()
         }
 
         try validateVoidResponse(data, response: response)
@@ -87,9 +139,9 @@ final class ApiClient {
     private func decodeOrThrow<T: Decodable>(_ data: Data, response: URLResponse) throws -> T {
         if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
             if let message = errorMessage(from: data) {
-                throw ApiError(message: message)
+                throw ApiError(message: message, statusCode: http.statusCode)
             }
-            throw ApiError(message: "Request failed")
+            throw ApiError(message: "Request failed", statusCode: http.statusCode)
         }
         return try jsonDecoder.decode(T.self, from: data)
     }
@@ -108,13 +160,62 @@ final class ApiClient {
     private func validateVoidResponse(_ data: Data, response: URLResponse) throws {
         if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
             if let message = errorMessage(from: data) {
-                throw ApiError(message: message)
+                throw ApiError(message: message, statusCode: http.statusCode)
             }
-            throw ApiError(message: "Request failed")
+            throw ApiError(message: "Request failed", statusCode: http.statusCode)
         }
     }
 
+    private func handleAuthFailureIfNeeded(for error: Error) {
+        guard shouldInvalidateSession(for: error) else {
+            return
+        }
+        authFailureHandler?()
+    }
+
+    private func shouldInvalidateSession(for error: Error) -> Bool {
+        guard let apiError = error as? ApiError else {
+            return false
+        }
+
+        switch apiError.statusCode {
+        case 401:
+            return true
+        case 403:
+            return apiError.message.localizedCaseInsensitiveContains("pending approval")
+        default:
+            return false
+        }
+    }
+
+    func ensureAccessToken() async throws -> String? {
+        guard let tokens = tokensProvider?() else { return nil }
+        let currentTokens: AuthTokens
+        if JwtHelper.isTokenExpired(tokens.accessToken) {
+            currentTokens = try await ensureFreshTokens(using: tokens)
+        } else {
+            currentTokens = tokens
+        }
+        return currentTokens.accessToken
+    }
+
+    private func ensureFreshTokens(using tokens: AuthTokens) async throws -> AuthTokens {
+        if !JwtHelper.isTokenExpired(tokens.accessToken) {
+            return tokens
+        }
+        return try await refreshTokens(refreshToken: tokens.refreshToken)
+    }
+
     private func refreshTokens(refreshToken: String) async throws -> AuthTokens {
+        return try await tokenRefreshCoordinator.run(refreshToken: refreshToken) { [weak self] in
+            guard let self else {
+                throw ApiError(message: "Request failed")
+            }
+            return try await self.performRefreshTokensRequest(refreshToken: refreshToken)
+        }
+    }
+
+    private func performRefreshTokensRequest(refreshToken: String) async throws -> AuthTokens {
         struct RefreshRequest: Encodable {
             let RefreshToken: String
         }

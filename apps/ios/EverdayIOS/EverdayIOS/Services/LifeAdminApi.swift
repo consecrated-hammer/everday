@@ -412,19 +412,7 @@ enum LifeAdminApi {
     }
 
     private static func ensureAccessToken() async throws -> String? {
-        guard let tokens = ApiClient.shared.tokensProvider?() else { return nil }
-        if JwtHelper.isTokenExpired(tokens.accessToken) {
-            struct RefreshRequest: Encodable { let RefreshToken: String }
-            let refreshed: AuthTokens = try await ApiClient.shared.request(
-                path: "auth/refresh",
-                method: "POST",
-                body: RefreshRequest(RefreshToken: tokens.refreshToken),
-                requiresAuth: false
-            )
-            ApiClient.shared.tokensHandler?(refreshed)
-            return refreshed.accessToken
-        }
-        return tokens.accessToken
+        try await ApiClient.shared.ensureAccessToken()
     }
 
     private static func decodeResponse<T: Decodable>(_ data: Data, response: URLResponse) throws -> T {

@@ -13,6 +13,7 @@ import {
 import Icon from "../../../components/Icon.jsx";
 import HealthLog from "../../Health/Log.jsx";
 import { FetchDailyLog, FetchHealthSettings, FetchWeeklySummary } from "../../../lib/healthApi.js";
+import { GetAdjustedCalorieTarget, GetConsumedCalories } from "../../../lib/healthMetrics.js";
 
 const FormatDate = (value) => {
   const year = value.getFullYear();
@@ -31,7 +32,7 @@ const FormatNumber = (value) => {
   return Number(value).toLocaleString();
 };
 
-const BuildWeeklySeries = (startDate, summary, target) => {
+const BuildWeeklySeries = (startDate, summary, targets) => {
   const days = summary?.Days || [];
   const byDate = new Map(days.map((day) => [day.LogDate, day]));
   const series = [];
@@ -46,7 +47,7 @@ const BuildWeeklySeries = (startDate, summary, target) => {
       Date: iso,
       Label: current.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
       Calories: record?.TotalCalories ?? 0,
-      Target: target ?? 0
+      Target: GetAdjustedCalorieTarget(targets, { Steps: record?.Steps ?? 0 })
     });
   }
 
@@ -125,20 +126,21 @@ const HealthWidget = ({ IsExpanded }) => {
   }, [logModalOpen]);
 
   const weeklySeries = useMemo(
-    () => BuildWeeklySeries(startDate, weeklySummary, targets?.DailyCalorieTarget ?? 0),
+    () => BuildWeeklySeries(startDate, weeklySummary, targets),
     [startDate, targets, weeklySummary]
   );
 
-  const calories = totals?.NetCalories ?? totals?.TotalCalories ?? 0;
+  const calories = GetConsumedCalories(totals);
   const protein = totals?.TotalProtein ?? 0;
   const steps = log?.Steps ?? 0;
+  const calorieTarget = GetAdjustedCalorieTarget(targets, log);
 
   const summaryItems = [
     {
       Key: "Calories",
       Label: "Calories",
       Value: calories,
-      Target: targets?.DailyCalorieTarget ?? 0
+      Target: calorieTarget
     },
     {
       Key: "Protein",

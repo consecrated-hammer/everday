@@ -521,7 +521,7 @@
 				CODE_SIGN_ENTITLEMENTS = EverdayIOS/EverdayIOS.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				ENABLE_PREVIEWS = YES;
 				INFOPLIST_FILE = EverdayIOS/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Everday Life Admin";
@@ -531,7 +531,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.1.1;
+				MARKETING_VERSION = 1.1.2;
 				PRODUCT_BUNDLE_IDENTIFIER = au.batserver.everday.ios;
 				PRODUCT_NAME = EverdayIOS;
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -552,7 +552,7 @@
 				CODE_SIGN_ENTITLEMENTS = EverdayIOS/EverdayIOS.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				INFOPLIST_FILE = EverdayIOS/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Everday Life Admin";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
@@ -561,7 +561,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.1.1;
+				MARKETING_VERSION = 1.1.2;
 				PRODUCT_BUNDLE_IDENTIFIER = au.batserver.everday.ios;
 				PRODUCT_NAME = EverdayIOS;
 				PROVISIONING_PROFILE_SPECIFIER = "";

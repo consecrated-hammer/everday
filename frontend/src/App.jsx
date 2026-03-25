@@ -112,6 +112,7 @@ const App = () => (
       >
         <Route index element={<KidsHome />} />
         <Route path="history" element={<KidsHistory />} />
+        <Route path="notifications" element={<Notifications />} />
       </Route>
     </Routes>
   </BrowserRouter>

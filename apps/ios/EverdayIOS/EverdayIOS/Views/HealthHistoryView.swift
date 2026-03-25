@@ -58,6 +58,14 @@ struct HealthHistoryView: View {
                 await loadDays(reset: true)
             }
         }
+        .onAppear {
+            guard status != .idle, status != .loading else { return }
+            Task { await reloadVisibleDays() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: HealthDataSync.didChangeNotification)) { _ in
+            guard status != .loading else { return }
+            Task { await reloadVisibleDays() }
+        }
     }
 
     private var summaries: [HistoryDaySummary] {
@@ -103,6 +111,25 @@ struct HealthHistoryView: View {
         let count = range.days ?? pageSize
         offset += count
         await loadDays(reset: false)
+    }
+
+    private func reloadVisibleDays() async {
+        status = .loading
+        errorMessage = ""
+        let count = max(days.count, range.days ?? pageSize)
+        let dates = buildDateRange(offsetDays: 0, count: count)
+        var results: [HistoryDayData] = []
+        for date in dates {
+            do {
+                let response = try await HealthApi.fetchDailyLog(date: date)
+                results.append(HistoryDayData(dateKey: date, response: response))
+            } catch {
+                results.append(HistoryDayData(dateKey: date, response: nil))
+            }
+        }
+        days = results
+        offset = max(0, count - pageSize)
+        status = .ready
     }
 
     private func buildDateRange(offsetDays: Int, count: Int) -> [String] {

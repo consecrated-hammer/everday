@@ -1,9 +1,12 @@
 import { Link } from "react-router-dom";
 
 import { useNotifications } from "../../hooks/useNotifications.js";
+import { IsKid } from "../../lib/authStorage.js";
 import { FormatDateTime } from "../../lib/formatters.js";
 
 const IsExternalLink = (value) => /^https?:\/\//i.test(value || "");
+const CanKidUseLink = (value) =>
+  !value || value.startsWith("/kids") || value.startsWith("/notifications");
 
 const ExtractFirstName = (value) => {
   const trimmed = (value || "").trim();
@@ -38,6 +41,7 @@ const BuildStatusLabel = (notification) => {
 };
 
 const Notifications = () => {
+  const isKid = IsKid();
   const {
     notifications,
     unreadCount,
@@ -86,7 +90,7 @@ const Notifications = () => {
             const metaLabel = BuildMetaLabel(notification);
             const statusLabel = BuildStatusLabel(notification);
             const actionLabel = notification.ActionLabel || "Open";
-            const showAction = Boolean(notification.LinkUrl);
+            const showAction = Boolean(notification.LinkUrl) && (!isKid || CanKidUseLink(notification.LinkUrl));
             const isExternal = IsExternalLink(notification.LinkUrl);
             const onOpen = async () => {
               if (!notification.IsRead) {

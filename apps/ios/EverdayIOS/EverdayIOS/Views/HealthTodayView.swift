@@ -3,13 +3,9 @@ import SwiftUI
 
 struct HealthTodayView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-    @State private var status: LoadState = .idle
-    @State private var errorMessage = ""
-    @State private var logResponse: HealthDailyLogResponse?
-    @State private var settings: HealthUserSettings?
-    @State private var weeklySummary: HealthWeeklySummary?
-    @State private var weightHistory: [HealthWeightHistoryEntry] = []
-    @State private var stepsHistory: [HealthStepsHistoryEntry] = []
+    @ObservedObject var sharedData: HealthSharedDataStore
+    @State private var isUpdating = false
+    @State private var actionErrorMessage = ""
     @State private var showStepsSheet = false
     @State private var showWeightSheet = false
     @State private var lastHandledQuickLogStepsRequestNonce = 0
@@ -31,11 +27,11 @@ struct HealthTodayView: View {
                 }
                 weeklySummaryCard
 
-                if status == .loading {
+                if isLoading {
                     HealthEmptyState(message: "Loading today...")
                 }
-                if !errorMessage.isEmpty {
-                    HealthErrorBanner(message: errorMessage)
+                if !resolvedErrorMessage.isEmpty {
+                    HealthErrorBanner(message: resolvedErrorMessage)
                 }
             }
             .padding(20)
@@ -61,8 +57,8 @@ struct HealthTodayView: View {
             )
         }
         .task {
-            if status == .idle {
-                await load()
+            if sharedData.status == .idle {
+                await sharedData.loadIfNeeded()
             }
         }
         .onAppear {
@@ -283,6 +279,37 @@ struct HealthTodayView: View {
         logResponse?.DailyLog?.StepKcalFactorOverride ?? logResponse?.Targets.StepKcalFactor
     }
 
+    private var logResponse: HealthDailyLogResponse? {
+        sharedData.logResponse
+    }
+
+    private var settings: HealthUserSettings? {
+        sharedData.settings
+    }
+
+    private var weeklySummary: HealthWeeklySummary? {
+        sharedData.weeklySummary
+    }
+
+    private var stepsHistory: [HealthStepsHistoryEntry] {
+        sharedData.stepsHistory
+    }
+
+    private var weightHistory: [HealthWeightHistoryEntry] {
+        sharedData.weightHistory
+    }
+
+    private var isLoading: Bool {
+        isUpdating || sharedData.status == .loading
+    }
+
+    private var resolvedErrorMessage: String {
+        if !actionErrorMessage.isEmpty {
+            return actionErrorMessage
+        }
+        return sharedData.errorMessage
+    }
+
     private func adjustedCalorieTarget(targets: HealthTargets) -> Double {
         let base = Double(targets.DailyCalorieTarget ?? 0)
         if base == 0 { return 0 }
@@ -302,30 +329,6 @@ struct HealthTodayView: View {
         case "Sugar": return targets.ShowSugarOnToday ?? false
         case "Sodium": return targets.ShowSodiumOnToday ?? false
         default: return true
-        }
-    }
-
-    private func load() async {
-        status = .loading
-        errorMessage = ""
-        do {
-            async let settingsResult = HealthApi.fetchSettings()
-            async let logResult = HealthApi.fetchDailyLog(date: todayKey)
-            async let summaryResult = HealthApi.fetchWeeklySummary(startDate: weekStartKey)
-            async let stepsResult = HealthApi.fetchStepsHistory(startDate: weekStartKey, endDate: todayKey)
-            async let weightResult = HealthApi.fetchWeightHistory(startDate: weekStartKey, endDate: todayKey)
-
-            settings = try await settingsResult
-            logResponse = try await logResult
-            weeklySummary = try await summaryResult
-            let steps = try await stepsResult
-            let weights = try await weightResult
-            stepsHistory = steps.Steps
-            weightHistory = weights.Weights
-            status = .ready
-        } catch {
-            status = .error
-            errorMessage = (error as? ApiError)?.message ?? "Unable to load today."
         }
     }
 
@@ -353,8 +356,8 @@ struct HealthTodayView: View {
 
     private func updateMetrics(steps: Int, weight: Double?, logDateKey: String) async {
         do {
-            status = .loading
-            errorMessage = ""
+            isUpdating = true
+            actionErrorMessage = ""
             _ = try await HealthApi.updateDailySteps(date: logDateKey, request: HealthStepUpdateRequest(
                 Steps: steps,
                 StepKcalFactorOverride: currentStepFactor,
@@ -362,10 +365,10 @@ struct HealthTodayView: View {
             ))
             showStepsSheet = false
             showWeightSheet = false
-            await load()
+            isUpdating = false
         } catch {
-            status = .error
-            errorMessage = (error as? ApiError)?.message ?? "Unable to update today."
+            isUpdating = false
+            actionErrorMessage = (error as? ApiError)?.message ?? "Unable to update today."
         }
     }
 }
@@ -387,13 +390,6 @@ private struct HealthChartPoint: Identifiable {
     let id = UUID()
     let date: Date
     let calories: Double
-}
-
-private enum LoadState {
-    case idle
-    case loading
-    case ready
-    case error
 }
 
 private struct HealthTodayStepsSheet: View {

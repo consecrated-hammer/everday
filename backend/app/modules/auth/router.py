@@ -27,6 +27,7 @@ from app.modules.auth.schemas import (
     TokenResponse,
 )
 from app.modules.auth.service import (
+    ComputeRefreshTokenLookupHash,
     CreateAccessToken,
     CreatePasswordResetToken,
     CreateRefreshToken,
@@ -41,6 +42,48 @@ from app.modules.notifications.services import CreateNotificationsForUsers
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 logger = logging.getLogger("app.auth")
+
+
+def _CreateRefreshTokenRecord(user_id: int, refresh_token: str, expires_at) -> RefreshToken:
+    return RefreshToken(
+        UserId=user_id,
+        TokenHash=HashRefreshToken(refresh_token),
+        LookupHash=ComputeRefreshTokenLookupHash(refresh_token),
+        ExpiresAt=expires_at,
+    )
+
+
+def _FindRefreshTokenRecord(db: Session, raw_refresh_token: str, now) -> RefreshToken | None:
+    lookup_hash = ComputeRefreshTokenLookupHash(raw_refresh_token)
+    exact_match = (
+        db.query(RefreshToken)
+        .filter(
+            RefreshToken.LookupHash == lookup_hash,
+            RefreshToken.RevokedAt.is_(None),
+            RefreshToken.ExpiresAt > now,
+        )
+        .first()
+    )
+    if exact_match:
+        if VerifyRefreshToken(raw_refresh_token, exact_match.TokenHash):
+            return exact_match
+        return None
+
+    legacy_tokens = (
+        db.query(RefreshToken)
+        .filter(
+            RefreshToken.LookupHash.is_(None),
+            RefreshToken.RevokedAt.is_(None),
+            RefreshToken.ExpiresAt > now,
+        )
+        .all()
+    )
+    for token in legacy_tokens:
+        if VerifyRefreshToken(raw_refresh_token, token.TokenHash):
+            token.LookupHash = lookup_hash
+            db.add(token)
+            return token
+    return None
 
 
 def _NotifyPendingApproval(db: Session, pending_user: User) -> None:
@@ -106,15 +149,10 @@ def Login(payload: LoginRequest, db: Session = Depends(GetDb)) -> TokenResponse:
 
     access_token, expires_in = CreateAccessToken(user.Id, user.Username)
     refresh_token = CreateRefreshToken()
-    refresh_hash = HashRefreshToken(refresh_token)
     refresh_ttl_days = int(_require_env("JWT_REFRESH_TTL_DAYS"))
     expires_at = now + timedelta(days=refresh_ttl_days)
 
-    record = RefreshToken(
-        UserId=user.Id,
-        TokenHash=refresh_hash,
-        ExpiresAt=expires_at,
-    )
+    record = _CreateRefreshTokenRecord(user.Id, refresh_token, expires_at)
     db.add(record)
     db.commit()
 
@@ -180,16 +218,7 @@ def Register(payload: RegisterRequest, db: Session = Depends(GetDb)) -> Register
 @router.post("/refresh", response_model=TokenResponse)
 def Refresh(payload: RefreshRequest, db: Session = Depends(GetDb)) -> TokenResponse:
     now = NowUtc()
-    tokens = (
-        db.query(RefreshToken)
-        .filter(RefreshToken.RevokedAt.is_(None), RefreshToken.ExpiresAt > now)
-        .all()
-    )
-    matched = None
-    for token in tokens:
-        if VerifyRefreshToken(payload.RefreshToken, token.TokenHash):
-            matched = token
-            break
+    matched = _FindRefreshTokenRecord(db, payload.RefreshToken, now)
 
     if not matched:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
@@ -209,17 +238,10 @@ def Refresh(payload: RefreshRequest, db: Session = Depends(GetDb)) -> TokenRespo
     matched.RevokedAt = now
     access_token, expires_in = CreateAccessToken(user.Id, user.Username)
     refresh_token = CreateRefreshToken()
-    refresh_hash = HashRefreshToken(refresh_token)
     refresh_ttl_days = int(_require_env("JWT_REFRESH_TTL_DAYS"))
     expires_at = now + timedelta(days=refresh_ttl_days)
 
-    db.add(
-        RefreshToken(
-            UserId=user.Id,
-            TokenHash=refresh_hash,
-            ExpiresAt=expires_at,
-        )
-    )
+    db.add(_CreateRefreshTokenRecord(user.Id, refresh_token, expires_at))
     db.commit()
 
     return TokenResponse(
@@ -238,13 +260,13 @@ def Refresh(payload: RefreshRequest, db: Session = Depends(GetDb)) -> TokenRespo
 
 @router.post("/logout")
 def Logout(payload: RefreshRequest, user: UserContext = Depends(RequireAuthenticated), db: Session = Depends(GetDb)) -> dict:
-    tokens = db.query(RefreshToken).filter(RefreshToken.UserId == user.Id, RefreshToken.RevokedAt.is_(None)).all()
-    for token in tokens:
-        if VerifyRefreshToken(payload.RefreshToken, token.TokenHash):
-            token.RevokedAt = NowUtc()
-            db.add(token)
-            db.commit()
-            return {"status": "ok"}
+    now = NowUtc()
+    token = _FindRefreshTokenRecord(db, payload.RefreshToken, now)
+    if token and token.UserId == user.Id:
+        token.RevokedAt = now
+        db.add(token)
+        db.commit()
+        return {"status": "ok"}
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Refresh token not found")
 
 

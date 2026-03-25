@@ -3,18 +3,17 @@ import SwiftUI
 
 struct DashboardView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-    @State private var status: TodayLoadState = .idle
-    @State private var errorMessage = ""
-    @State private var logResponse: HealthDailyLogResponse?
-    @State private var weeklySummary: HealthWeeklySummary?
+    @ObservedObject var sharedData: HealthSharedDataStore
 
     let visibleModules: [DashboardModule]
     let onSelectModule: (DashboardModule) -> Void
 
     init(
+        sharedData: HealthSharedDataStore,
         visibleModules: [DashboardModule] = DashboardModule.defaultOrder,
         onSelectModule: @escaping (DashboardModule) -> Void
     ) {
+        self.sharedData = sharedData
         self.visibleModules = visibleModules
         self.onSelectModule = onSelectModule
     }
@@ -29,8 +28,8 @@ struct DashboardView: View {
                     otherModulesCard
                 }
 
-                if !errorMessage.isEmpty {
-                    HealthErrorBanner(message: errorMessage)
+                if !sharedData.errorMessage.isEmpty {
+                    HealthErrorBanner(message: sharedData.errorMessage)
                 }
             }
             .padding(20)
@@ -38,7 +37,7 @@ struct DashboardView: View {
             .frame(maxWidth: .infinity)
         }
         .refreshable {
-            await load()
+            await sharedData.refresh()
         }
         .background(Color(.systemGroupedBackground))
         .navigationTitle("Today")
@@ -51,9 +50,13 @@ struct DashboardView: View {
             }
         }
         .task {
-            if status == .idle {
-                await load()
+            if sharedData.status == .idle {
+                await sharedData.loadIfNeeded()
             }
+        }
+        .onAppear {
+            guard sharedData.status != .idle, sharedData.status != .loading else { return }
+            Task { await sharedData.refresh() }
         }
     }
 
@@ -64,7 +67,7 @@ struct DashboardView: View {
                 subtitle: progressSubtitle
             )
 
-            if status == .loading {
+            if sharedData.status == .loading {
                 ProgressView("Loading progress...")
             } else if progressRows.isEmpty {
                 HealthEmptyState(message: "Set targets in Health to track progress here.")
@@ -85,7 +88,7 @@ struct DashboardView: View {
                 subtitle: "A light summary for the last 7 days."
             )
 
-            if status == .loading {
+            if sharedData.status == .loading {
                 ProgressView("Loading weekly summary...")
             } else if weeklySummaryDays.isEmpty {
                 HealthEmptyState(message: "Log a few days to see your weekly pattern.")
@@ -165,10 +168,6 @@ struct DashboardView: View {
         logResponse?.DailyLog?.Steps ?? logResponse?.Summary.Steps ?? 0
     }
 
-    private var currentWeight: Double? {
-        logResponse?.DailyLog?.WeightKg
-    }
-
     private var weeklySummaryDays: [TodayWeeklyPoint] {
         guard let weeklySummary else { return [] }
         return weeklySummary.Days.compactMap { day in
@@ -202,13 +201,12 @@ struct DashboardView: View {
         visibleModules.filter { $0 != .health }
     }
 
-    private var todayKey: String {
-        HealthFormatters.dateKey(from: Date())
+    private var logResponse: HealthDailyLogResponse? {
+        sharedData.logResponse
     }
 
-    private var weekStartKey: String {
-        let start = Calendar.current.date(byAdding: .day, value: -6, to: Date()) ?? Date()
-        return HealthFormatters.dateKey(from: start)
+    private var weeklySummary: HealthWeeklySummary? {
+        sharedData.weeklySummary
     }
 
     private func adjustedCalorieTarget(targets: HealthTargets) -> Double {
@@ -224,22 +222,6 @@ struct DashboardView: View {
         let formatter = DateFormatter()
         formatter.setLocalizedDateFormatFromTemplate("EEE")
         return formatter.string(from: date)
-    }
-
-    private func load() async {
-        status = .loading
-        errorMessage = ""
-
-        do {
-            async let logResult = HealthApi.fetchDailyLog(date: todayKey)
-            async let summaryResult = HealthApi.fetchWeeklySummary(startDate: weekStartKey)
-            logResponse = try await logResult
-            weeklySummary = try await summaryResult
-            status = .ready
-        } catch {
-            status = .error
-            errorMessage = (error as? ApiError)?.message ?? "Unable to load today's health summary."
-        }
     }
 
     @ViewBuilder
@@ -376,13 +358,6 @@ private struct DashboardModuleRow: View {
         )
         .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
-}
-
-private enum TodayLoadState {
-    case idle
-    case loading
-    case ready
-    case error
 }
 
 private struct TodayProgressRowModel {

@@ -1,11 +1,9 @@
 import SwiftUI
 
 struct HealthInsightsView: View {
-    @State private var summary: HealthWeeklySummary?
+    @ObservedObject var sharedData: HealthSharedDataStore
     @State private var suggestions: [HealthSuggestion] = []
-    @State private var status: LoadState = .idle
     @State private var suggestionsStatus: LoadState = .idle
-    @State private var errorMessage = ""
     @State private var lastSuggestedAt: Date?
 
     var body: some View {
@@ -14,11 +12,11 @@ struct HealthInsightsView: View {
                 summaryCard
                 suggestionsCard
 
-                if status == .loading {
+                if sharedData.status == .loading {
                     HealthEmptyState(message: "Loading insights...")
                 }
-                if !errorMessage.isEmpty {
-                    HealthErrorBanner(message: errorMessage)
+                if !sharedData.errorMessage.isEmpty {
+                    HealthErrorBanner(message: sharedData.errorMessage)
                 }
             }
             .padding(20)
@@ -26,14 +24,25 @@ struct HealthInsightsView: View {
             .frame(maxWidth: .infinity)
         }
         .task {
-            if status == .idle {
-                await load()
+            if sharedData.status == .idle {
+                await sharedData.loadIfNeeded()
             }
+            if suggestionsStatus == .idle {
+                await loadSuggestions(force: false)
+            }
+        }
+        .onAppear {
+            guard suggestionsStatus != .loading else { return }
+            Task { await loadSuggestions(force: false) }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: HealthDataSync.didChangeNotification)) { _ in
+            guard suggestionsStatus != .loading else { return }
+            Task { await loadSuggestions(force: false) }
         }
     }
 
     private var summaryCard: some View {
-        HealthSectionCard {
+            HealthSectionCard {
             HealthSectionHeader(title: "Weekly snapshot", subtitle: "Averages from the last 7 days.")
             if let summary {
                 let avgCalories = averageValue(summary, key: "TotalCalories", decimals: 0)
@@ -99,24 +108,15 @@ struct HealthInsightsView: View {
         HealthFormatters.dateKey(from: Date())
     }
 
+    private var summary: HealthWeeklySummary? {
+        sharedData.weeklySummary
+    }
+
     private func averageValue(_ summary: HealthWeeklySummary, key: String, decimals: Int) -> Double {
         let total = summary.Totals[key] ?? 0
         let value = total / 7.0
         let factor = pow(10.0, Double(decimals))
         return (value * factor).rounded() / factor
-    }
-
-    private func load() async {
-        status = .loading
-        errorMessage = ""
-        do {
-            summary = try await HealthApi.fetchWeeklySummary(startDate: weekStartKey())
-            await loadSuggestions(force: false)
-            status = .ready
-        } catch {
-            status = .error
-            errorMessage = (error as? ApiError)?.message ?? "Failed to load insights."
-        }
     }
 
     private func loadSuggestions(force: Bool) async {
@@ -136,11 +136,6 @@ struct HealthInsightsView: View {
         }
     }
 
-    private func weekStartKey() -> String {
-        let calendar = Calendar.current
-        let start = calendar.date(byAdding: .day, value: -6, to: Date()) ?? Date()
-        return HealthFormatters.dateKey(from: start)
-    }
 }
 
 private enum LoadState {

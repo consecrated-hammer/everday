@@ -1,5 +1,6 @@
 import PhotosUI
 import SwiftUI
+import UIKit
 
 struct HealthMealEntrySheet: View {
     @Environment(\.dismiss) private var dismiss
@@ -43,8 +44,10 @@ struct HealthMealEntrySheet: View {
     @State private var scanResult: HealthImageScanResponse?
     @State private var scanImageItem: PhotosPickerItem?
     @State private var scanImageBase64: String?
+    @State private var showScanCamera = false
     @State private var scanNote = ""
     @State private var aiQuantityText = "1"
+    @State private var aiLogPhase: AiLogPhase?
     @State private var showQuickAddMealChooser = false
     @State private var activeAiModal: AiToolModal?
     @State private var showDescribeLogConfirmation = false
@@ -252,6 +255,22 @@ struct HealthMealEntrySheet: View {
         .buttonStyle(.plain)
     }
 
+    @ViewBuilder
+    private func aiProgressSection(_ phase: AiLogPhase) -> some View {
+        Section {
+            HStack(spacing: 12) {
+                ProgressView()
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(phase.title)
+                        .font(.subheadline.weight(.semibold))
+                    Text(phase.message)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
     private var aiDescribeModal: some View {
         NavigationStack {
             List {
@@ -280,11 +299,16 @@ struct HealthMealEntrySheet: View {
                             .foregroundStyle(.secondary)
                         TextField("Quantity", text: $aiQuantityText)
                             .keyboardType(.decimalPad)
-                        Button(status == .loading ? "Logging..." : "Confirm and log meal") {
+                            .disabled(isAiLogging)
+                        Button(isAiLogging ? aiLogButtonTitle : "Confirm and log meal") {
                             showDescribeLogConfirmation = true
                         }
-                        .disabled(describeStatus == .loading || status == .loading)
+                        .disabled(describeStatus == .loading || status == .loading || isAiLogging)
                     }
+                }
+
+                if let aiLogPhase {
+                    aiProgressSection(aiLogPhase)
                 }
 
                 if !errorMessage.isEmpty {
@@ -300,6 +324,7 @@ struct HealthMealEntrySheet: View {
                     Button("Close") {
                         activeAiModal = nil
                     }
+                    .disabled(isAiLogging)
                 }
             }
             .confirmationDialog(
@@ -325,17 +350,24 @@ struct HealthMealEntrySheet: View {
                     }
                     .pickerStyle(.segmented)
 
+                    Button("Take photo") {
+                        showScanCamera = true
+                    }
+                    .disabled(!UIImagePickerController.isSourceTypeAvailable(.camera) || isAiLogging)
+
                     PhotosPicker(selection: $scanImageItem, matching: .images) {
                         Text(scanImageBase64 == nil ? "Choose photo" : "Change photo")
                     }
+                    .disabled(isAiLogging)
 
                     TextField("Context note", text: $scanNote, axis: .vertical)
+                        .disabled(isAiLogging)
 
                     Button(scanStatus == .loading ? "Analyzing..." : "Analyze photo") {
                         Task { await analyzeScanPhoto() }
                     }
                     .buttonStyle(.borderedProminent)
-                    .disabled(scanImageBase64 == nil || scanStatus == .loading)
+                    .disabled(scanImageBase64 == nil || scanStatus == .loading || isAiLogging)
                 }
 
                 if let result = scanResult {
@@ -357,11 +389,16 @@ struct HealthMealEntrySheet: View {
                         }
                         TextField("Quantity", text: $aiQuantityText)
                             .keyboardType(.decimalPad)
-                        Button(status == .loading ? "Logging..." : "Confirm and log meal") {
+                            .disabled(isAiLogging)
+                        Button(isAiLogging ? aiLogButtonTitle : "Confirm and log meal") {
                             showScanLogConfirmation = true
                         }
-                        .disabled(scanStatus == .loading || status == .loading)
+                        .disabled(scanStatus == .loading || status == .loading || isAiLogging)
                     }
+                }
+
+                if let aiLogPhase {
+                    aiProgressSection(aiLogPhase)
                 }
 
                 if !scanError.isEmpty {
@@ -377,6 +414,12 @@ struct HealthMealEntrySheet: View {
                     Button("Close") {
                         activeAiModal = nil
                     }
+                    .disabled(isAiLogging)
+                }
+            }
+            .sheet(isPresented: $showScanCamera) {
+                HealthCameraPicker { image in
+                    handleCapturedScanImage(image)
                 }
             }
             .confirmationDialog(
@@ -1087,6 +1130,7 @@ struct HealthMealEntrySheet: View {
         describeResult = nil
         describeText = ""
         aiQuantityText = "1"
+        aiLogPhase = nil
         errorMessage = ""
         showDescribeLogConfirmation = false
         activeAiModal = .describe
@@ -1099,7 +1143,9 @@ struct HealthMealEntrySheet: View {
         scanNote = ""
         scanImageItem = nil
         scanImageBase64 = nil
+        showScanCamera = false
         aiQuantityText = "1"
+        aiLogPhase = nil
         errorMessage = ""
         showScanLogConfirmation = false
         activeAiModal = .scan
@@ -1131,6 +1177,7 @@ struct HealthMealEntrySheet: View {
         errorMessage = ""
         do {
             let quantity = try parseAiQuantity()
+            aiLogPhase = .creatingFood(hasPhoto: false)
             let food = try await createAiFood(
                 name: "\(result.MealName) (AI total)",
                 servingQuantity: result.ServingQuantity,
@@ -1145,11 +1192,14 @@ struct HealthMealEntrySheet: View {
                 sodium: result.SodiumPerServing,
                 imageBase64: nil
             )
+            aiLogPhase = .loggingMeal
             try await logAiFood(food: food, quantity: quantity, notes: result.Summary)
+            aiLogPhase = nil
             describeStatus = .ready
             onSaved()
             dismiss()
         } catch {
+            aiLogPhase = nil
             describeStatus = .error
             errorMessage = (error as? ApiError)?.message ?? "Unable to log parsed meal."
         }
@@ -1185,6 +1235,7 @@ struct HealthMealEntrySheet: View {
         errorMessage = ""
         do {
             let quantity = try parseAiQuantity()
+            aiLogPhase = .creatingFood(hasPhoto: scanImageBase64 != nil)
             let food = try await createAiFood(
                 name: result.FoodName,
                 servingQuantity: result.ServingQuantity,
@@ -1199,11 +1250,14 @@ struct HealthMealEntrySheet: View {
                 sodium: result.SodiumPerServing,
                 imageBase64: scanImageBase64
             )
+            aiLogPhase = .loggingMeal
             try await logAiFood(food: food, quantity: quantity, notes: result.Summary)
+            aiLogPhase = nil
             scanStatus = .ready
             onSaved()
             dismiss()
         } catch {
+            aiLogPhase = nil
             scanStatus = .error
             scanError = (error as? ApiError)?.message ?? "Unable to log scan result."
         }
@@ -1213,12 +1267,26 @@ struct HealthMealEntrySheet: View {
         guard let scanImageItem else { return }
         do {
             if let data = try await scanImageItem.loadTransferable(type: Data.self) {
+                scanResult = nil
+                scanError = ""
                 scanImageBase64 = data.base64EncodedString()
             } else {
                 scanImageBase64 = nil
             }
         } catch {
             scanImageBase64 = nil
+        }
+    }
+
+    private func handleCapturedScanImage(_ image: UIImage) {
+        scanImageItem = nil
+        scanResult = nil
+        scanError = ""
+        if let data = image.jpegData(compressionQuality: 0.88) {
+            scanImageBase64 = data.base64EncodedString()
+        } else {
+            scanImageBase64 = nil
+            scanError = "Unable to prepare captured photo."
         }
     }
 
@@ -1354,6 +1422,14 @@ struct HealthMealEntrySheet: View {
     private var hasFavouriteItems: Bool {
         foods.contains(where: { $0.IsFavourite }) || templates.contains(where: { $0.Template.IsFavourite })
     }
+
+    private var isAiLogging: Bool {
+        aiLogPhase != nil
+    }
+
+    private var aiLogButtonTitle: String {
+        aiLogPhase?.buttonTitle ?? "Logging..."
+    }
 }
 
 private enum SelectionMode: String, CaseIterable {
@@ -1423,4 +1499,79 @@ private enum LoadState {
     case loading
     case ready
     case error
+}
+
+private enum AiLogPhase {
+    case creatingFood(hasPhoto: Bool)
+    case loggingMeal
+
+    var title: String {
+        switch self {
+        case .creatingFood:
+            return "Preparing AI meal"
+        case .loggingMeal:
+            return "Logging meal"
+        }
+    }
+
+    var message: String {
+        switch self {
+        case .creatingFood(let hasPhoto):
+            return hasPhoto
+                ? "Uploading the photo and creating the meal entry."
+                : "Creating the meal from the AI recommendation."
+        case .loggingMeal:
+            return "Saving the meal to your log."
+        }
+    }
+
+    var buttonTitle: String {
+        switch self {
+        case .creatingFood:
+            return "Uploading..."
+        case .loggingMeal:
+            return "Logging..."
+        }
+    }
+}
+
+private struct HealthCameraPicker: UIViewControllerRepresentable {
+    let onCapture: (UIImage) -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onCapture: onCapture)
+    }
+
+    func makeUIViewController(context: Context) -> UIImagePickerController {
+        let picker = UIImagePickerController()
+        picker.sourceType = .camera
+        picker.cameraCaptureMode = .photo
+        picker.allowsEditing = false
+        picker.delegate = context.coordinator
+        return picker
+    }
+
+    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
+
+    final class Coordinator: NSObject, UINavigationControllerDelegate, UIImagePickerControllerDelegate {
+        private let onCapture: (UIImage) -> Void
+
+        init(onCapture: @escaping (UIImage) -> Void) {
+            self.onCapture = onCapture
+        }
+
+        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+            picker.dismiss(animated: true)
+        }
+
+        func imagePickerController(
+            _ picker: UIImagePickerController,
+            didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]
+        ) {
+            if let image = info[.originalImage] as? UIImage {
+                onCapture(image)
+            }
+            picker.dismiss(animated: true)
+        }
+    }
 }

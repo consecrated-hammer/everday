@@ -1,7 +1,59 @@
 import SwiftUI
 
+@MainActor
+final class HealthSharedDataStore: ObservableObject {
+    @Published private(set) var status: SharedHealthLoadState = .idle
+    @Published private(set) var errorMessage = ""
+    @Published private(set) var settings: HealthUserSettings?
+    @Published private(set) var logResponse: HealthDailyLogResponse?
+    @Published private(set) var weeklySummary: HealthWeeklySummary?
+    @Published private(set) var stepsHistory: [HealthStepsHistoryEntry] = []
+    @Published private(set) var weightHistory: [HealthWeightHistoryEntry] = []
+
+    func loadIfNeeded() async {
+        guard status == .idle else { return }
+        await refresh()
+    }
+
+    func refresh() async {
+        guard status != .loading else { return }
+
+        status = .loading
+        errorMessage = ""
+
+        do {
+            async let settingsResult = HealthApi.fetchSettings()
+            async let logResult = HealthApi.fetchDailyLog(date: todayKey)
+            async let summaryResult = HealthApi.fetchWeeklySummary(startDate: weekStartKey)
+            async let stepsResult = HealthApi.fetchStepsHistory(startDate: weekStartKey, endDate: todayKey)
+            async let weightResult = HealthApi.fetchWeightHistory(startDate: weekStartKey, endDate: todayKey)
+
+            settings = try await settingsResult
+            logResponse = try await logResult
+            weeklySummary = try await summaryResult
+            stepsHistory = try await stepsResult.Steps
+            weightHistory = try await weightResult.Weights
+            status = .ready
+        } catch {
+            status = .error
+            errorMessage = (error as? ApiError)?.message ?? "Unable to load health data."
+        }
+    }
+
+    private var todayKey: String {
+        HealthFormatters.dateKey(from: Date())
+    }
+
+    private var weekStartKey: String {
+        let calendar = Calendar.current
+        let start = calendar.date(byAdding: .day, value: -6, to: Date()) ?? Date()
+        return HealthFormatters.dateKey(from: start)
+    }
+}
+
 struct HealthRootView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @ObservedObject var sharedData: HealthSharedDataStore
     @State private var selection: HealthTab = .today
     @State private var quickLogMealNonce = 0
     @State private var quickLogStepsNonce = 0
@@ -20,12 +72,14 @@ struct HealthRootView: View {
     let openHealthFoodsRequestNonce: Int
 
     init(
+        sharedData: HealthSharedDataStore,
         quickLogMealRequestNonce: Int = 0,
         quickLogStepsRequestNonce: Int = 0,
         quickLogWeightRequestNonce: Int = 0,
         openHealthLogRequestNonce: Int = 0,
         openHealthFoodsRequestNonce: Int = 0
     ) {
+        self.sharedData = sharedData
         self.quickLogMealRequestNonce = quickLogMealRequestNonce
         self.quickLogStepsRequestNonce = quickLogStepsRequestNonce
         self.quickLogWeightRequestNonce = quickLogWeightRequestNonce
@@ -48,6 +102,7 @@ struct HealthRootView: View {
                 switch selection {
                 case .today:
                     HealthTodayView(
+                        sharedData: sharedData,
                         onQuickLogMeal: triggerQuickLogMeal,
                         quickLogStepsRequestNonce: quickLogStepsNonce,
                         quickLogWeightRequestNonce: quickLogWeightNonce
@@ -63,7 +118,7 @@ struct HealthRootView: View {
                 case .foods:
                     HealthFoodsView()
                 case .insights:
-                    HealthInsightsView()
+                    HealthInsightsView(sharedData: sharedData)
                 case .history:
                     HealthHistoryView()
                 }
@@ -81,6 +136,9 @@ struct HealthRootView: View {
             }
         }
         .onAppear {
+            if sharedData.status != .idle, sharedData.status != .loading {
+                Task { await sharedData.refresh() }
+            }
             handleExternalQuickLogMealRequest(quickLogMealRequestNonce)
             handleExternalQuickLogStepsRequest(quickLogStepsRequestNonce)
             handleExternalQuickLogWeightRequest(quickLogWeightRequestNonce)
@@ -148,6 +206,13 @@ struct HealthRootView: View {
         lastHandledOpenFoodsNonce = nonce
         selection = .foods
     }
+}
+
+enum SharedHealthLoadState {
+    case idle
+    case loading
+    case ready
+    case error
 }
 
 private enum HealthTab: String, CaseIterable, Identifiable {
