@@ -15,10 +15,13 @@ class _FakeRefreshTokenQuery:
         self._mode = "unknown"
 
     def filter(self, *args, **kwargs):
-        rendered = " ".join(str(arg) for arg in args)
-        if "LookupHash" in rendered and " IS NULL" not in rendered:
+        rendered_args = [str(arg) for arg in args]
+        has_exact_lookup = any("LookupHash" in rendered and " IS NULL" not in rendered for rendered in rendered_args)
+        has_legacy_lookup = any("LookupHash" in rendered and "IS NULL" in rendered for rendered in rendered_args)
+
+        if has_exact_lookup:
             self._mode = "exact"
-        elif "LookupHash IS NULL" in rendered:
+        elif has_legacy_lookup:
             self._mode = "legacy"
         else:
             self._mode = "other"
