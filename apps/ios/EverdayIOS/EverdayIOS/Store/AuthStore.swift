@@ -58,9 +58,7 @@ final class AuthStore: ObservableObject {
     }
 
     func logout() async {
-        Task {
-            await PushNotificationCoordinator.shared.unregisterCurrentDevice()
-        }
+        await PushNotificationCoordinator.shared.unregisterCurrentDevice()
         clearLocalSession()
         await PushNotificationCoordinator.shared.clearBadge()
         await PushNotificationCoordinator.shared.handleAuthStateChanged(isAuthenticated: false)

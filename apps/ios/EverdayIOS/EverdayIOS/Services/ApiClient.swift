@@ -48,36 +48,38 @@ final class ApiClient {
         var request = URLRequest(url: url)
         request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        var currentTokens = tokensProvider?()
 
         if let body {
             request.httpBody = try jsonEncoder.encode(AnyEncodable(body))
         }
 
         if requiresAuth {
-            if let tokens = tokensProvider?(), JwtHelper.isTokenExpired(tokens.accessToken) {
+            if let tokens = currentTokens, JwtHelper.isTokenExpired(tokens.accessToken) {
                 do {
-                    _ = try await ensureFreshTokens(using: tokens)
+                    currentTokens = try await ensureFreshTokens(using: tokens)
                 } catch {
-                    authFailureHandler?()
+                    handleAuthFailureIfNeeded(for: error)
                     throw error
                 }
             }
-            if let token = tokensProvider?()?.accessToken {
+            if let token = currentTokens?.accessToken {
                 request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
             }
         }
 
         let (data, response) = try await URLSession.shared.data(for: request)
         if let http = response as? HTTPURLResponse, http.statusCode == 401, requiresAuth {
-            if let refresh = tokensProvider?()?.refreshToken {
+            if let refresh = currentTokens?.refreshToken ?? tokensProvider?()?.refreshToken {
                 do {
                     let refreshed = try await refreshTokens(refreshToken: refresh)
+                    currentTokens = refreshed
                     var retry = request
                     retry.setValue("Bearer \(refreshed.accessToken)", forHTTPHeaderField: "Authorization")
                     let (retryData, retryResponse) = try await URLSession.shared.data(for: retry)
                     return try decodeOrThrow(retryData, response: retryResponse)
                 } catch {
-                    authFailureHandler?()
+                    handleAuthFailureIfNeeded(for: error)
                     throw error
                 }
             }
@@ -92,37 +94,39 @@ final class ApiClient {
         var request = URLRequest(url: url)
         request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        var currentTokens = tokensProvider?()
 
         if let body {
             request.httpBody = try jsonEncoder.encode(AnyEncodable(body))
         }
 
         if requiresAuth {
-            if let tokens = tokensProvider?(), JwtHelper.isTokenExpired(tokens.accessToken) {
+            if let tokens = currentTokens, JwtHelper.isTokenExpired(tokens.accessToken) {
                 do {
-                    _ = try await ensureFreshTokens(using: tokens)
+                    currentTokens = try await ensureFreshTokens(using: tokens)
                 } catch {
-                    authFailureHandler?()
+                    handleAuthFailureIfNeeded(for: error)
                     throw error
                 }
             }
-            if let token = tokensProvider?()?.accessToken {
+            if let token = currentTokens?.accessToken {
                 request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
             }
         }
 
         let (data, response) = try await URLSession.shared.data(for: request)
         if let http = response as? HTTPURLResponse, http.statusCode == 401, requiresAuth {
-            if let refresh = tokensProvider?()?.refreshToken {
+            if let refresh = currentTokens?.refreshToken ?? tokensProvider?()?.refreshToken {
                 do {
                     let refreshed = try await refreshTokens(refreshToken: refresh)
+                    currentTokens = refreshed
                     var retry = request
                     retry.setValue("Bearer \(refreshed.accessToken)", forHTTPHeaderField: "Authorization")
                     let (retryData, retryResponse) = try await URLSession.shared.data(for: retry)
                     try validateVoidResponse(retryData, response: retryResponse)
                     return
                 } catch {
-                    authFailureHandler?()
+                    handleAuthFailureIfNeeded(for: error)
                     throw error
                 }
             }
@@ -135,9 +139,9 @@ final class ApiClient {
     private func decodeOrThrow<T: Decodable>(_ data: Data, response: URLResponse) throws -> T {
         if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
             if let message = errorMessage(from: data) {
-                throw ApiError(message: message)
+                throw ApiError(message: message, statusCode: http.statusCode)
             }
-            throw ApiError(message: "Request failed")
+            throw ApiError(message: "Request failed", statusCode: http.statusCode)
         }
         return try jsonDecoder.decode(T.self, from: data)
     }
@@ -156,9 +160,31 @@ final class ApiClient {
     private func validateVoidResponse(_ data: Data, response: URLResponse) throws {
         if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
             if let message = errorMessage(from: data) {
-                throw ApiError(message: message)
+                throw ApiError(message: message, statusCode: http.statusCode)
             }
-            throw ApiError(message: "Request failed")
+            throw ApiError(message: "Request failed", statusCode: http.statusCode)
+        }
+    }
+
+    private func handleAuthFailureIfNeeded(for error: Error) {
+        guard shouldInvalidateSession(for: error) else {
+            return
+        }
+        authFailureHandler?()
+    }
+
+    private func shouldInvalidateSession(for error: Error) -> Bool {
+        guard let apiError = error as? ApiError else {
+            return false
+        }
+
+        switch apiError.statusCode {
+        case 401:
+            return true
+        case 403:
+            return apiError.message.localizedCaseInsensitiveContains("pending approval")
+        default:
+            return false
         }
     }
 
