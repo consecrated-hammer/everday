@@ -5,6 +5,7 @@ struct RootView: View {
     @EnvironmentObject var pushCoordinator: PushNotificationCoordinator
     @Environment(\.openURL) private var openURL
 
+    @StateObject private var sharedHealthData = HealthSharedDataStore()
     @State private var selection: ParentTab = .dashboard
     @State private var dashboardPath = NavigationPath()
     @State private var healthPath = NavigationPath()
@@ -44,6 +45,7 @@ struct RootView: View {
         TabView(selection: $selection) {
             NavigationStack(path: $dashboardPath) {
                 DashboardView(
+                    sharedData: sharedHealthData,
                     visibleModules: visibleDashboardModules,
                     onSelectModule: handleDashboardModuleSelection
                 )
@@ -59,6 +61,7 @@ struct RootView: View {
 
             NavigationStack(path: $healthPath) {
                 HealthRootView(
+                    sharedData: sharedHealthData,
                     quickLogMealRequestNonce: healthQuickLogMealRequestNonce,
                     quickLogStepsRequestNonce: healthQuickLogStepsRequestNonce,
                     quickLogWeightRequestNonce: healthQuickLogWeightRequestNonce,
@@ -114,6 +117,12 @@ struct RootView: View {
             }
             .badge(pushCoordinator.unreadCount)
             .tag(ParentTab.more)
+        }
+        .task {
+            await sharedHealthData.loadIfNeeded()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: HealthDataSync.didChangeNotification)) { _ in
+            Task { await sharedHealthData.refresh() }
         }
     }
 

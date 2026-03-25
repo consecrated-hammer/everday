@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Outlet, useNavigate } from "react-router-dom";
+import { NavLink, Outlet, useNavigate } from "react-router-dom";
 
 import { Logout } from "../../lib/authApi.js";
 import { ClearTokens, GetTokens, GetDisplayName } from "../../lib/authStorage.js";
@@ -46,6 +46,33 @@ const KidsLayout = () => {
         <Outlet />
       </main>
       <footer className="kids-footer">
+        <nav className="kids-footer-links" aria-label="Kids navigation">
+          <NavLink
+            to="/kids"
+            end
+            className={({ isActive }) =>
+              `kids-text-button kids-footer-link${isActive ? " is-active" : ""}`
+            }
+          >
+            Home
+          </NavLink>
+          <NavLink
+            to="/kids/history"
+            className={({ isActive }) =>
+              `kids-text-button kids-footer-link${isActive ? " is-active" : ""}`
+            }
+          >
+            History
+          </NavLink>
+          <NavLink
+            to="/kids/notifications"
+            className={({ isActive }) =>
+              `kids-text-button kids-footer-link${isActive ? " is-active" : ""}`
+            }
+          >
+            Notifications
+          </NavLink>
+        </nav>
         <button type="button" className="kids-text-button kids-footer-logout" onClick={onLogout}>
           Log out
         </button>

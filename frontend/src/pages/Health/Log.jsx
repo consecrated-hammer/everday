@@ -20,6 +20,7 @@ import {
   UpdateFood,
   UpdateMealEntry
 } from "../../lib/healthApi.js";
+import { GetAdjustedCalorieTarget } from "../../lib/healthMetrics.js";
 import { FetchUsers } from "../../lib/settingsApi.js";
 
 const FormatDate = (value) => {
@@ -921,7 +922,7 @@ const Log = ({ InitialDate, InitialAddMode }) => {
     [entries]
   );
   const dayCaloriesLabel = FormatNumber(Math.round(dayTotals.calories));
-  const dayCalorieTarget = Number(targets?.DailyCalorieTarget ?? 0);
+  const dayCalorieTarget = GetAdjustedCalorieTarget(targets, dailyLog);
   const dayMacroRows = useMemo(() => {
     const resolveTarget = (key) => {
       if (!targets) {

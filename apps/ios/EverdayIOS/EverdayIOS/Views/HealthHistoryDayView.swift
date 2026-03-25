@@ -66,6 +66,14 @@ struct HealthHistoryDayView: View {
                 await load()
             }
         }
+        .onAppear {
+            guard status != .idle, status != .loading else { return }
+            Task { await load() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: HealthDataSync.didChangeNotification)) { _ in
+            guard status != .loading else { return }
+            Task { await load() }
+        }
     }
 
     private var headerCard: some View {

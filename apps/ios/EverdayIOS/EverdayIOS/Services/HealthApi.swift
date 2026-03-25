@@ -1,5 +1,13 @@
 import Foundation
 
+enum HealthDataSync {
+    static let didChangeNotification = Notification.Name("HealthDataSync.didChange")
+
+    static func postDidChange() {
+        NotificationCenter.default.post(name: didChangeNotification, object: nil)
+    }
+}
+
 enum HealthApi {
     static func fetchSettings() async throws -> HealthUserSettings {
         try await ApiClient.shared.request(path: "health/settings", requiresAuth: true)
@@ -34,27 +42,61 @@ enum HealthApi {
     }
 
     static func createDailyLog(_ request: HealthCreateDailyLogRequest) async throws -> HealthDailyLogCreateResponse {
-        try await ApiClient.shared.request(path: "health/daily-logs", method: "POST", body: request, requiresAuth: true)
+        try await ApiClient.shared.request(
+            path: "health/daily-logs",
+            method: "POST",
+            body: request,
+            requiresAuth: true
+        )
     }
 
     static func updateDailySteps(date: String, request: HealthStepUpdateRequest) async throws -> HealthDailyLogCreateResponse {
-        try await ApiClient.shared.request(path: "health/daily-logs/\(date)/steps", method: "PATCH", body: request, requiresAuth: true)
+        let response: HealthDailyLogCreateResponse = try await ApiClient.shared.request(
+            path: "health/daily-logs/\(date)/steps",
+            method: "PATCH",
+            body: request,
+            requiresAuth: true
+        )
+        HealthDataSync.postDidChange()
+        return response
     }
 
     static func createMealEntry(_ request: HealthCreateMealEntryRequest) async throws -> HealthMealEntryResponse {
-        try await ApiClient.shared.request(path: "health/daily-logs/meal-entries", method: "POST", body: request, requiresAuth: true)
+        let response: HealthMealEntryResponse = try await ApiClient.shared.request(
+            path: "health/daily-logs/meal-entries",
+            method: "POST",
+            body: request,
+            requiresAuth: true
+        )
+        HealthDataSync.postDidChange()
+        return response
     }
 
     static func shareMealEntry(_ request: HealthShareMealEntryRequest) async throws -> HealthMealEntryResponse {
-        try await ApiClient.shared.request(path: "health/daily-logs/meal-entries/share", method: "POST", body: request, requiresAuth: true)
+        let response: HealthMealEntryResponse = try await ApiClient.shared.request(
+            path: "health/daily-logs/meal-entries/share",
+            method: "POST",
+            body: request,
+            requiresAuth: true
+        )
+        HealthDataSync.postDidChange()
+        return response
     }
 
     static func updateMealEntry(mealEntryId: String, request: HealthUpdateMealEntryRequest) async throws -> HealthMealEntryResponse {
-        try await ApiClient.shared.request(path: "health/daily-logs/meal-entries/\(mealEntryId)", method: "PATCH", body: request, requiresAuth: true)
+        let response: HealthMealEntryResponse = try await ApiClient.shared.request(
+            path: "health/daily-logs/meal-entries/\(mealEntryId)",
+            method: "PATCH",
+            body: request,
+            requiresAuth: true
+        )
+        HealthDataSync.postDidChange()
+        return response
     }
 
     static func deleteMealEntry(mealEntryId: String) async throws {
         try await ApiClient.shared.requestVoid(path: "health/daily-logs/meal-entries/\(mealEntryId)", method: "DELETE", requiresAuth: true)
+        HealthDataSync.postDidChange()
     }
 
     static func fetchFoods() async throws -> [HealthFood] {

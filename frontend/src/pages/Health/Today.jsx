@@ -25,6 +25,7 @@ import {
   UpdateDailySteps,
   UpdateHealthSettings
 } from "../../lib/healthApi.js";
+import { GetAdjustedCalorieTarget, GetConsumedCalories } from "../../lib/healthMetrics.js";
 import { LoadHealthTodayLayout, SaveHealthTodayLayout } from "../../lib/healthTodayLayout.js";
 
 const FormatDate = (value) => {
@@ -106,7 +107,7 @@ const GetMetricUnit = (key) => (key === "Calories" ? "kcal" : "g");
 
 const GetBarValue = (totals, log, key) => {
   if (!totals) return 0;
-  if (key === "Calories") return totals.TotalCalories ?? totals.NetCalories ?? 0;
+  if (key === "Calories") return GetConsumedCalories(totals);
   if (key === "Protein") return totals.TotalProtein ?? 0;
   if (key === "Steps") return log?.Steps ?? 0;
   if (key === "Fibre") return totals.TotalFibre ?? 0;
@@ -116,16 +117,6 @@ const GetBarValue = (totals, log, key) => {
   if (key === "Sugar") return totals.TotalSugar ?? 0;
   if (key === "Sodium") return totals.TotalSodium ?? 0;
   return 0;
-};
-
-const GetAdjustedCalorieTarget = (targets, log) => {
-  const baseTarget = Number(targets?.DailyCalorieTarget ?? 0);
-  if (!baseTarget) return 0;
-  const steps = Number(log?.Steps ?? 0);
-  const stepFactor =
-    log?.StepKcalFactorOverride ?? Number(targets?.StepKcalFactor ?? 0);
-  const adjustment = steps > 0 && stepFactor > 0 ? steps * stepFactor : 0;
-  return Math.max(0, Math.round(baseTarget + adjustment));
 };
 
 const GetBarTarget = (targets, log, key) => {

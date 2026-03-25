@@ -1,3 +1,4 @@
+import hashlib
 import os
 import secrets
 from datetime import timedelta
@@ -36,6 +37,10 @@ def CreateAccessToken(user_id: int, username: str) -> tuple[str, int]:
 
 def CreateRefreshToken() -> str:
     return secrets.token_urlsafe(48)
+
+
+def ComputeRefreshTokenLookupHash(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
 def HashRefreshToken(token: str) -> str:
