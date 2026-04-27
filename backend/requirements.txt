@@ -5,7 +5,7 @@ SQLAlchemy==2.0.49
 alembic==1.18.4
 passlib[argon2]==1.7.4
 PyJWT==2.12.1
-cryptography==46.0.7
+cryptography==47.0.0
 httpx[http2]==0.28.1
 pytest==9.0.3
 ask-sdk-webservice-support==1.3.3
