@@ -55,6 +55,45 @@ def test_calculate_daily_totals_steps_and_remaining():
     assert totals.RemainingProteinMax == 110
 
 
+def test_calculate_daily_totals_includes_workouts():
+    targets = Targets(
+        DailyCalorieTarget=2000,
+        ProteinTargetMin=100,
+        ProteinTargetMax=150,
+        StepKcalFactor=0.04,
+        StepTarget=8000,
+    )
+
+    entries = [
+        MealEntryWithFood(
+            MealEntryId="1",
+            DailyLogId="log",
+            MealType="Breakfast",
+            FoodId="food-1",
+            FoodName="Food A",
+            ServingDescription="1 serving",
+            CaloriesPerServing=700,
+            ProteinPerServing=40,
+            Quantity=1,
+            SortOrder=0,
+        )
+    ]
+
+    totals = CalculateDailyTotals(
+        entries,
+        Steps=1000,
+        StepKcalFactor=targets.StepKcalFactor,
+        Targets=targets,
+        WorkoutCaloriesBurned=250,
+    )
+
+    assert totals.CaloriesBurnedFromSteps == 40
+    assert totals.CaloriesBurnedFromWorkouts == 250
+    assert totals.TotalCaloriesBurned == 290
+    assert totals.NetCalories == 410
+    assert totals.RemainingCalories == 1590
+
+
 def test_calculate_weekly_summary():
     summaries = [
         DailySummary(LogDate=date(2024, 1, 1), TotalCalories=1800, TotalProtein=120, Steps=8000, NetCalories=1600),

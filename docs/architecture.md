@@ -39,7 +39,7 @@ Everday is a multi-user household app with a FastAPI backend, SQL Server databas
 
 ## Environments
 - DEV: `scripts/dev.sh` with `docker-compose.traefik.dev.yml` and `.env.dev`.
-- PROD: `/mnt/docker/config/dockerconfigs/docker-compose.yml`.
+- PROD: `/mnt/docker/infra/config/dockerconfigs/docker-compose.yml`.
 
 ## Data and Migrations
 - All schema changes go through Alembic migrations.

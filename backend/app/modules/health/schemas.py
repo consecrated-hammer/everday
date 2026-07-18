@@ -74,10 +74,46 @@ class FoodInfo(BaseModel):
 class DailyLog(BaseModel):
     DailyLogId: str
     LogDate: date
+    DayName: str | None = None
+    WeekNumber: int | None = None
+    WeekStart: date | None = None
     Steps: int
     StepKcalFactorOverride: float | None = None
     WeightKg: float | None = None
+    OfficeMode: str | None = None
+    WaterLitres: float | None = None
+    WalkingPadMinutes: int | None = None
+    ExerciseNotes: str | None = None
+    SleepHours: float | None = None
+    Period: bool | None = None
+    PeriodLabel: str | None = None
+    HungerBeforeDinner: int | None = None
+    OverallSatisfaction: int | None = None
+    Takeaway: bool | None = None
+    LoggedComplete: bool | None = None
+    AdherentDay: bool | None = None
+    AdherentStatus: str | None = None
     Notes: str | None = None
+    DailyCalorieTargetSnapshot: int | None = None
+    ProteinTargetSnapshot: float | None = None
+    StepTargetSnapshot: int | None = None
+
+
+class Workout(BaseModel):
+    WorkoutId: str
+    LogDate: date
+    WorkoutType: str
+    WorkoutName: str
+    DurationMinutes: float | None = None
+    CaloriesBurned: int = 0
+    DistanceKm: float | None = None
+    Source: str
+    ExternalId: str | None = None
+    StartedAt: datetime | None = None
+    EndedAt: datetime | None = None
+    Notes: str | None = None
+    Metadata: dict | None = None
+    CreatedAt: datetime | None = None
 
 
 class MealEntry(BaseModel):
@@ -260,6 +296,8 @@ class DailyTotals(BaseModel):
     TotalSugar: float
     TotalSodium: float
     CaloriesBurnedFromSteps: int
+    CaloriesBurnedFromWorkouts: int = 0
+    TotalCaloriesBurned: int = 0
     NetCalories: int
     RemainingCalories: int
     RemainingProteinMin: float
@@ -283,6 +321,10 @@ class DailySummary(BaseModel):
     TotalSugar: float = 0
     TotalSodium: float = 0
     Steps: int
+    CaloriesBurnedFromSteps: int = 0
+    CaloriesBurnedFromWorkouts: int = 0
+    TotalCaloriesBurned: int = 0
+    WorkoutCount: int = 0
     NetCalories: int
 
 
@@ -308,6 +350,25 @@ class StepsHistoryEntry(BaseModel):
 
 class StepsHistoryResponse(BaseModel):
     Steps: list[StepsHistoryEntry]
+
+
+class WorkoutHistoryEntry(BaseModel):
+    WorkoutId: str
+    LogDate: date
+    WorkoutType: str
+    WorkoutName: str
+    DurationMinutes: float | None = None
+    CaloriesBurned: int = 0
+    DistanceKm: float | None = None
+    Source: str
+    ExternalId: str | None = None
+    StartedAt: datetime | None = None
+    EndedAt: datetime | None = None
+    Notes: str | None = None
+
+
+class WorkoutHistoryResponse(BaseModel):
+    Workouts: list[WorkoutHistoryEntry]
 
 
 class HaeImportResponse(BaseModel):
@@ -365,6 +426,21 @@ class DailyAiSuggestionsRunResponse(BaseModel):
     Errors: int
 
 
+class DailyTipRunRequest(BaseModel):
+    RunDate: date | None = None
+    RunTime: str | None = Field(default=None, pattern=r"^\d{2}:\d{2}$")
+    Slot: str | None = Field(default=None, pattern=r"^(morning|midday|dinner)$")
+    UserId: int | None = Field(default=None, ge=1)
+
+
+class DailyTipRunResponse(BaseModel):
+    Slot: str
+    ProcessedUsers: int
+    Generated: int
+    Skipped: int
+    Errors: int
+
+
 class DailyLogWithEntries(BaseModel):
     DailyLog: DailyLog
     Entries: list[MealEntryWithFood]
@@ -415,13 +491,64 @@ class CreateDailyLogInput(BaseModel):
     Steps: int = Field(default=0, ge=0)
     StepKcalFactorOverride: float | None = Field(default=None, ge=0)
     WeightKg: float | None = Field(default=None, ge=20, le=500)
+    OfficeMode: str | None = Field(default=None, min_length=1, max_length=20)
+    WaterLitres: float | None = Field(default=None, ge=0, le=20)
+    WalkingPadMinutes: int | None = Field(default=None, ge=0, le=1440)
+    ExerciseNotes: str | None = Field(default=None, max_length=1000)
+    SleepHours: float | None = Field(default=None, ge=0, le=24)
+    Period: bool | None = None
+    PeriodLabel: str | None = Field(default=None, min_length=1, max_length=40)
+    HungerBeforeDinner: int | None = Field(default=None, ge=1, le=10)
+    OverallSatisfaction: int | None = Field(default=None, ge=1, le=10)
+    Takeaway: bool | None = None
+    LoggedComplete: bool | None = None
+    AdherentDay: bool | None = None
+    AdherentStatus: str | None = Field(default=None, min_length=1, max_length=20)
     Notes: str | None = None
+    DailyCalorieTargetSnapshot: int | None = Field(default=None, ge=0)
+    ProteinTargetSnapshot: float | None = Field(default=None, ge=0)
+    StepTargetSnapshot: int | None = Field(default=None, ge=0)
 
 
 class StepUpdateInput(BaseModel):
     Steps: int = Field(ge=0)
     StepKcalFactorOverride: float | None = Field(default=None, ge=0)
     WeightKg: float | None = Field(default=None, ge=20, le=500)
+
+
+class UpdateDailyLogInput(BaseModel):
+    Steps: int | None = Field(default=None, ge=0)
+    StepKcalFactorOverride: float | None = Field(default=None, ge=0)
+    WeightKg: float | None = Field(default=None, ge=20, le=500)
+    OfficeMode: str | None = Field(default=None, min_length=1, max_length=20)
+    WaterLitres: float | None = Field(default=None, ge=0, le=20)
+    WalkingPadMinutes: int | None = Field(default=None, ge=0, le=1440)
+    ExerciseNotes: str | None = Field(default=None, max_length=1000)
+    SleepHours: float | None = Field(default=None, ge=0, le=24)
+    Period: bool | None = None
+    PeriodLabel: str | None = Field(default=None, min_length=1, max_length=40)
+    HungerBeforeDinner: int | None = Field(default=None, ge=1, le=10)
+    OverallSatisfaction: int | None = Field(default=None, ge=1, le=10)
+    Takeaway: bool | None = None
+    LoggedComplete: bool | None = None
+    AdherentDay: bool | None = None
+    AdherentStatus: str | None = Field(default=None, min_length=1, max_length=20)
+    Notes: str | None = None
+    DailyCalorieTargetSnapshot: int | None = Field(default=None, ge=0)
+    ProteinTargetSnapshot: float | None = Field(default=None, ge=0)
+    StepTargetSnapshot: int | None = Field(default=None, ge=0)
+
+
+class CreateWorkoutInput(BaseModel):
+    LogDate: str = Field(min_length=1)
+    WorkoutType: str = Field(min_length=1, max_length=80)
+    WorkoutName: str = Field(min_length=1, max_length=200)
+    DurationMinutes: float | None = Field(default=None, gt=0, le=1440)
+    CaloriesBurned: int = Field(default=0, ge=0, le=20000)
+    DistanceKm: float | None = Field(default=None, ge=0, le=1000)
+    StartedAt: datetime | None = None
+    EndedAt: datetime | None = None
+    Notes: str | None = Field(default=None, max_length=1000)
 
 
 class CreateMealEntryInput(BaseModel):
@@ -656,6 +783,218 @@ class RecommendationLog(BaseModel):
 
 class RecommendationLogListResponse(BaseModel):
     Logs: list[RecommendationLog]
+
+
+class RecipeReview(BaseModel):
+    RecipeReviewId: str
+    RecipeName: str
+    LogDate: date
+    MealEntryId: str | None = None
+    Rating: float | None = None
+    WouldMakeAgain: str | None = None
+    HallOfFameOverride: str | None = None
+    Notes: str | None = None
+    CreatedAt: datetime
+    UpdatedAt: datetime
+
+
+class CreateRecipeReviewInput(BaseModel):
+    RecipeName: str = Field(min_length=1, max_length=200)
+    LogDate: str = Field(min_length=1)
+    MealEntryId: str | None = None
+    Rating: float | None = Field(default=None, ge=0, le=10)
+    WouldMakeAgain: str | None = Field(default=None, min_length=1, max_length=20)
+    HallOfFameOverride: str | None = Field(default=None, min_length=1, max_length=20)
+    Notes: str | None = None
+
+
+class UpdateRecipeReviewInput(BaseModel):
+    RecipeName: str | None = Field(default=None, min_length=1, max_length=200)
+    LogDate: str | None = Field(default=None, min_length=1)
+    MealEntryId: str | None = None
+    Rating: float | None = Field(default=None, ge=0, le=10)
+    WouldMakeAgain: str | None = Field(default=None, min_length=1, max_length=20)
+    HallOfFameOverride: str | None = Field(default=None, min_length=1, max_length=20)
+    Notes: str | None = None
+
+
+class RecipeReviewListResponse(BaseModel):
+    Items: list[RecipeReview]
+
+
+class RecipeStat(BaseModel):
+    RecipeName: str
+    TimesEaten: int
+    AverageRating: float | None = None
+    AverageCalories: float | None = None
+    AverageProtein: float | None = None
+    HallOfFame: str | None = None
+    Notes: str | None = None
+    LatestLogDate: date | None = None
+
+
+class RecipeStatsResponse(BaseModel):
+    Items: list[RecipeStat]
+
+
+class ProductReview(BaseModel):
+    ProductReviewId: str
+    FoodId: str | None = None
+    ProductName: str
+    Brand: str | None = None
+    Category: str | None = None
+    BuyAgain: str | None = None
+    Rating: float | None = None
+    CaloriesPerServing: int | None = None
+    ProteinPerServing: float | None = None
+    Notes: str | None = None
+    CreatedAt: datetime
+    UpdatedAt: datetime
+
+
+class UpsertProductReviewInput(BaseModel):
+    FoodId: str | None = None
+    ProductName: str = Field(min_length=1, max_length=200)
+    Brand: str | None = Field(default=None, max_length=120)
+    Category: str | None = Field(default=None, max_length=120)
+    BuyAgain: str | None = Field(default=None, min_length=1, max_length=20)
+    Rating: float | None = Field(default=None, ge=0, le=10)
+    CaloriesPerServing: int | None = Field(default=None, ge=0)
+    ProteinPerServing: float | None = Field(default=None, ge=0)
+    Notes: str | None = None
+
+
+class ProductReviewListResponse(BaseModel):
+    Items: list[ProductReview]
+
+
+class Experiment(BaseModel):
+    ExperimentId: str
+    StartDate: date
+    EndDate: date | None = None
+    VariableChanged: str
+    Reason: str | None = None
+    ExpectedOutcome: str | None = None
+    ActualOutcome: str | None = None
+    Decision: str | None = None
+    Status: str
+    DurationDays: int | None = None
+    CreatedAt: datetime
+    UpdatedAt: datetime
+
+
+class UpsertExperimentInput(BaseModel):
+    ExperimentId: str | None = None
+    StartDate: str = Field(min_length=1)
+    EndDate: str | None = None
+    VariableChanged: str = Field(min_length=1, max_length=200)
+    Reason: str | None = None
+    ExpectedOutcome: str | None = None
+    ActualOutcome: str | None = None
+    Decision: str | None = Field(default=None, min_length=1, max_length=40)
+    Status: str = Field(default="In progress", min_length=1, max_length=40)
+
+
+class ExperimentListResponse(BaseModel):
+    Items: list[Experiment]
+
+
+class BodyMeasurement(BaseModel):
+    BodyMeasurementId: str
+    LogDate: date
+    WaistCm: float | None = None
+    HipsCm: float | None = None
+    RestingHeartRate: int | None = None
+    PeriodCycleNotes: str | None = None
+    Notes: str | None = None
+    WeightKg: float | None = None
+    CreatedAt: datetime
+    UpdatedAt: datetime
+
+
+class UpsertBodyMeasurementInput(BaseModel):
+    LogDate: str = Field(min_length=1)
+    WaistCm: float | None = Field(default=None, ge=0, le=500)
+    HipsCm: float | None = Field(default=None, ge=0, le=500)
+    RestingHeartRate: int | None = Field(default=None, ge=0, le=300)
+    PeriodCycleNotes: str | None = None
+    Notes: str | None = None
+
+
+class BodyMeasurementListResponse(BaseModel):
+    Items: list[BodyMeasurement]
+
+
+class WeeklyReviewNote(BaseModel):
+    WeeklyReviewNoteId: str
+    WeekStart: date
+    BiggestNutritionWin: str | None = None
+    ImprovementForNextWeek: str | None = None
+    CreatedAt: datetime
+    UpdatedAt: datetime
+
+
+class UpsertWeeklyReviewNoteInput(BaseModel):
+    WeekStart: str = Field(min_length=1)
+    BiggestNutritionWin: str | None = None
+    ImprovementForNextWeek: str | None = None
+
+
+class WeeklyReviewSnapshot(BaseModel):
+    WeekStart: date
+    WeekEnd: date
+    AverageCalories: float | None = None
+    AverageProtein: float | None = None
+    AverageCarbs: float | None = None
+    AverageFat: float | None = None
+    AverageFibre: float | None = None
+    AverageSteps: float | None = None
+    AverageSleep: float | None = None
+    WeightChange: float | None = None
+    AdherenceRatio: float | None = None
+    BestMeal: str | None = None
+    WorstMeal: str | None = None
+    HighestRatedRecipe: str | None = None
+    FridayTakeaway: bool | None = None
+    Note: WeeklyReviewNote | None = None
+
+
+class Insight(BaseModel):
+    InsightId: str
+    InsightType: str
+    PeriodType: str
+    PeriodStart: date
+    PeriodEnd: date | None = None
+    Title: str
+    Summary: str | None = None
+    Confidence: str | None = None
+    Status: str
+    Source: str
+    SchemaVersion: int = 1
+    Payload: dict | None = None
+    Tags: list[str] = Field(default_factory=list)
+    CreatedAt: datetime | None = None
+    UpdatedAt: datetime | None = None
+
+
+class UpsertInsightInput(BaseModel):
+    InsightId: str | None = None
+    InsightType: str = Field(min_length=1, max_length=80)
+    PeriodType: str = Field(min_length=1, max_length=20)
+    PeriodStart: date
+    PeriodEnd: date | None = None
+    Title: str = Field(min_length=1, max_length=200)
+    Summary: str | None = None
+    Confidence: str | None = Field(default=None, max_length=20)
+    Status: str = Field(default="active", min_length=1, max_length=20)
+    Source: str = Field(default="manual", min_length=1, max_length=40)
+    SchemaVersion: int = Field(default=1, ge=1, le=1000)
+    Payload: dict | None = None
+    Tags: list[str] = Field(default_factory=list)
+
+
+class InsightListResponse(BaseModel):
+    Items: list[Insight]
 
 
 class HealthReminderRunRequest(BaseModel):

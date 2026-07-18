@@ -77,12 +77,20 @@ def SaveUploadFile(file: UploadFile, owner_user_id: int) -> StoredDocument:
     if not file:
         raise ValueError("File is required.")
 
-    data = file.file.read()
-    if data is None:
-        data = b""
     max_bytes = _ResolveMaxBytes()
-    if len(data) > max_bytes:
-        raise ValueError(f"File exceeds {max_bytes // (1024 * 1024)} MB.")
+    chunks: list[bytes] = []
+    total = 0
+    # Stop reading as soon as the limit is crossed; do not materialise an
+    # attacker-controlled multipart body before validating its size.
+    while True:
+        chunk = file.file.read(min(1024 * 1024, max_bytes + 1 - total))
+        if not chunk:
+            break
+        chunks.append(chunk)
+        total += len(chunk)
+        if total > max_bytes:
+            raise ValueError(f"File exceeds {max_bytes // (1024 * 1024)} MB.")
+    data = b"".join(chunks)
 
     content_type = file.content_type
     original_name = file.filename

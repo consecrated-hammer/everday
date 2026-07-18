@@ -93,7 +93,7 @@ A task is “done” when:
 
 ### Environment naming
 - DEV = `scripts/dev.sh` with `docker-compose.traefik.dev.yml` using `.env.dev`
-- PROD = main stack compose at `/mnt/docker/config/dockerconfigs/docker-compose.yml`
+- PROD = main stack compose at `/mnt/docker/infra/config/dockerconfigs/docker-compose.yml`
 
 ### Afer any code changes
 - Frontend-only changes: run `./scripts/dev.sh --lint-only`
@@ -129,9 +129,9 @@ A task is “done” when:
     - `python scripts/sqlpeek.py --schema dbo --object Users --action data --top 25`
 
 ### Prod deployment steps (only when asked)
-- Update `/mnt/docker/config/dockerconfigs/.env` for prod variables.
-- Update `/mnt/docker/config/dockerconfigs/docker-compose.yml` if new env passthrough or ports are required.
-- Deploy: `docker compose -f /mnt/docker/config/dockerconfigs/docker-compose.yml up -d everday`
+- Update `/mnt/docker/infra/config/dockerconfigs/.env` for prod variables.
+- Update `/mnt/docker/infra/config/dockerconfigs/docker-compose.yml` if new env passthrough or ports are required.
+- Deploy: `docker compose -f /mnt/docker/infra/config/dockerconfigs/docker-compose.yml up -d everday`
 - Run migrations after deploy: `docker exec -it everday alembic upgrade head`
 - Verify: `https://everday.batserver.au/api/health` and spot-check the feature area.
 
