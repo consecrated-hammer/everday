@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import uuid
 from datetime import date
 
@@ -50,15 +50,35 @@ def _FormatShortDate(value: str) -> str:
 
 
 def _BuildDailyLog(log: DailyLogModel) -> DailyLog:
+    week_start = log.LogDate - timedelta(days=log.LogDate.weekday())
     return DailyLog(
         DailyLogId=log.DailyLogId,
         LogDate=log.LogDate,
+        DayName=log.LogDate.strftime("%A"),
+        WeekNumber=int(log.LogDate.isocalendar().week),
+        WeekStart=week_start,
         Steps=log.Steps,
         StepKcalFactorOverride=float(log.StepKcalFactorOverride)
         if log.StepKcalFactorOverride is not None
         else None,
         WeightKg=float(log.WeightKg) if log.WeightKg is not None else None,
+        OfficeMode=log.OfficeMode,
+        WaterLitres=float(log.WaterLitres) if log.WaterLitres is not None else None,
+        WalkingPadMinutes=int(log.WalkingPadMinutes) if log.WalkingPadMinutes is not None else None,
+        ExerciseNotes=log.ExerciseNotes,
+        SleepHours=float(log.SleepHours) if log.SleepHours is not None else None,
+        Period=bool(log.Period) if log.Period is not None else None,
+        PeriodLabel=log.PeriodLabel,
+        HungerBeforeDinner=int(log.HungerBeforeDinner) if log.HungerBeforeDinner is not None else None,
+        OverallSatisfaction=int(log.OverallSatisfaction) if log.OverallSatisfaction is not None else None,
+        Takeaway=bool(log.Takeaway) if log.Takeaway is not None else None,
+        LoggedComplete=bool(log.LoggedComplete) if log.LoggedComplete is not None else None,
+        AdherentDay=bool(log.AdherentDay) if log.AdherentDay is not None else None,
+        AdherentStatus=log.AdherentStatus,
         Notes=log.Notes,
+        DailyCalorieTargetSnapshot=log.DailyCalorieTargetSnapshot,
+        ProteinTargetSnapshot=float(log.ProteinTargetSnapshot) if log.ProteinTargetSnapshot is not None else None,
+        StepTargetSnapshot=log.StepTargetSnapshot,
     )
 
 
@@ -324,7 +344,23 @@ def UpsertDailyLog(db: Session, UserId: int, Input: CreateDailyLogInput) -> Dail
             or (record.WeightKg is not None and Input.WeightKg is not None and float(record.WeightKg) != Input.WeightKg)
         )
         record.StepKcalFactorOverride = Input.StepKcalFactorOverride
+        record.OfficeMode = Input.OfficeMode
+        record.WaterLitres = Input.WaterLitres
+        record.WalkingPadMinutes = Input.WalkingPadMinutes
+        record.ExerciseNotes = Input.ExerciseNotes
+        record.SleepHours = Input.SleepHours
+        record.Period = Input.Period
+        record.PeriodLabel = Input.PeriodLabel
+        record.HungerBeforeDinner = Input.HungerBeforeDinner
+        record.OverallSatisfaction = Input.OverallSatisfaction
+        record.Takeaway = Input.Takeaway
+        record.LoggedComplete = Input.LoggedComplete
+        record.AdherentDay = Input.AdherentDay
+        record.AdherentStatus = Input.AdherentStatus
         record.Notes = Input.Notes
+        record.DailyCalorieTargetSnapshot = Input.DailyCalorieTargetSnapshot
+        record.ProteinTargetSnapshot = Input.ProteinTargetSnapshot
+        record.StepTargetSnapshot = Input.StepTargetSnapshot
         if steps_changed:
             RecordMetricEntry(
                 db,
@@ -360,7 +396,23 @@ def UpsertDailyLog(db: Session, UserId: int, Input: CreateDailyLogInput) -> Dail
             Steps=Input.Steps,
             StepKcalFactorOverride=Input.StepKcalFactorOverride,
             WeightKg=Input.WeightKg,
+            OfficeMode=Input.OfficeMode,
+            WaterLitres=Input.WaterLitres,
+            WalkingPadMinutes=Input.WalkingPadMinutes,
+            ExerciseNotes=Input.ExerciseNotes,
+            SleepHours=Input.SleepHours,
+            Period=Input.Period,
+            PeriodLabel=Input.PeriodLabel,
+            HungerBeforeDinner=Input.HungerBeforeDinner,
+            OverallSatisfaction=Input.OverallSatisfaction,
+            Takeaway=Input.Takeaway,
+            LoggedComplete=Input.LoggedComplete,
+            AdherentDay=Input.AdherentDay,
+            AdherentStatus=Input.AdherentStatus,
             Notes=Input.Notes,
+            DailyCalorieTargetSnapshot=Input.DailyCalorieTargetSnapshot,
+            ProteinTargetSnapshot=Input.ProteinTargetSnapshot,
+            StepTargetSnapshot=Input.StepTargetSnapshot,
         )
         if Input.Steps != 0:
             record.StepsUpdatedAt = occurred_at
@@ -488,6 +540,41 @@ def UpdateSteps(
     db.refresh(record)
 
     if WeightKg is not None:
+        UpdateUserWeightFromLatestLog(db, UserId)
+
+    return _BuildDailyLog(record)
+
+
+def UpdateDailyLog(
+    db: Session,
+    UserId: int,
+    LogDate: str,
+    Fields: dict,
+) -> DailyLog:
+    LogDateValue = ParseIsoDate(LogDate)
+    record = (
+        db.query(DailyLogModel)
+        .filter(DailyLogModel.UserId == UserId, DailyLogModel.LogDate == LogDateValue)
+        .first()
+    )
+    if record is None:
+        record = DailyLogModel(
+            DailyLogId=str(uuid.uuid4()),
+            UserId=UserId,
+            LogDate=LogDateValue,
+            Steps=0,
+        )
+        db.add(record)
+
+    for field_name, field_value in Fields.items():
+        if not hasattr(record, field_name):
+            raise ValueError(f"Unsupported daily log field: {field_name}")
+        setattr(record, field_name, field_value)
+
+    db.commit()
+    db.refresh(record)
+
+    if "WeightKg" in Fields and Fields.get("WeightKg") is not None:
         UpdateUserWeightFromLatestLog(db, UserId)
 
     return _BuildDailyLog(record)

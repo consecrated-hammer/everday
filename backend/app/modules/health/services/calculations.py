@@ -14,6 +14,7 @@ def CalculateDailyTotals(
     Steps: int,
     StepKcalFactor: float,
     Targets: Targets,
+    WorkoutCaloriesBurned: int = 0,
 ) -> DailyTotals:
     TotalCaloriesRaw = sum(Entry.CaloriesPerServing * Entry.Quantity for Entry in Entries)
     TotalProteinRaw = sum(Entry.ProteinPerServing * Entry.Quantity for Entry in Entries)
@@ -26,7 +27,9 @@ def CalculateDailyTotals(
 
     SafeSteps = max(0, round(Steps))
     CaloriesBurnedRaw = SafeSteps * StepKcalFactor
-    NetCaloriesRaw = TotalCaloriesRaw - CaloriesBurnedRaw
+    SafeWorkoutCaloriesBurned = max(0, round(WorkoutCaloriesBurned))
+    TotalCaloriesBurnedRaw = CaloriesBurnedRaw + SafeWorkoutCaloriesBurned
+    NetCaloriesRaw = TotalCaloriesRaw - TotalCaloriesBurnedRaw
 
     TotalCalories = RoundCalories(TotalCaloriesRaw)
     TotalProtein = RoundNutrient(TotalProteinRaw)
@@ -37,6 +40,8 @@ def CalculateDailyTotals(
     TotalSugar = RoundNutrient(TotalSugarRaw)
     TotalSodium = RoundNutrient(TotalSodiumRaw)
     CaloriesBurnedFromSteps = RoundCalories(CaloriesBurnedRaw)
+    CaloriesBurnedFromWorkouts = RoundCalories(SafeWorkoutCaloriesBurned)
+    TotalCaloriesBurned = RoundCalories(TotalCaloriesBurnedRaw)
     NetCalories = RoundCalories(NetCaloriesRaw)
     RemainingCalories = RoundCalories(Targets.DailyCalorieTarget - NetCaloriesRaw)
     RemainingProteinMin = RoundNutrient(Targets.ProteinTargetMin - TotalProteinRaw)
@@ -58,6 +63,8 @@ def CalculateDailyTotals(
         TotalSugar=TotalSugar,
         TotalSodium=TotalSodium,
         CaloriesBurnedFromSteps=CaloriesBurnedFromSteps,
+        CaloriesBurnedFromWorkouts=CaloriesBurnedFromWorkouts,
+        TotalCaloriesBurned=TotalCaloriesBurned,
         NetCalories=NetCalories,
         RemainingCalories=RemainingCalories,
         RemainingProteinMin=RemainingProteinMin,
@@ -71,7 +78,7 @@ def CalculateDailyTotals(
     )
 
 
-def BuildDailySummary(LogDate, Steps: int, Totals: DailyTotals) -> DailySummary:
+def BuildDailySummary(LogDate, Steps: int, Totals: DailyTotals, WorkoutCount: int = 0) -> DailySummary:
     return DailySummary(
         LogDate=LogDate,
         TotalCalories=Totals.TotalCalories,
@@ -83,6 +90,10 @@ def BuildDailySummary(LogDate, Steps: int, Totals: DailyTotals) -> DailySummary:
         TotalSugar=Totals.TotalSugar,
         TotalSodium=Totals.TotalSodium,
         Steps=max(0, round(Steps)),
+        CaloriesBurnedFromSteps=Totals.CaloriesBurnedFromSteps,
+        CaloriesBurnedFromWorkouts=Totals.CaloriesBurnedFromWorkouts,
+        TotalCaloriesBurned=Totals.TotalCaloriesBurned,
+        WorkoutCount=max(0, int(WorkoutCount or 0)),
         NetCalories=Totals.NetCalories,
     )
 
@@ -99,6 +110,10 @@ def CalculateWeeklySummary(Days: list[DailySummary]) -> WeeklySummary:
         "TotalSugar": sum(Day.TotalSugar for Day in Days),
         "TotalSodium": sum(Day.TotalSodium for Day in Days),
         "TotalSteps": sum(Day.Steps for Day in Days),
+        "TotalCaloriesBurnedFromSteps": sum(Day.CaloriesBurnedFromSteps for Day in Days),
+        "TotalCaloriesBurnedFromWorkouts": sum(Day.CaloriesBurnedFromWorkouts for Day in Days),
+        "TotalCaloriesBurned": sum(Day.TotalCaloriesBurned for Day in Days),
+        "TotalWorkoutCount": sum(Day.WorkoutCount for Day in Days),
         "TotalNetCalories": sum(Day.NetCalories for Day in Days),
     }
 
@@ -112,6 +127,10 @@ def CalculateWeeklySummary(Days: list[DailySummary]) -> WeeklySummary:
         "AverageSugar": RoundNutrient(Totals["TotalSugar"] / Count),
         "AverageSodium": RoundNutrient(Totals["TotalSodium"] / Count),
         "AverageSteps": RoundCalories(Totals["TotalSteps"] / Count),
+        "AverageCaloriesBurnedFromSteps": RoundCalories(Totals["TotalCaloriesBurnedFromSteps"] / Count),
+        "AverageCaloriesBurnedFromWorkouts": RoundCalories(Totals["TotalCaloriesBurnedFromWorkouts"] / Count),
+        "AverageCaloriesBurned": RoundCalories(Totals["TotalCaloriesBurned"] / Count),
+        "AverageWorkoutCount": RoundNutrient(Totals["TotalWorkoutCount"] / Count),
         "AverageNetCalories": RoundCalories(Totals["TotalNetCalories"] / Count),
     }
 

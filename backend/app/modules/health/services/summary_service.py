@@ -12,6 +12,7 @@ from app.modules.health.services.calculations import (
 from app.modules.health.services.daily_logs_service import GetEntriesForLog
 from app.modules.health.services.settings_service import GetSettings
 from app.modules.health.utils.dates import ParseIsoDate
+from app.modules.health.services.workouts_service import GetWorkoutCaloriesForDate
 
 
 def GetWeeklySummary(db: Session, UserId: int, StartDate: str) -> WeeklySummary:
@@ -39,7 +40,14 @@ def GetWeeklySummary(db: Session, UserId: int, StartDate: str) -> WeeklySummary:
             if log.StepKcalFactorOverride is not None
             else settings.StepKcalFactor
         )
-        totals = CalculateDailyTotals(entries_for_log, log.Steps, step_factor, settings)
-        summaries.append(BuildDailySummary(log.LogDate, log.Steps, totals))
+        workout_calories, workout_count = GetWorkoutCaloriesForDate(db, UserId, log.LogDate)
+        totals = CalculateDailyTotals(
+            entries_for_log,
+            log.Steps,
+            step_factor,
+            settings,
+            WorkoutCaloriesBurned=workout_calories,
+        )
+        summaries.append(BuildDailySummary(log.LogDate, log.Steps, totals, WorkoutCount=workout_count))
 
     return CalculateWeeklySummary(summaries)

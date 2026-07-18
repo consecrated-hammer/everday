@@ -107,6 +107,8 @@ def setup_logging() -> None:
         "app.migrations",
         "app.reminders",
         "app.kids_reminders",
+        "app.daily_tips",
+        "app.gmail_intake",
         "app.auth",
         "app.auth.email",
         "integrations.alexa",
