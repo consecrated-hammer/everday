@@ -300,12 +300,6 @@ class WeeklyReviewNoteResponse(BaseModel):
 
 class WeeklyReviewSnapshotResponse(BaseModel):
     Item: WeeklyReviewSnapshot
-    DailyLog: HealthDailyLog | None = None
-    Workouts: list[HealthWorkout]
-    Entries: list[HealthMealEntryWithFood]
-    Totals: HealthDailyTotals
-    Summary: HealthDailySummary
-    Targets: HealthTargets
 
 
 class InsightFiltersResponse(BaseModel):
