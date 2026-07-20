@@ -1,10 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { NavLink, useMatch } from "react-router-dom";
 import { createPortal } from "react-dom";
-import "@blocknote/core/fonts/inter.css";
-import "@blocknote/mantine/style.css";
-import { BlockNoteView } from "@blocknote/mantine";
-import { useCreateBlockNote } from "@blocknote/react";
 
 import {
   FetchNotes,
@@ -20,6 +16,7 @@ import Icon from "../../components/Icon.jsx";
 import { FormatDateTime } from "../../lib/formatters.js";
 import { GetDisplayName, GetUserId, GetUsername } from "../../lib/authStorage.js";
 
+const NotesRichEditor = lazy(() => import("../../components/NotesRichEditor.jsx"));
 const SystemLabelPrefixes = ["everday:"];
 
 const ExtractUserTags = (labels = []) =>
@@ -87,21 +84,6 @@ const BuildFallbackText = (items = []) => {
 
 const BuildDraftStorageKey = (scope, userId) => `notes:draft:${scope}:${userId || "unknown"}`;
 
-const ParseContentToBlocks = (content, fallbackText = "") => {
-  if (!content) {
-    return [{ type: "paragraph", content: fallbackText }];
-  }
-  try {
-    const parsed = JSON.parse(content);
-    if (Array.isArray(parsed)) {
-      return parsed;
-    }
-  } catch (error) {
-    // fall through to plain text
-  }
-  return [{ type: "paragraph", content }];
-};
-
 const ExtractPlainText = (content) => {
   if (!content) {
     return "";
@@ -139,45 +121,6 @@ const ExtractPlainText = (content) => {
   } catch (error) {
     return String(content);
   }
-};
-
-const NotesRichEditor = ({ content, fallbackItems = [], onChange = () => {}, readOnly = false }) => {
-  const fallbackText = useMemo(() => BuildFallbackText(fallbackItems), [fallbackItems]);
-  const initialBlocks = useMemo(() => ParseContentToBlocks(content, fallbackText), [content, fallbackText]);
-  const initialSerialized = useMemo(() => JSON.stringify(initialBlocks), [initialBlocks]);
-  const initialIsJson = useMemo(() => {
-    try {
-      const parsed = JSON.parse(content || "");
-      return Array.isArray(parsed);
-    } catch (error) {
-      return false;
-    }
-  }, [content]);
-  const editor = useCreateBlockNote({ initialContent: initialBlocks });
-  const hasInitialized = useRef(false);
-
-  const handleChange = useCallback(() => {
-    if (readOnly) {
-      return;
-    }
-    const serialized = JSON.stringify(editor.document);
-    if (serialized === content) {
-      return;
-    }
-    if (!hasInitialized.current) {
-      hasInitialized.current = true;
-      if (!initialIsJson && serialized === initialSerialized) {
-        return;
-      }
-    }
-    onChange(serialized);
-  }, [content, editor, initialIsJson, initialSerialized, onChange, readOnly]);
-
-  return (
-    <div className={`notes-rich-editor${readOnly ? " is-readonly" : ""}`}>
-      <BlockNoteView editor={editor} editable={!readOnly} onChange={readOnly ? undefined : handleChange} />
-    </div>
-  );
 };
 
 export default function Notes() {
@@ -1308,12 +1251,14 @@ const activeFilterChips = [
                 </div>
               </header>
               {activeNote.Content || (activeNote.Items && activeNote.Items.length > 0) ? (
-                <NotesRichEditor
-                  key={`preview-${activeNote.Id}-${activeNote.UpdatedAt || ""}`}
-                  content={activeNote.Content}
-                  fallbackItems={activeNote.Items || []}
-                  readOnly
-                />
+                <Suspense fallback={<div className="notes-rich-editor" />}>
+                  <NotesRichEditor
+                    key={`preview-${activeNote.Id}-${activeNote.UpdatedAt || ""}`}
+                    content={activeNote.Content}
+                    fallbackItems={activeNote.Items || []}
+                    readOnly
+                  />
+                </Suspense>
               ) : (
                 <div className="notes-preview-empty">No content yet.</div>
               )}
@@ -1357,12 +1302,14 @@ const activeFilterChips = [
               </div>
             <div className="form-group">
               <label>Content</label>
-              <NotesRichEditor
-                key={`editor-${editorSession}`}
-                content={form.Content}
-                fallbackItems={form.Items}
-                onChange={(value) => setForm((prev) => ({ ...prev, Content: value }))}
-              />
+              <Suspense fallback={<div className="notes-rich-editor" />}>
+                <NotesRichEditor
+                  key={`editor-${editorSession}`}
+                  content={form.Content}
+                  fallbackItems={form.Items}
+                  onChange={(value) => setForm((prev) => ({ ...prev, Content: value }))}
+                />
+              </Suspense>
             </div>
               <div className="form-group">
                 <label htmlFor="note-tags">Tags</label>

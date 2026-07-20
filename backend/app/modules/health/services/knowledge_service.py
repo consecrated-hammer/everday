@@ -59,6 +59,14 @@ def _normalize_optional_enum(value: str | None, allowed: set[str]) -> str | None
     return lowered
 
 
+def _hall_of_fame_override_for_rating(rating: float | None, override: str | None) -> str | None:
+    return override if rating is not None else None
+
+
+def _is_hall_of_fame(value: str | None) -> bool:
+    return value == "yes"
+
+
 def _build_recipe_review(row: RecipeReviewModel) -> RecipeReview:
     return RecipeReview(
         RecipeReviewId=row.RecipeReviewId,
@@ -190,8 +198,7 @@ def _build_insight(row: InsightModel) -> Insight:
 
 def UpsertRecipeReview(db: Session, user_id: int, payload: CreateRecipeReviewInput | UpdateRecipeReviewInput, review_id: str | None = None) -> RecipeReview:
     log_date = ParseIsoDate(payload.LogDate) if getattr(payload, "LogDate", None) else None
-    would_make_again = _normalize_optional_enum(getattr(payload, "WouldMakeAgain", None), YES_NO_VALUES)
-    hall_of_fame = _normalize_optional_enum(getattr(payload, "HallOfFameOverride", None), HALL_OF_FAME_VALUES)
+    supplied_fields = payload.model_fields_set
     recipe_name = str(getattr(payload, "RecipeName", "") or "").strip()
 
     if review_id:
@@ -223,11 +230,22 @@ def UpsertRecipeReview(db: Session, user_id: int, payload: CreateRecipeReviewInp
         row.RecipeName = recipe_name
     if log_date is not None:
         row.LogDate = log_date
-    row.MealEntryId = getattr(payload, "MealEntryId", None)
-    row.Rating = getattr(payload, "Rating", None)
-    row.WouldMakeAgain = would_make_again
-    row.HallOfFameOverride = hall_of_fame
-    row.Notes = getattr(payload, "Notes", None)
+    if not review_id or "MealEntryId" in supplied_fields:
+        row.MealEntryId = getattr(payload, "MealEntryId", None)
+    if not review_id or "Rating" in supplied_fields:
+        row.Rating = getattr(payload, "Rating", None)
+    if not review_id or "WouldMakeAgain" in supplied_fields:
+        row.WouldMakeAgain = _normalize_optional_enum(getattr(payload, "WouldMakeAgain", None), YES_NO_VALUES)
+    if not review_id or "HallOfFameOverride" in supplied_fields:
+        row.HallOfFameOverride = _normalize_optional_enum(
+            getattr(payload, "HallOfFameOverride", None), HALL_OF_FAME_VALUES
+        )
+    if not review_id or "Notes" in supplied_fields:
+        row.Notes = getattr(payload, "Notes", None)
+    row.HallOfFameOverride = _hall_of_fame_override_for_rating(
+        float(row.Rating) if row.Rating is not None else None,
+        row.HallOfFameOverride,
+    )
     row.UpdatedAt = datetime.utcnow()
     db.commit()
     db.refresh(row)
@@ -245,6 +263,17 @@ def GetRecipeReviews(db: Session, user_id: int, limit: int = 200) -> list[Recipe
     return [_build_recipe_review(row) for row in rows]
 
 
+def DeleteRecipeReview(db: Session, user_id: int, review_id: str) -> None:
+    row = db.query(RecipeReviewModel).filter(
+        RecipeReviewModel.RecipeReviewId == review_id,
+        RecipeReviewModel.UserId == user_id,
+    ).first()
+    if row is None:
+        raise ValueError("Recipe review not found.")
+    db.delete(row)
+    db.commit()
+
+
 def GetRecipeStats(db: Session, user_id: int, start_date: str | None = None, end_date: str | None = None, limit: int = 100) -> list[RecipeStat]:
     recipe_reviews_query = db.query(RecipeReviewModel).filter(RecipeReviewModel.UserId == user_id)
     if start_date:
@@ -253,45 +282,10 @@ def GetRecipeStats(db: Session, user_id: int, start_date: str | None = None, end
         recipe_reviews_query = recipe_reviews_query.filter(RecipeReviewModel.LogDate <= ParseIsoDate(end_date))
     review_rows = recipe_reviews_query.all()
 
-    meal_rows_query = (
-        db.query(DailyLogModel)
-        .filter(DailyLogModel.UserId == user_id)
-        .order_by(DailyLogModel.LogDate.asc())
-    )
-    if start_date:
-        meal_rows_query = meal_rows_query.filter(DailyLogModel.LogDate >= ParseIsoDate(start_date))
-    if end_date:
-        meal_rows_query = meal_rows_query.filter(DailyLogModel.LogDate <= ParseIsoDate(end_date))
-    logs = meal_rows_query.all()
-
     aggregated: dict[str, dict[str, object]] = {}
-    for log in logs:
-        for entry in GetEntriesForLog(db, user_id, log.DailyLogId):
-            recipe_name = str(entry.TemplateName or entry.FoodName or "").strip()
-            if not recipe_name:
-                continue
-            bucket = aggregated.setdefault(
-                recipe_name,
-                {
-                    "RecipeName": recipe_name,
-                    "TimesEaten": 0,
-                    "Calories": [],
-                    "Protein": [],
-                    "LatestLogDate": log.LogDate,
-                    "Notes": [],
-                    "Ratings": [],
-                    "WouldMakeAgain": [],
-                    "HallOfFameOverride": [],
-                },
-            )
-            bucket["TimesEaten"] = int(bucket["TimesEaten"]) + 1
-            if entry.CaloriesPerServing is not None:
-                bucket["Calories"].append(float(entry.CaloriesPerServing) * float(entry.Quantity))
-            if entry.ProteinPerServing is not None:
-                bucket["Protein"].append(float(entry.ProteinPerServing) * float(entry.Quantity))
-            bucket["LatestLogDate"] = max(bucket["LatestLogDate"], log.LogDate)
-
     for row in review_rows:
+        if row.Rating is None:
+            continue
         bucket = aggregated.setdefault(
             row.RecipeName,
             {
@@ -306,6 +300,7 @@ def GetRecipeStats(db: Session, user_id: int, start_date: str | None = None, end
                 "HallOfFameOverride": [],
             },
         )
+        bucket["TimesEaten"] = int(bucket["TimesEaten"]) + 1
         if row.Rating is not None:
             bucket["Ratings"].append(float(row.Rating))
         if row.Notes:
@@ -329,7 +324,7 @@ def GetRecipeStats(db: Session, user_id: int, start_date: str | None = None, end
                 AverageRating=round(sum(ratings) / len(ratings), 2) if ratings else None,
                 AverageCalories=round(sum(calories) / len(calories), 2) if calories else None,
                 AverageProtein=round(sum(protein) / len(protein), 2) if protein else None,
-                HallOfFame=hall_of_fame,
+                HallOfFame=_is_hall_of_fame(hall_of_fame),
                 Notes=notes[-1] if notes else None,
                 LatestLogDate=bucket["LatestLogDate"],
             )

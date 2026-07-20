@@ -12,6 +12,17 @@ const ParseAllowedHosts = (value) =>
 
 export default defineConfig({
   plugins: [react()],
+  build: {
+    // BlockNote is an intentionally lazy, Notes-only rich-editor dependency.
+    chunkSizeWarningLimit: 1400,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          "vendor-react": ["react", "react-dom", "react-router-dom"],
+        },
+      },
+    },
+  },
   server: {
     host: true,
     port: 5183,
