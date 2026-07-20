@@ -322,6 +322,36 @@ class BodyMeasurement(Base):
     UpdatedAt = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
 
 
+class HeadacheEvent(Base):
+    __tablename__ = "headache_events"
+    __table_args__ = {"schema": "health"}
+    HeadacheEventId = Column(String(36), primary_key=True, index=True)
+    UserId = Column(Integer, nullable=False, index=True)
+    LogDate = Column(Date, nullable=False, index=True)
+    OnsetAt = Column(DateTime(timezone=True))
+    EventType = Column(String(30), nullable=False, default="headache")
+    Severity = Column(Integer)
+    Location = Column(String(200))
+    ContextNotes = Column(Text)
+    CreatedAt = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    UpdatedAt = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+
+
+class MedicationDose(Base):
+    __tablename__ = "medication_doses"
+    __table_args__ = {"schema": "health"}
+    MedicationDoseId = Column(String(36), primary_key=True, index=True)
+    UserId = Column(Integer, nullable=False, index=True)
+    LogDate = Column(Date, nullable=False, index=True)
+    HeadacheEventId = Column(String(36), nullable=True, index=True)
+    TakenAt = Column(DateTime(timezone=True))
+    MedicationName = Column(String(200), nullable=False)
+    Dose = Column(String(120))
+    Notes = Column(Text)
+    CreatedAt = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    UpdatedAt = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+
+
 class WeeklyReviewNote(Base):
     __tablename__ = "weekly_review_notes"
     __table_args__ = (

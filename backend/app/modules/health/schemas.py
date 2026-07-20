@@ -926,6 +926,46 @@ class BodyMeasurementListResponse(BaseModel):
     Items: list[BodyMeasurement]
 
 
+class HeadacheEvent(BaseModel):
+    HeadacheEventId: str
+    LogDate: date
+    OnsetAt: datetime | None = None
+    EventType: str
+    Severity: int | None = None
+    Location: str | None = None
+    ContextNotes: str | None = None
+
+
+class UpsertHeadacheEventInput(BaseModel):
+    HeadacheEventId: str | None = None
+    LogDate: str
+    OnsetAt: datetime | None = None
+    EventType: str = Field(default="headache", max_length=30)
+    Severity: int | None = Field(default=None, ge=1, le=10)
+    Location: str | None = Field(default=None, max_length=200)
+    ContextNotes: str | None = None
+
+
+class MedicationDose(BaseModel):
+    MedicationDoseId: str
+    LogDate: date
+    HeadacheEventId: str | None = None
+    TakenAt: datetime | None = None
+    MedicationName: str
+    Dose: str | None = None
+    Notes: str | None = None
+
+
+class UpsertMedicationDoseInput(BaseModel):
+    MedicationDoseId: str | None = None
+    LogDate: str
+    HeadacheEventId: str | None = None
+    TakenAt: datetime | None = None
+    MedicationName: str = Field(min_length=1, max_length=200)
+    Dose: str | None = Field(default=None, max_length=120)
+    Notes: str | None = None
+
+
 class WeeklyReviewNote(BaseModel):
     WeeklyReviewNoteId: str
     WeekStart: date
