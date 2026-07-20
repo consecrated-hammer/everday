@@ -377,6 +377,7 @@ class HaeImportResponse(BaseModel):
     WorkoutsCount: int
     StepsUpdated: int
     WeightUpdated: int
+    SleepUpdated: int
 
 
 class HaeApiKeyResponse(BaseModel):
@@ -828,7 +829,7 @@ class RecipeStat(BaseModel):
     AverageRating: float | None = None
     AverageCalories: float | None = None
     AverageProtein: float | None = None
-    HallOfFame: str | None = None
+    HallOfFame: bool = False
     Notes: str | None = None
     LatestLogDate: date | None = None
 

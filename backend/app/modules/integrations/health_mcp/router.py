@@ -48,8 +48,6 @@ from app.modules.integrations.health_mcp.service import (
     GetMeasurementHistory,
     GetInsightHistory,
     GetProductReviewHistory,
-    GetRecipeReviewHistory,
-    GetRecipeStatsView,
     GetSavedFoods,
     GetStepSummary,
     GetTodayMeals,
@@ -64,7 +62,6 @@ from app.modules.integrations.health_mcp.service import (
     UpsertInsightRecord,
     UpsertMeasurementRecord,
     UpsertProductReviewRecord,
-    UpsertRecipeReviewRecord,
     UpsertWeeklyReviewNoteRecord,
     UpdateDailyLog,
     UpdateMeal,
@@ -74,6 +71,12 @@ from app.modules.integrations.health_mcp.service import (
     UpdateWorkout,
     LogWorkout,
     LogWeight,
+)
+from app.modules.integrations.health_mcp.recipe_reviews import (
+    DeleteRecipeReviewRecord,
+    GetRecipeReviewHistory,
+    GetRecipeStatsView,
+    UpsertRecipeReviewRecord,
 )
 
 router = APIRouter(prefix="/api/integrations/health-mcp", tags=["integrations-health-mcp"])
@@ -707,6 +710,14 @@ def GetRecipeReviewsRoute(
     user: UserContext = Depends(RequireModuleRole("health", write=False)),
 ) -> RecipeReviewListResponse:
     return RecipeReviewListResponse(Items=GetRecipeReviewHistory(db, user.Id, limit))
+
+
+@router.delete("/recipe-reviews/{review_id}", status_code=status.HTTP_204_NO_CONTENT)
+def DeleteRecipeReviewRoute(review_id: str, db: Session = Depends(GetDb), user: UserContext = Depends(RequireModuleRole("health", write=True))) -> None:
+    try:
+        DeleteRecipeReviewRecord(db, user.Id, review_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
 
 @router.get("/recipe-stats", response_model=RecipeStatsResponse)

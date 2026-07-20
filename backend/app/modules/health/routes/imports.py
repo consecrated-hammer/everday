@@ -70,4 +70,5 @@ async def ImportHaeRoute(
         WorkoutsCount=result.WorkoutsCount,
         StepsUpdated=result.StepsUpdated,
         WeightUpdated=result.WeightUpdated,
+        SleepUpdated=result.SleepUpdated,
     )

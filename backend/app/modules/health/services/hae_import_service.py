@@ -27,6 +27,7 @@ class HaeImportSummary:
     WorkoutsCount: int
     StepsUpdated: int
     WeightUpdated: int
+    SleepUpdated: int
 
 
 @dataclass
@@ -64,9 +65,10 @@ def ImportHealthAutoExportPayload(
         len(metrics),
         workouts_count,
     )
-    entries, latest_steps, latest_weight = _ParseMetrics(metrics)
+    entries, latest_steps, latest_weight, latest_sleep = _ParseMetrics(metrics)
 
     updates = {entry.LogDate for entry in entries} | set(latest_steps.keys()) | set(latest_weight.keys())
+    updates |= set(latest_sleep.keys())
     updates |= {entry.LogDate for entry in workouts}
     existing_logs: dict[date, DailyLogModel] = {}
     if updates:
@@ -103,6 +105,7 @@ def ImportHealthAutoExportPayload(
 
     steps_updated = 0
     weight_updated = 0
+    sleep_updated = 0
 
     for log_date in updates:
         record = existing_logs.get(log_date)
@@ -139,6 +142,17 @@ def ImportHealthAutoExportPayload(
             ):
                 weight_updated += 1
 
+        sleep_entry = latest_sleep.get(log_date)
+        if sleep_entry:
+            if ApplyMetricToDailyLog(
+                record,
+                "sleep",
+                sleep_entry.Value,
+                sleep_entry.OccurredAt,
+                "automation",
+            ):
+                sleep_updated += 1
+
     for workout in workouts:
         UpsertImportedWorkout(
             db,
@@ -173,10 +187,11 @@ def ImportHealthAutoExportPayload(
         UpdateUserWeightFromLatestLog(db, UserId)
 
     logger.debug(
-        "health import applied user_id=%s steps_updated=%s weight_updated=%s",
+        "health import applied user_id=%s steps_updated=%s weight_updated=%s sleep_updated=%s",
         UserId,
         steps_updated,
         weight_updated,
+        sleep_updated,
     )
     return HaeImportSummary(
         ImportId=import_id,
@@ -184,6 +199,7 @@ def ImportHealthAutoExportPayload(
         WorkoutsCount=workouts_count,
         StepsUpdated=steps_updated,
         WeightUpdated=weight_updated,
+        SleepUpdated=sleep_updated,
     )
 
 
@@ -223,10 +239,16 @@ def _ExtractWorkouts(payload: dict[str, Any]) -> list[dict[str, Any]]:
 
 def _ParseMetrics(
     metrics: list[dict[str, Any]]
-) -> tuple[list[ParsedMetricEntry], dict[date, ParsedMetricEntry], dict[date, ParsedMetricEntry]]:
+) -> tuple[
+    list[ParsedMetricEntry],
+    dict[date, ParsedMetricEntry],
+    dict[date, ParsedMetricEntry],
+    dict[date, ParsedMetricEntry],
+]:
     entries: list[ParsedMetricEntry] = []
     latest_steps: dict[date, ParsedMetricEntry] = {}
     latest_weight: dict[date, ParsedMetricEntry] = {}
+    latest_sleep: dict[date, ParsedMetricEntry] = {}
     step_totals: dict[date, float] = {}
     step_latest: dict[date, datetime] = {}
 
@@ -268,6 +290,20 @@ def _ParseMetrics(
                 )
                 entries.append(entry)
                 _MergeLatestEntry(latest_weight, entry)
+        elif _IsSleepMetric(name):
+            parsed_entries = _ParseSleepMetricEntries(metric)
+            for log_date, timestamp, value in parsed_entries:
+                normalized = _NormalizeSleepHours(value)
+                if normalized is None:
+                    continue
+                entry = ParsedMetricEntry(
+                    MetricType="sleep",
+                    Value=float(normalized),
+                    LogDate=log_date,
+                    OccurredAt=timestamp,
+                )
+                entries.append(entry)
+                _MergeLatestEntry(latest_sleep, entry)
 
     if step_totals:
         for log_date, total in step_totals.items():
@@ -281,7 +317,7 @@ def _ParseMetrics(
                 OccurredAt=occurred_at,
             )
 
-    return entries, latest_steps, latest_weight
+    return entries, latest_steps, latest_weight, latest_sleep
 
 
 def _ParseWorkouts(workouts: list[dict[str, Any]]) -> list[ParsedWorkoutEntry]:
@@ -315,6 +351,10 @@ def _IsWeightMetric(name: str) -> bool:
     return "body mass" in name or name == "weight" or "weight" in name
 
 
+def _IsSleepMetric(name: str) -> bool:
+    return "sleep" in name
+
+
 def _ParseMetricEntries(metric: dict[str, Any]) -> list[tuple[date, datetime, float]]:
     data = metric.get("data")
     if not isinstance(data, list):
@@ -339,6 +379,42 @@ def _ParseMetricEntries(metric: dict[str, Any]) -> list[tuple[date, datetime, fl
         if not parsed:
             continue
         log_date, timestamp = parsed
+        results.append((log_date, timestamp, value))
+
+    return results
+
+
+def _ParseSleepMetricEntries(metric: dict[str, Any]) -> list[tuple[date, datetime, float]]:
+    data = metric.get("data")
+    if not isinstance(data, list):
+        return []
+
+    results: list[tuple[date, datetime, float]] = []
+    for entry in data:
+        if not isinstance(entry, dict):
+            continue
+        quantity = entry.get("totalSleep", entry.get("asleep", entry.get("qty", entry.get("value"))))
+        if quantity is None:
+            continue
+        try:
+            value = float(quantity)
+        except (TypeError, ValueError):
+            continue
+
+        date_value = _ExtractDateValue(entry)
+        if not date_value:
+            continue
+        parsed = _ParseHaeDate(date_value)
+        if not parsed:
+            continue
+        log_date, timestamp = parsed
+
+        sleep_end = entry.get("sleepEnd")
+        if isinstance(sleep_end, str) and sleep_end.strip():
+            parsed_sleep_end = _ParseHaeDate(sleep_end)
+            if parsed_sleep_end:
+                timestamp = parsed_sleep_end[1]
+
         results.append((log_date, timestamp, value))
 
     return results
@@ -417,6 +493,12 @@ def _NormalizeWeight(value: float, units: str) -> float | None:
     if normalized < 20 or normalized > 500:
         return None
     return round(normalized, 2)
+
+
+def _NormalizeSleepHours(value: float) -> float | None:
+    if value < 0 or value > 24:
+        return None
+    return round(value, 2)
 
 
 def _ParseWorkout(workout: dict[str, Any]) -> ParsedWorkoutEntry | None:
