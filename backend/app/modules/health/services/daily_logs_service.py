@@ -571,6 +571,10 @@ def UpdateDailyLog(
             raise ValueError(f"Unsupported daily log field: {field_name}")
         setattr(record, field_name, field_value)
 
+    if "SleepHours" in Fields:
+        record.SleepUpdatedAt = datetime.now(timezone.utc)
+        record.SleepSource = "user"
+
     db.commit()
     db.refresh(record)
 

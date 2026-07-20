@@ -122,6 +122,8 @@ class DailyLog(Base):
     WalkingPadMinutes = Column(Integer)
     ExerciseNotes = Column(Text)
     SleepHours = Column(Numeric(4, 2))
+    SleepUpdatedAt = Column(DateTime(timezone=True))
+    SleepSource = Column(String(20))
     Period = Column(Boolean)
     PeriodLabel = Column(String(40))
     HungerBeforeDinner = Column(Integer)
