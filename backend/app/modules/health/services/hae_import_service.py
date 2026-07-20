@@ -11,6 +11,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.modules.health.models import DailyLog as DailyLogModel
+from app.modules.health.models import BodyMeasurement as BodyMeasurementModel
 from app.modules.health.models import ImportLog as ImportLogModel
 from app.modules.health.models import MetricEntry as MetricEntryModel
 from app.modules.health.services.daily_logs_service import UpdateUserWeightFromLatestLog
@@ -28,6 +29,7 @@ class HaeImportSummary:
     StepsUpdated: int
     WeightUpdated: int
     SleepUpdated: int
+    RestingHeartRateUpdated: int
 
 
 @dataclass
@@ -65,10 +67,11 @@ def ImportHealthAutoExportPayload(
         len(metrics),
         workouts_count,
     )
-    entries, latest_steps, latest_weight, latest_sleep = _ParseMetrics(metrics)
+    entries, latest_steps, latest_weight, latest_sleep, latest_resting_heart_rate = _ParseMetrics(metrics)
 
     updates = {entry.LogDate for entry in entries} | set(latest_steps.keys()) | set(latest_weight.keys())
     updates |= set(latest_sleep.keys())
+    updates |= set(latest_resting_heart_rate.keys())
     updates |= {entry.LogDate for entry in workouts}
     existing_logs: dict[date, DailyLogModel] = {}
     if updates:
@@ -106,6 +109,19 @@ def ImportHealthAutoExportPayload(
     steps_updated = 0
     weight_updated = 0
     sleep_updated = 0
+    resting_heart_rate_updated = 0
+
+    measurements: dict[date, BodyMeasurementModel] = {}
+    if latest_resting_heart_rate:
+        rows = (
+            db.query(BodyMeasurementModel)
+            .filter(
+                BodyMeasurementModel.UserId == UserId,
+                BodyMeasurementModel.LogDate.in_(latest_resting_heart_rate.keys()),
+            )
+            .all()
+        )
+        measurements = {row.LogDate: row for row in rows}
 
     for log_date in updates:
         record = existing_logs.get(log_date)
@@ -153,6 +169,27 @@ def ImportHealthAutoExportPayload(
             ):
                 sleep_updated += 1
 
+        resting_heart_rate_entry = latest_resting_heart_rate.get(log_date)
+        if resting_heart_rate_entry:
+            measurement = measurements.get(log_date)
+            if measurement is None:
+                measurement = BodyMeasurementModel(
+                    BodyMeasurementId=str(uuid.uuid4()),
+                    UserId=UserId,
+                    LogDate=log_date,
+                )
+                db.add(measurement)
+                measurements[log_date] = measurement
+            should_apply = measurement.RestingHeartRateSource != "user"
+            if should_apply and measurement.RestingHeartRateSource == "automation" and measurement.RestingHeartRateUpdatedAt:
+                should_apply = resting_heart_rate_entry.OccurredAt > measurement.RestingHeartRateUpdatedAt
+            if should_apply:
+                measurement.RestingHeartRate = int(round(resting_heart_rate_entry.Value))
+                measurement.RestingHeartRateUpdatedAt = resting_heart_rate_entry.OccurredAt
+                measurement.RestingHeartRateSource = "automation"
+                measurement.UpdatedAt = datetime.utcnow()
+                resting_heart_rate_updated += 1
+
     for workout in workouts:
         UpsertImportedWorkout(
             db,
@@ -187,11 +224,12 @@ def ImportHealthAutoExportPayload(
         UpdateUserWeightFromLatestLog(db, UserId)
 
     logger.debug(
-        "health import applied user_id=%s steps_updated=%s weight_updated=%s sleep_updated=%s",
+        "health import applied user_id=%s steps_updated=%s weight_updated=%s sleep_updated=%s resting_heart_rate_updated=%s",
         UserId,
         steps_updated,
         weight_updated,
         sleep_updated,
+        resting_heart_rate_updated,
     )
     return HaeImportSummary(
         ImportId=import_id,
@@ -200,6 +238,7 @@ def ImportHealthAutoExportPayload(
         StepsUpdated=steps_updated,
         WeightUpdated=weight_updated,
         SleepUpdated=sleep_updated,
+        RestingHeartRateUpdated=resting_heart_rate_updated,
     )
 
 
@@ -244,11 +283,14 @@ def _ParseMetrics(
     dict[date, ParsedMetricEntry],
     dict[date, ParsedMetricEntry],
     dict[date, ParsedMetricEntry],
+    dict[date, ParsedMetricEntry],
 ]:
     entries: list[ParsedMetricEntry] = []
     latest_steps: dict[date, ParsedMetricEntry] = {}
     latest_weight: dict[date, ParsedMetricEntry] = {}
     latest_sleep: dict[date, ParsedMetricEntry] = {}
+    latest_resting_heart_rate: dict[date, ParsedMetricEntry] = {}
+    resting_heart_rate_samples: dict[date, list[ParsedMetricEntry]] = {}
     step_totals: dict[date, float] = {}
     step_latest: dict[date, datetime] = {}
 
@@ -304,6 +346,20 @@ def _ParseMetrics(
                 )
                 entries.append(entry)
                 _MergeLatestEntry(latest_sleep, entry)
+        elif _IsRestingHeartRateMetric(name):
+            parsed_entries = _ParseMetricEntries(metric)
+            for log_date, timestamp, value in parsed_entries:
+                normalized = _NormalizeRestingHeartRate(value)
+                if normalized is None:
+                    continue
+                entry = ParsedMetricEntry(
+                    MetricType="resting_heart_rate",
+                    Value=float(normalized),
+                    LogDate=log_date,
+                    OccurredAt=timestamp,
+                )
+                entries.append(entry)
+                resting_heart_rate_samples.setdefault(log_date, []).append(entry)
 
     if step_totals:
         for log_date, total in step_totals.items():
@@ -317,7 +373,15 @@ def _ParseMetrics(
                 OccurredAt=occurred_at,
             )
 
-    return entries, latest_steps, latest_weight, latest_sleep
+    for log_date, samples in resting_heart_rate_samples.items():
+        latest_resting_heart_rate[log_date] = ParsedMetricEntry(
+            MetricType="resting_heart_rate",
+            Value=float(round(sum(sample.Value for sample in samples) / len(samples))),
+            LogDate=log_date,
+            OccurredAt=max(sample.OccurredAt for sample in samples),
+        )
+
+    return entries, latest_steps, latest_weight, latest_sleep, latest_resting_heart_rate
 
 
 def _ParseWorkouts(workouts: list[dict[str, Any]]) -> list[ParsedWorkoutEntry]:
@@ -332,7 +396,7 @@ def _ParseWorkouts(workouts: list[dict[str, Any]]) -> list[ParsedWorkoutEntry]:
 def _NormalizeMetricName(name: Any) -> str:
     if not isinstance(name, str):
         return ""
-    return re.sub(r"\s+", " ", name.strip().lower())
+    return re.sub(r"\s+", " ", re.sub(r"[_-]+", " ", name.strip().lower()))
 
 
 def _NormalizeUnits(units: Any) -> str:
@@ -353,6 +417,10 @@ def _IsWeightMetric(name: str) -> bool:
 
 def _IsSleepMetric(name: str) -> bool:
     return "sleep" in name
+
+
+def _IsRestingHeartRateMetric(name: str) -> bool:
+    return "resting" in name and "heart rate" in name
 
 
 def _ParseMetricEntries(metric: dict[str, Any]) -> list[tuple[date, datetime, float]]:
@@ -499,6 +567,12 @@ def _NormalizeSleepHours(value: float) -> float | None:
     if value < 0 or value > 24:
         return None
     return round(value, 2)
+
+
+def _NormalizeRestingHeartRate(value: float) -> int | None:
+    if value < 25 or value > 250:
+        return None
+    return int(round(value))
 
 
 def _ParseWorkout(workout: dict[str, Any]) -> ParsedWorkoutEntry | None:

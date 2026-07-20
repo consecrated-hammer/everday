@@ -57,12 +57,13 @@ async def ImportHaeRoute(
 
     result = ImportHealthAutoExportPayload(db, user_id, payload)
     logger.info(
-        "health import processed user_id=%s metrics=%s workouts=%s steps_updated=%s weight_updated=%s",
+        "health import processed user_id=%s metrics=%s workouts=%s steps_updated=%s weight_updated=%s resting_heart_rate_updated=%s",
         user_id,
         result.MetricsCount,
         result.WorkoutsCount,
         result.StepsUpdated,
         result.WeightUpdated,
+        result.RestingHeartRateUpdated,
     )
     return HaeImportResponse(
         ImportId=result.ImportId,
@@ -71,4 +72,5 @@ async def ImportHaeRoute(
         StepsUpdated=result.StepsUpdated,
         WeightUpdated=result.WeightUpdated,
         SleepUpdated=result.SleepUpdated,
+        RestingHeartRateUpdated=result.RestingHeartRateUpdated,
     )

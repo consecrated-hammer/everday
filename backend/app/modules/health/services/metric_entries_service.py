@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.modules.health.models import DailyLog as DailyLogModel
 from app.modules.health.models import MetricEntry as MetricEntryModel
 
-MetricType = Literal["steps", "weight", "sleep"]
+MetricType = Literal["steps", "weight", "sleep", "resting_heart_rate"]
 MetricSource = Literal["user", "automation"]
 
 

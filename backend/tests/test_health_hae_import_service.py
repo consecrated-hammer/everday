@@ -53,7 +53,7 @@ def test_parse_workout_converts_distance_and_duration_units():
 
 
 def test_parse_metrics_extracts_sleep_analysis_total_sleep():
-    entries, latest_steps, latest_weight, latest_sleep = service._ParseMetrics(  # noqa: SLF001
+    entries, latest_steps, latest_weight, latest_sleep, latest_resting_heart_rate = service._ParseMetrics(  # noqa: SLF001
         [
             {
                 "name": "sleep_analysis",
@@ -73,9 +73,34 @@ def test_parse_metrics_extracts_sleep_analysis_total_sleep():
 
     assert latest_steps == {}
     assert latest_weight == {}
+    assert latest_resting_heart_rate == {}
     assert len(entries) == 1
     sleep_entry = latest_sleep[date(2026, 7, 19)]
     assert sleep_entry.MetricType == "sleep"
     assert sleep_entry.LogDate.isoformat() == "2026-07-19"
     assert sleep_entry.Value == 6.63
     assert sleep_entry.OccurredAt.isoformat() == "2026-07-18T20:28:29+00:00"
+
+
+def test_parse_metrics_averages_resting_heart_rate_by_day():
+    entries, latest_steps, latest_weight, latest_sleep, latest_resting_heart_rate = service._ParseMetrics(  # noqa: SLF001
+        [
+            {
+                "name": "resting_heart_rate",
+                "units": "count/min",
+                "data": [
+                    {"date": "2026-07-19T07:00:00Z", "qty": 60},
+                    {"date": "2026-07-19T08:00:00Z", "qty": 62},
+                ],
+            }
+        ]
+    )
+
+    assert latest_steps == {}
+    assert latest_weight == {}
+    assert latest_sleep == {}
+    assert len(entries) == 2
+    heart_rate = latest_resting_heart_rate[date(2026, 7, 19)]
+    assert heart_rate.MetricType == "resting_heart_rate"
+    assert heart_rate.Value == 61
+    assert heart_rate.OccurredAt.isoformat() == "2026-07-19T08:00:00+00:00"

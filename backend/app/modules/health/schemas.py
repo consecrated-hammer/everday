@@ -378,6 +378,7 @@ class HaeImportResponse(BaseModel):
     StepsUpdated: int
     WeightUpdated: int
     SleepUpdated: int
+    RestingHeartRateUpdated: int
 
 
 class HaeApiKeyResponse(BaseModel):

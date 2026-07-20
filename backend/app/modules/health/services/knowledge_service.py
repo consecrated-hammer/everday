@@ -543,6 +543,9 @@ def UpsertBodyMeasurement(db: Session, user_id: int, payload: UpsertBodyMeasurem
     row.WaistCm = payload.WaistCm
     row.HipsCm = payload.HipsCm
     row.RestingHeartRate = payload.RestingHeartRate
+    if payload.RestingHeartRate is not None:
+        row.RestingHeartRateUpdatedAt = datetime.utcnow()
+        row.RestingHeartRateSource = "user"
     row.PeriodCycleNotes = payload.PeriodCycleNotes
     row.Notes = payload.Notes
     row.UpdatedAt = datetime.utcnow()

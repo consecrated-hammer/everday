@@ -316,6 +316,8 @@ class BodyMeasurement(Base):
     WaistCm = Column(Numeric(6, 2))
     HipsCm = Column(Numeric(6, 2))
     RestingHeartRate = Column(Integer)
+    RestingHeartRateUpdatedAt = Column(DateTime(timezone=True))
+    RestingHeartRateSource = Column(String(20))
     PeriodCycleNotes = Column(Text)
     Notes = Column(Text)
     CreatedAt = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
