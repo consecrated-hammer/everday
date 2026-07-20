@@ -45,9 +45,18 @@ def ApplyMetricToDailyLog(
         return True
     if MetricTypeValue == "sleep":
         normalized = round(Value, 2)
-        if record.SleepHours is not None and float(record.SleepHours) == normalized:
+        existing = record.SleepUpdatedAt
+        existing_source = record.SleepSource
+        if Source == "automation":
+            if existing_source == "user":
+                return False
+            if existing_source == "automation" and existing is not None and OccurredAt <= existing:
+                return False
+        elif existing_source == "user" and existing is not None and OccurredAt <= existing:
             return False
         record.SleepHours = normalized
+        record.SleepUpdatedAt = OccurredAt
+        record.SleepSource = Source
         return True
     return False
 
