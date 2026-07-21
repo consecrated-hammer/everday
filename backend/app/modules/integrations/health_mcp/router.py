@@ -110,6 +110,7 @@ class LogManualMealInput(BaseModel):
     SodiumPerServing: float | None = Field(default=None, ge=0)
     ServingQuantity: float = Field(default=1.0, gt=0)
     ServingUnit: str = Field(default="serving", min_length=1)
+    Quantity: float = Field(default=1.0, gt=0)
 
 
 class ParsedMealOut(BaseModel):
@@ -125,6 +126,13 @@ class ParsedMealOut(BaseModel):
     SaturatedFatPerServing: float | None = None
     SugarPerServing: float | None = None
     SodiumPerServing: float | None = None
+    BaseServingQuantity: float | None = None
+    BaseServingUnit: str | None = None
+    QuantityMultiplier: float | None = None
+    ConsumedQuantity: float | None = None
+    ConsumedUnit: str | None = None
+    EffectiveCalories: int | None = None
+    EffectiveProtein: float | None = None
     Summary: str | None = None
     Confidence: str | None = None
     Questions: list[str] = Field(default_factory=list)
@@ -411,20 +419,12 @@ def LogManualMealRoute(
             **LogMealManual(
                 db,
                 user.Id,
-                payload.Date,
-                payload.FoodName,
-                payload.CaloriesPerServing,
-                payload.ProteinPerServing,
-                payload.FibrePerServing,
-                payload.CarbsPerServing,
-                payload.FatPerServing,
-                payload.SaturatedFatPerServing,
-                payload.SugarPerServing,
-                payload.SodiumPerServing,
-                payload.ServingQuantity,
-                payload.ServingUnit,
-                payload.MealType,
-                payload.Note,
+                log_date=payload.Date, food_name=payload.FoodName, calories_per_serving=payload.CaloriesPerServing,
+                protein_per_serving=payload.ProteinPerServing, fibre_per_serving=payload.FibrePerServing,
+                carbs_per_serving=payload.CarbsPerServing, fat_per_serving=payload.FatPerServing,
+                saturated_fat_per_serving=payload.SaturatedFatPerServing, sugar_per_serving=payload.SugarPerServing,
+                sodium_per_serving=payload.SodiumPerServing, serving_quantity=payload.ServingQuantity,
+                serving_unit=payload.ServingUnit, quantity=payload.Quantity, meal_type=payload.MealType, note=payload.Note,
             )
         )
     except ValueError as exc:

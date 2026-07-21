@@ -129,6 +129,14 @@ class MealEntry(BaseModel):
     PortionBaseUnit: str | None = None
     PortionBaseAmount: float | None = None
     PortionBaseTotal: float | None = None
+    EntryCaloriesPerServing: int | None = None
+    EntryProteinPerServing: float | None = None
+    EntryFibrePerServing: float | None = None
+    EntryCarbsPerServing: float | None = None
+    EntryFatPerServing: float | None = None
+    EntrySaturatedFatPerServing: float | None = None
+    EntrySugarPerServing: float | None = None
+    EntrySodiumPerServing: float | None = None
     EntryNotes: str | None = None
     SortOrder: int
     ScheduleSlotId: str | None = None
@@ -160,6 +168,14 @@ class MealEntryWithFood(BaseModel):
     PortionBaseUnit: str | None = None
     PortionBaseAmount: float | None = None
     PortionBaseTotal: float | None = None
+    EntryCaloriesPerServing: int | None = None
+    EntryProteinPerServing: float | None = None
+    EntryFibrePerServing: float | None = None
+    EntryCarbsPerServing: float | None = None
+    EntryFatPerServing: float | None = None
+    EntrySaturatedFatPerServing: float | None = None
+    EntrySugarPerServing: float | None = None
+    EntrySodiumPerServing: float | None = None
     EntryNotes: str | None = None
     SortOrder: int
     ScheduleSlotId: str | None = None
@@ -563,6 +579,14 @@ class CreateMealEntryInput(BaseModel):
     PortionLabel: str = Field(min_length=1)
     PortionBaseUnit: str = Field(min_length=1)
     PortionBaseAmount: float = Field(gt=0)
+    EntryCaloriesPerServing: int | None = Field(default=None, ge=0)
+    EntryProteinPerServing: float | None = Field(default=None, ge=0)
+    EntryFibrePerServing: float | None = Field(default=None, ge=0)
+    EntryCarbsPerServing: float | None = Field(default=None, ge=0)
+    EntryFatPerServing: float | None = Field(default=None, ge=0)
+    EntrySaturatedFatPerServing: float | None = Field(default=None, ge=0)
+    EntrySugarPerServing: float | None = Field(default=None, ge=0)
+    EntrySodiumPerServing: float | None = Field(default=None, ge=0)
     EntryNotes: str | None = None
     SortOrder: int = 0
     ScheduleSlotId: str | None = None

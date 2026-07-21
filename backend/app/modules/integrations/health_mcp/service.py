@@ -310,6 +310,16 @@ def _FindReusableFood(db: Session, user_id: int, parsed_meal: dict[str, Any]) ->
     return None
 
 
+def _FindFoodByName(db: Session, user_id: int, food_name: str) -> FoodModel | None:
+    normalized = _BuildAiFoodName(food_name)
+    return (
+        db.query(FoodModel)
+        .filter(FoodModel.OwnerUserId == user_id, func.lower(FoodModel.FoodName) == normalized.lower())
+        .order_by(FoodModel.CreatedAt.desc())
+        .first()
+    )
+
+
 def _BuildUniqueFoodName(db: Session, user_id: int, base_name: str, calories_per_serving: float) -> str:
     normalized = " ".join(base_name.split()) or "Manual meal"
     existing = (
@@ -462,17 +472,28 @@ def _CreateMealEntryFromFood(
     meal_type: MealType,
     food: Food,
     note: str | None = None,
+    quantity: float = 1.0,
+    entry_nutrition: dict[str, Any] | None = None,
 ) -> MealEntry:
+    entry_nutrition = entry_nutrition or {}
     payload = CreateMealEntryInput(
         DailyLogId=daily_log_id,
         MealType=meal_type,
         FoodId=food.FoodId,
         MealTemplateId=None,
-        Quantity=1.0,
+        Quantity=quantity,
         PortionOptionId=None,
         PortionLabel=food.ServingUnit or "serving",
         PortionBaseUnit=food.ServingUnit or "serving",
         PortionBaseAmount=float(food.ServingQuantity or 1.0),
+        EntryCaloriesPerServing=entry_nutrition.get("CaloriesPerServing"),
+        EntryProteinPerServing=entry_nutrition.get("ProteinPerServing"),
+        EntryFibrePerServing=entry_nutrition.get("FibrePerServing"),
+        EntryCarbsPerServing=entry_nutrition.get("CarbsPerServing"),
+        EntryFatPerServing=entry_nutrition.get("FatPerServing"),
+        EntrySaturatedFatPerServing=entry_nutrition.get("SaturatedFatPerServing"),
+        EntrySugarPerServing=entry_nutrition.get("SugarPerServing"),
+        EntrySodiumPerServing=entry_nutrition.get("SodiumPerServing"),
         EntryNotes=note,
         SortOrder=_GetNextSortOrder(db, daily_log_id),
         ScheduleSlotId=None,
@@ -568,6 +589,7 @@ def LogMealManual(
     sodium_per_serving: float | None = None,
     serving_quantity: float = 1.0,
     serving_unit: str = "serving",
+    quantity: float = 1.0,
     meal_type: str | None = None,
     note: str | None = None,
 ) -> dict[str, Any]:
@@ -575,21 +597,35 @@ def LogMealManual(
     if not cleaned_name:
         raise ValueError("Food name is required.")
     daily_log = EnsureDailyLogForDate(db, user_id, log_date)
-    food = _CreateManualFood(
-        db,
-        user_id,
-        cleaned_name,
-        calories_per_serving,
-        protein_per_serving,
-        fibre_per_serving,
-        carbs_per_serving,
-        fat_per_serving,
-        saturated_fat_per_serving,
-        sugar_per_serving,
-        sodium_per_serving,
-        serving_quantity,
-        serving_unit,
-    )
+    existing = _FindFoodByName(db, user_id, cleaned_name)
+    entry_nutrition = None
+    if existing is not None:
+        food = Food.model_validate({
+            "FoodId": existing.FoodId, "OwnerUserId": existing.OwnerUserId, "FoodName": existing.FoodName,
+            "ServingDescription": existing.ServingDescription, "ServingQuantity": float(existing.ServingQuantity or 1.0),
+            "ServingUnit": existing.ServingUnit or "serving", "CaloriesPerServing": int(existing.CaloriesPerServing),
+            "ProteinPerServing": float(existing.ProteinPerServing), "FibrePerServing": existing.FibrePerServing,
+            "CarbsPerServing": existing.CarbsPerServing, "FatPerServing": existing.FatPerServing,
+            "SaturatedFatPerServing": existing.SaturatedFatPerServing, "SugarPerServing": existing.SugarPerServing,
+            "SodiumPerServing": existing.SodiumPerServing, "DataSource": existing.DataSource or "manual",
+            "CountryCode": existing.CountryCode or "AU", "IsFavourite": bool(existing.IsFavourite),
+            "ImageUrl": existing.ImageUrl, "CreatedAt": existing.CreatedAt,
+        })
+        requested = {
+            "CaloriesPerServing": int(round(calories_per_serving)),
+            "ProteinPerServing": protein_per_serving,
+            "FibrePerServing": fibre_per_serving,
+            "CarbsPerServing": carbs_per_serving,
+            "FatPerServing": fat_per_serving,
+            "SaturatedFatPerServing": saturated_fat_per_serving,
+            "SugarPerServing": sugar_per_serving,
+            "SodiumPerServing": sodium_per_serving,
+        }
+        actual = {key: getattr(existing, key) for key in requested}
+        if any(not _FloatEqual(actual[key], value) for key, value in requested.items()):
+            entry_nutrition = requested
+    else:
+        food = _CreateManualFood(db, user_id, cleaned_name, calories_per_serving, protein_per_serving, fibre_per_serving, carbs_per_serving, fat_per_serving, saturated_fat_per_serving, sugar_per_serving, sodium_per_serving, serving_quantity, serving_unit)
     entry = _CreateMealEntryFromFood(
         db,
         user_id,
@@ -597,6 +633,8 @@ def LogMealManual(
         _ResolveMealType(meal_type),
         food,
         note,
+        quantity,
+        entry_nutrition,
     )
     parsed = {
         "FoodName": cleaned_name,
@@ -614,6 +652,13 @@ def LogMealManual(
         "Summary": note,
         "Confidence": "Exact",
         "Questions": [],
+        "BaseServingQuantity": float(food.ServingQuantity or 1.0),
+        "BaseServingUnit": food.ServingUnit or "serving",
+        "QuantityMultiplier": float(entry.Quantity),
+        "ConsumedQuantity": float(entry.PortionBaseTotal or serving_quantity * quantity),
+        "ConsumedUnit": entry.PortionBaseUnit or serving_unit,
+        "EffectiveCalories": int(round(calories_per_serving * float(entry.Quantity))),
+        "EffectiveProtein": protein_per_serving * float(entry.Quantity),
     }
     snapshot = _BuildDaySnapshot(db, user_id, log_date)
     return {
