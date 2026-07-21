@@ -1,6 +1,7 @@
 from datetime import date
 
 from app.modules.health.schemas import DailySummary, DailyTotals, MealEntry, Targets, Workout
+from app.modules.health.services.portion_entry_service import BuildPortionValues
 from app.modules.integrations.health_mcp import service
 
 
@@ -143,3 +144,15 @@ def test_log_meal_from_text_creates_entry(monkeypatch):
     assert result["MealEntryId"] == "meal-1"
     assert result["ParsedMeal"]["FoodName"] == "Apple"
     assert result["Workouts"][0].CaloriesBurned == 120
+
+
+def test_custom_count_serving_units_support_fractional_portions():
+    class DessertFood:
+        ServingQuantity = 1.0
+        ServingUnit = "dessert"
+
+    servings, unit, total = BuildPortionValues(DessertFood(), 0.75, "dessert", 1.0)
+
+    assert servings == 0.75
+    assert unit == "each"
+    assert total == 0.75
