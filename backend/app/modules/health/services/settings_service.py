@@ -556,36 +556,42 @@ def GetGoalRecommendation(
     )
 
     if Input is not None and Input.ApplyGoal and GoalPlan:
-        record.GoalType = GoalPlan.GoalType.value
-        record.GoalBmiMin = GoalPlan.BmiMin
-        record.GoalBmiMax = GoalPlan.BmiMax
-        record.GoalTargetBmi = (
-            GoalPlan.TargetBmi if Input.TargetWeightKgOverride is not None else None
-        )
-        record.GoalStartDate = GoalPlan.StartDate
-        record.GoalEndDate = GoalPlan.EndDate
-        record.GoalCompletedAt = None
-        record.GoalCompletionNotifiedAt = None
-        if record.GoalSetAt is None:
-            record.GoalSetAt = Now
-        record.GoalUpdatedAt = Now
-        if Input.DailyCalorieTargetOverride is not None:
-            recommendation.DailyCalorieTarget = Input.DailyCalorieTargetOverride
-        record.DailyCalorieTarget = recommendation.DailyCalorieTarget
-        record.ProteinTargetMin = recommendation.ProteinTargetMin
-        record.ProteinTargetMax = recommendation.ProteinTargetMax
-        record.FibreTarget = recommendation.FibreTarget
-        record.CarbsTarget = recommendation.CarbsTarget
-        record.FatTarget = recommendation.FatTarget
-        record.SaturatedFatTarget = recommendation.SaturatedFatTarget
-        record.SugarTarget = recommendation.SugarTarget
-        record.SodiumTarget = recommendation.SodiumTarget
-        db.add(record)
-        db.commit()
-        db.refresh(record)
+        _PersistGoalPlan(db, record, GoalPlan, Input, Now)
         GoalSummaryValue = BuildGoalSummary(GoalPlan, CompletedAt=None, Today=Now.date())
 
     return recommendation, model_used, GoalSummaryValue
+
+
+def _PersistGoalPlan(
+    db: Session,
+    record: SettingsModel,
+    plan,
+    input_value: GoalRecommendationInput,
+    now: datetime,
+) -> None:
+    record.GoalType = plan.GoalType.value
+    record.GoalBmiMin = plan.BmiMin
+    record.GoalBmiMax = plan.BmiMax
+    record.GoalTargetBmi = plan.TargetBmi if input_value.TargetWeightKgOverride is not None else None
+    record.GoalStartDate = plan.StartDate
+    record.GoalEndDate = plan.EndDate
+    record.GoalCompletedAt = None
+    record.GoalCompletionNotifiedAt = None
+    if record.GoalSetAt is None:
+        record.GoalSetAt = now
+    record.GoalUpdatedAt = now
+    db.add(record)
+    db.commit()
+    db.refresh(record)
+
+
+def SetGoal(db: Session, UserId: int, Input: GoalRecommendationInput) -> UserSettings:
+    record = EnsureSettingsForUser(db, UserId)
+    profile = GetUserProfile(db, UserId, IsAdmin=False)
+    now = datetime.now(timezone.utc)
+    plan = _BuildGoalPlanFromInput(profile, Input, now)
+    _PersistGoalPlan(db, record, plan, Input, now)
+    return GetUserSettings(db, UserId)
 
 
 def GetUserSettings(db: Session, UserId: int) -> UserSettings:
