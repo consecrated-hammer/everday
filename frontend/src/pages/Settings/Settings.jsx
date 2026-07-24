@@ -20,6 +20,7 @@ import {
   FetchRecommendationHistory,
   GetAiRecommendations,
   RotateHaeApiKey,
+  SetHealthGoal,
   UpdateHealthProfile,
   UpdateHealthSettings
 } from "../../lib/healthApi.js";
@@ -1332,7 +1333,7 @@ const Settings = () => {
     }));
   };
 
-  const buildGoalPayload = (applyGoal) => {
+  const buildGoalPayload = (includeAdjustments = false) => {
     const range =
       BmiRangeOptions.find((option) => option.key === goalWizardForm.BmiRangeKey) ||
       BmiRangeOptions[1];
@@ -1341,17 +1342,11 @@ const Settings = () => {
       BmiMin: range.min,
       BmiMax: range.max,
       StartDate: goalWizardForm.StartDate || undefined,
-      DurationMonths: Number(goalWizardForm.DurationMonths || 6),
-      ApplyGoal: applyGoal
+      DurationMonths: Number(goalWizardForm.DurationMonths || 6)
     };
-    if (applyGoal && goalWizardAdjustments) {
-      const previewDaily = Number(goalWizardPreview?.DailyCalorieTarget);
+    if (includeAdjustments && goalWizardAdjustments) {
       const previewTargetWeight = Number(goalWizardPreview?.Goal?.TargetWeightKg);
       const previewEndDate = goalWizardPreview?.Goal?.EndDate || "";
-      const nextDaily = Number(goalWizardAdjustments.DailyCalorieTarget);
-      if (Number.isFinite(nextDaily) && nextDaily !== previewDaily) {
-        payload.DailyCalorieTargetOverride = nextDaily;
-      }
       const nextTargetWeight = Number(goalWizardAdjustments.TargetWeightKg);
       if (Number.isFinite(nextTargetWeight) && nextTargetWeight !== previewTargetWeight) {
         payload.TargetWeightKgOverride = nextTargetWeight;
@@ -1393,14 +1388,13 @@ const Settings = () => {
     try {
       setGoalWizardStatus("saving");
       setGoalWizardError("");
-      const response = await GetAiRecommendations(buildGoalPayload(true));
-      setHealthRecommendation(response);
+      await SetHealthGoal(buildGoalPayload(true));
       await loadHealthSettings();
       setGoalWizardOpen(false);
       setGoalWizardStatus("ready");
     } catch (err) {
       setGoalWizardStatus("error");
-      setGoalWizardError(err?.message || "Failed to save goal targets");
+      setGoalWizardError(err?.message || "Failed to save goal");
     }
   };
 
@@ -2629,7 +2623,7 @@ const Settings = () => {
                         <div className="settings-subsection settings-subsection--actions-bottom">
                           <div className="settings-subsection-header">
                             <h4>Goal</h4>
-                            <p>Set BMI target, target weight and date, plus daily calories.</p>
+                            <p>Track the outcome you are working toward. Daily targets stay separate.</p>
                           </div>
                           {healthGoal ? (
                             <>
@@ -2656,10 +2650,6 @@ const Settings = () => {
                                 <div>
                                   <p>Target date</p>
                                   <h3>{FormatDate(healthGoal.EndDate)}</h3>
-                                </div>
-                                <div>
-                                  <p>Daily calories</p>
-                                  <h3>{healthGoal.DailyCalorieTarget}</h3>
                                 </div>
                               </div>
                             </>
@@ -2808,7 +2798,7 @@ const Settings = () => {
                         <div className="settings-subsection settings-subsection--actions-bottom">
                           <div className="settings-subsection-header">
                             <h4>Targets</h4>
-                            <p>Set calorie, protein, and step goals for today.</p>
+                            <p>Set the active calorie, protein, and step targets used for daily guidance.</p>
                           </div>
                           <div className="form-stack">
                             <div className="form-grid form-grid--kv">
@@ -3697,7 +3687,7 @@ const Settings = () => {
                     <p>{goalWizardPreview?.Explanation}</p>
                     <div className="health-summary-grid">
                       <div>
-                        <p>Daily calories</p>
+                        <p>Suggested daily calories</p>
                         <h3>{adjustedDailyCalories}</h3>
                       </div>
                       <div>
@@ -3717,16 +3707,6 @@ const Settings = () => {
                       </div>
                     </div>
                     <div className="form-grid">
-                      <label>
-                        Daily calories
-                        <input
-                          type="number"
-                          name="DailyCalorieTarget"
-                          min="0"
-                          value={goalWizardAdjustments?.DailyCalorieTarget ?? ""}
-                          onChange={onGoalAdjustmentChange}
-                        />
-                      </label>
                       <label>
                         Target weight (kg)
                         <input
@@ -3748,6 +3728,9 @@ const Settings = () => {
                         />
                       </label>
                     </div>
+                    <p className="form-note">
+                      This is a recommendation only. Saving the goal does not change active daily targets.
+                    </p>
                   </>
                 ) : (
                   <p className="form-note">No preview available yet.</p>
