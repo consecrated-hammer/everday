@@ -23,28 +23,42 @@ final class EnvironmentStore: ObservableObject {
 
     private static let storageKey = "everday.app.environment"
 
+    // Stored in the shared app-group suite so the widget extension resolves the
+    // same backend the user selected in the app.
+    private static var store: UserDefaults { AppGroup.userDefaults }
+
     init() {
         let defaultEnv = Self.defaultEnvironment()
-        if let saved = UserDefaults.standard.string(forKey: Self.storageKey),
-           let env = AppEnvironment(rawValue: saved) {
-            current = env
+        if let saved = Self.savedEnvironment() {
+            current = saved
         } else {
             current = defaultEnv
-            UserDefaults.standard.set(defaultEnv.rawValue, forKey: Self.storageKey)
+            Self.store.set(defaultEnv.rawValue, forKey: Self.storageKey)
         }
     }
 
     func set(_ environment: AppEnvironment) {
         current = environment
-        UserDefaults.standard.set(environment.rawValue, forKey: Self.storageKey)
+        Self.store.set(environment.rawValue, forKey: Self.storageKey)
     }
 
     static func resolvedEnvironment() -> AppEnvironment {
-        if let saved = UserDefaults.standard.string(forKey: storageKey),
+        savedEnvironment() ?? defaultEnvironment()
+    }
+
+    /// Reads the saved environment from the shared suite, migrating a value
+    /// previously written to `.standard` (pre app-group builds) if present.
+    private static func savedEnvironment() -> AppEnvironment? {
+        if let saved = store.string(forKey: storageKey),
            let env = AppEnvironment(rawValue: saved) {
             return env
         }
-        return defaultEnvironment()
+        if let legacy = UserDefaults.standard.string(forKey: storageKey),
+           let env = AppEnvironment(rawValue: legacy) {
+            store.set(env.rawValue, forKey: storageKey)
+            return env
+        }
+        return nil
     }
 
     private static func defaultEnvironment() -> AppEnvironment {

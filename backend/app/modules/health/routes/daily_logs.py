@@ -9,6 +9,7 @@ from app.modules.auth.deps import RequireModuleRole, UserContext
 from app.modules.health.schemas import (
     CreateDailyLogInput,
     CreateMealEntryInput,
+    CreateWorkoutInput,
     DailyLog,
     DailySummary,
     DailyTotals,
@@ -18,7 +19,10 @@ from app.modules.health.schemas import (
     StepsHistoryResponse,
     StepUpdateInput,
     Targets,
+    UpdateDailyLogInput,
     UpdateMealEntryInput,
+    Workout,
+    WorkoutHistoryResponse,
     WeightHistoryResponse,
 )
 from app.modules.health.services.calculations import BuildDailySummary, CalculateDailyTotals
@@ -30,11 +34,18 @@ from app.modules.health.services.daily_logs_service import (
     GetStepsHistory,
     GetEntriesForLog,
     ShareMealEntry,
+    UpdateDailyLog,
     UpdateMealEntry,
     UpdateSteps,
     UpsertDailyLog,
 )
 from app.modules.health.services.settings_service import GetSettings
+from app.modules.health.services.workouts_service import (
+    CreateWorkout,
+    GetWorkoutCaloriesForDate,
+    GetWorkoutHistory,
+    GetWorkoutsForDate,
+)
 from app.modules.health.utils.rbac import IsParent
 
 router = APIRouter()
@@ -42,6 +53,7 @@ router = APIRouter()
 
 class DailyLogResponse(BaseModel):
     DailyLog: Optional[DailyLog]
+    Workouts: list[Workout]
     Entries: list[MealEntryWithFood]
     Totals: DailyTotals
     Summary: DailySummary
@@ -54,6 +66,10 @@ class DailyLogCreateResponse(BaseModel):
 
 class MealEntryResponse(BaseModel):
     MealEntry: MealEntry
+
+
+class WorkoutResponse(BaseModel):
+    Workout: Workout
 
 
 @router.post("", response_model=DailyLogCreateResponse, status_code=status.HTTP_201_CREATED)
@@ -79,10 +95,11 @@ def GetDailyLog(
     settings = GetSettings(db, user.Id)
 
     if daily_log is None:
-        empty_totals = CalculateDailyTotals([], 0, settings.StepKcalFactor, settings)
-        empty_summary = BuildDailySummary(log_date, 0, empty_totals)
+        empty_totals = CalculateDailyTotals([], 0, settings.StepKcalFactor, settings, WorkoutCaloriesBurned=0)
+        empty_summary = BuildDailySummary(log_date, 0, empty_totals, WorkoutCount=0)
         return DailyLogResponse(
             DailyLog=None,
+            Workouts=[],
             Entries=[],
             Totals=empty_totals,
             Summary=empty_summary,
@@ -90,16 +107,25 @@ def GetDailyLog(
         )
 
     entries = GetEntriesForLog(db, user.Id, daily_log.DailyLogId)
+    workouts = GetWorkoutsForDate(db, user.Id, daily_log.LogDate)
+    workout_calories, workout_count = GetWorkoutCaloriesForDate(db, user.Id, daily_log.LogDate)
     step_factor = (
         daily_log.StepKcalFactorOverride
         if daily_log.StepKcalFactorOverride is not None
         else settings.StepKcalFactor
     )
-    totals = CalculateDailyTotals(entries, daily_log.Steps, step_factor, settings)
-    summary = BuildDailySummary(daily_log.LogDate, daily_log.Steps, totals)
+    totals = CalculateDailyTotals(
+        entries,
+        daily_log.Steps,
+        step_factor,
+        settings,
+        WorkoutCaloriesBurned=workout_calories,
+    )
+    summary = BuildDailySummary(daily_log.LogDate, daily_log.Steps, totals, WorkoutCount=workout_count)
 
     return DailyLogResponse(
         DailyLog=daily_log,
+        Workouts=workouts,
         Entries=entries,
         Totals=totals,
         Summary=summary,
@@ -135,6 +161,21 @@ def GetStepsHistoryRoute(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
+@router.get("/workouts/history", response_model=WorkoutHistoryResponse)
+def GetWorkoutHistoryRoute(
+    start_date: str,
+    end_date: str,
+    limit: int = 200,
+    db: Session = Depends(GetDb),
+    user: UserContext = Depends(RequireModuleRole("health", write=False)),
+) -> WorkoutHistoryResponse:
+    try:
+        workouts = GetWorkoutHistory(db, user.Id, start_date, end_date, limit)
+        return WorkoutHistoryResponse(Workouts=workouts)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
 @router.patch("/{log_date}/steps", response_model=DailyLogCreateResponse)
 def UpdateStepsRoute(
     log_date: str,
@@ -152,6 +193,36 @@ def UpdateStepsRoute(
             payload.WeightKg,
         )
         return DailyLogCreateResponse(DailyLog=daily_log)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.patch("/{log_date}", response_model=DailyLogCreateResponse)
+def UpdateDailyLogRoute(
+    log_date: str,
+    payload: UpdateDailyLogInput,
+    db: Session = Depends(GetDb),
+    user: UserContext = Depends(RequireModuleRole("health", write=True)),
+) -> DailyLogCreateResponse:
+    fields = payload.model_dump(exclude_unset=True)
+    if not fields:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Provide at least one field to update.")
+    try:
+        daily_log = UpdateDailyLog(db, user.Id, log_date, fields)
+        return DailyLogCreateResponse(DailyLog=daily_log)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.post("/workouts", response_model=WorkoutResponse, status_code=status.HTTP_201_CREATED)
+def CreateWorkoutRoute(
+    payload: CreateWorkoutInput,
+    db: Session = Depends(GetDb),
+    user: UserContext = Depends(RequireModuleRole("health", write=True)),
+) -> WorkoutResponse:
+    try:
+        workout = CreateWorkout(db, user.Id, payload)
+        return WorkoutResponse(Workout=workout)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 

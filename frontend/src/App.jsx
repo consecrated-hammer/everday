@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { BrowserRouter, Navigate, Route, Routes, useParams } from "react-router-dom";
 
 import AppShell from "./components/AppShell.jsx";
@@ -5,38 +6,39 @@ import ErrorBoundary from "./components/ErrorBoundary.jsx";
 import RequireAuth from "./components/RequireAuth.jsx";
 import RequireKidsOnly from "./components/RequireKidsOnly.jsx";
 import RequireKidsRedirect from "./components/RequireKidsRedirect.jsx";
-import Home from "./pages/Home/Home.jsx";
-import BudgetLayout from "./pages/Budget/BudgetLayout.jsx";
-import BudgetIncome from "./pages/Budget/Income.jsx";
-import BudgetExpenses from "./pages/Budget/Expenses.jsx";
-import BudgetAllocations from "./pages/Budget/Allocations.jsx";
-import BudgetSettings from "./pages/Budget/Settings.jsx";
-import Login from "./pages/Login/Login.jsx";
-import CreateAccount from "./pages/Login/CreateAccount.jsx";
-import ResetPassword from "./pages/Login/ResetPassword.jsx";
-import Shopping from "./pages/Shopping/Shopping.jsx";
-import Settings from "./pages/Settings/Settings.jsx";
-import Notifications from "./pages/Notifications/Notifications.jsx";
-import HealthLayout from "./pages/Health/HealthLayout.jsx";
-import HealthToday from "./pages/Health/Today.jsx";
-import HealthLog from "./pages/Health/Log.jsx";
-import HealthFoods from "./pages/Health/Foods.jsx";
-import HealthInsights from "./pages/Health/Insights.jsx";
-import KidsLayout from "./pages/Kids/KidsLayout.jsx";
-import KidsHome from "./pages/Kids/KidsHome.jsx";
-import KidsHistory from "./pages/Kids/KidsHistory.jsx";
-import KidsAdmin from "./pages/Kids/KidsAdmin.jsx";
-import LifeAdminLayout from "./pages/LifeAdmin/LifeAdminLayout.jsx";
-import LifeAdminRecords from "./pages/LifeAdmin/Records.jsx";
-import LifeAdminBuilder from "./pages/LifeAdmin/Builder.jsx";
-import LifeAdminLibrary from "./pages/LifeAdmin/Library.jsx";
-import Tasks from "./pages/Tasks/Tasks.jsx";
-import NotesLayout from "./pages/Notes/NotesLayout.jsx";
-import Notes from "./pages/Notes/Notes.jsx";
-import KidsProductPage from "./pages/Marketing/KidsProductPage.jsx";
-import KidsPrivacyPage from "./pages/Marketing/KidsPrivacyPage.jsx";
-import KidsSupportPage from "./pages/Marketing/KidsSupportPage.jsx";
-import KidsTermsPage from "./pages/Marketing/KidsTermsPage.jsx";
+
+const Home = lazy(() => import("./pages/Home/Home.jsx"));
+const BudgetLayout = lazy(() => import("./pages/Budget/BudgetLayout.jsx"));
+const BudgetIncome = lazy(() => import("./pages/Budget/Income.jsx"));
+const BudgetExpenses = lazy(() => import("./pages/Budget/Expenses.jsx"));
+const BudgetAllocations = lazy(() => import("./pages/Budget/Allocations.jsx"));
+const BudgetSettings = lazy(() => import("./pages/Budget/Settings.jsx"));
+const Login = lazy(() => import("./pages/Login/Login.jsx"));
+const CreateAccount = lazy(() => import("./pages/Login/CreateAccount.jsx"));
+const ResetPassword = lazy(() => import("./pages/Login/ResetPassword.jsx"));
+const Shopping = lazy(() => import("./pages/Shopping/Shopping.jsx"));
+const Settings = lazy(() => import("./pages/Settings/Settings.jsx"));
+const Notifications = lazy(() => import("./pages/Notifications/Notifications.jsx"));
+const HealthLayout = lazy(() => import("./pages/Health/HealthLayout.jsx"));
+const HealthToday = lazy(() => import("./pages/Health/Today.jsx"));
+const HealthLog = lazy(() => import("./pages/Health/Log.jsx"));
+const HealthFoods = lazy(() => import("./pages/Health/Foods.jsx"));
+const HealthInsights = lazy(() => import("./pages/Health/Insights.jsx"));
+const KidsLayout = lazy(() => import("./pages/Kids/KidsLayout.jsx"));
+const KidsHome = lazy(() => import("./pages/Kids/KidsHome.jsx"));
+const KidsHistory = lazy(() => import("./pages/Kids/KidsHistory.jsx"));
+const KidsAdmin = lazy(() => import("./pages/Kids/KidsAdmin.jsx"));
+const LifeAdminLayout = lazy(() => import("./pages/LifeAdmin/LifeAdminLayout.jsx"));
+const LifeAdminRecords = lazy(() => import("./pages/LifeAdmin/Records.jsx"));
+const LifeAdminBuilder = lazy(() => import("./pages/LifeAdmin/Builder.jsx"));
+const LifeAdminLibrary = lazy(() => import("./pages/LifeAdmin/Library.jsx"));
+const Tasks = lazy(() => import("./pages/Tasks/Tasks.jsx"));
+const NotesLayout = lazy(() => import("./pages/Notes/NotesLayout.jsx"));
+const Notes = lazy(() => import("./pages/Notes/Notes.jsx"));
+const KidsProductPage = lazy(() => import("./pages/Marketing/KidsProductPage.jsx"));
+const KidsPrivacyPage = lazy(() => import("./pages/Marketing/KidsPrivacyPage.jsx"));
+const KidsSupportPage = lazy(() => import("./pages/Marketing/KidsSupportPage.jsx"));
+const KidsTermsPage = lazy(() => import("./pages/Marketing/KidsTermsPage.jsx"));
 
 const HealthHistoryRedirect = () => {
   const { date } = useParams();
@@ -47,6 +49,7 @@ const HealthHistoryRedirect = () => {
 const App = () => (
   <ErrorBoundary>
     <BrowserRouter>
+      <Suspense fallback={<div className="page-loading">Loading...</div>}>
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/create-account" element={<CreateAccount />} />
@@ -115,6 +118,7 @@ const App = () => (
         <Route path="notifications" element={<Notifications />} />
       </Route>
     </Routes>
+      </Suspense>
   </BrowserRouter>
   </ErrorBoundary>
 );

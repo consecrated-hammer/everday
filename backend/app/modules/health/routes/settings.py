@@ -23,6 +23,7 @@ from app.modules.health.services.settings_service import (
     GetUserProfile,
     GetUserSettings,
     RotateHaeApiKey,
+    SetGoal,
     UpdateSettings,
     UpdateUserProfile,
 )
@@ -95,6 +96,18 @@ def GetAiRecommendations(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=500, detail="Failed to generate recommendations.") from exc
+
+
+@router.post("/goal", response_model=UserSettings)
+def SetGoalRoute(
+    payload: GoalRecommendationInput,
+    db: Session = Depends(GetDb),
+    user: UserContext = Depends(RequireModuleRole("health", write=True)),
+) -> UserSettings:
+    try:
+        return SetGoal(db, user.Id, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.get("/ai-recommendations/history", response_model=RecommendationLogListResponse)
