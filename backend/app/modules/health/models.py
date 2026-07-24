@@ -117,7 +117,25 @@ class DailyLog(Base):
     WeightUpdatedAt = Column(DateTime(timezone=True))
     StepsSource = Column(String(20))
     WeightSource = Column(String(20))
+    OfficeMode = Column(String(20))
+    WaterLitres = Column(Numeric(6, 2))
+    WalkingPadMinutes = Column(Integer)
+    ExerciseNotes = Column(Text)
+    SleepHours = Column(Numeric(4, 2))
+    SleepUpdatedAt = Column(DateTime(timezone=True))
+    SleepSource = Column(String(20))
+    Period = Column(Boolean)
+    PeriodLabel = Column(String(40))
+    HungerBeforeDinner = Column(Integer)
+    OverallSatisfaction = Column(Integer)
+    Takeaway = Column(Boolean)
+    LoggedComplete = Column(Boolean)
+    AdherentDay = Column(Boolean)
+    AdherentStatus = Column(String(20))
     Notes = Column(Text)
+    DailyCalorieTargetSnapshot = Column(Integer)
+    ProteinTargetSnapshot = Column(Numeric(10, 2))
+    StepTargetSnapshot = Column(Integer)
     CreatedAt = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
 
 
@@ -137,6 +155,14 @@ class MealEntry(Base):
     PortionBaseUnit = Column(String(10))
     PortionBaseAmount = Column(Numeric(10, 4))
     PortionBaseTotal = Column(Numeric(10, 4))
+    EntryCaloriesPerServing = Column(Integer)
+    EntryProteinPerServing = Column(Numeric(10, 2))
+    EntryFibrePerServing = Column(Numeric(10, 2))
+    EntryCarbsPerServing = Column(Numeric(10, 2))
+    EntryFatPerServing = Column(Numeric(10, 2))
+    EntrySaturatedFatPerServing = Column(Numeric(10, 2))
+    EntrySugarPerServing = Column(Numeric(10, 2))
+    EntrySodiumPerServing = Column(Numeric(10, 2))
     EntryNotes = Column(Text)
     SortOrder = Column(Integer, nullable=False, default=0)
     ScheduleSlotId = Column(String(36))
@@ -225,6 +251,155 @@ class RecommendationLog(Base):
     Explanation = Column(Text, nullable=False)
 
 
+class RecipeReview(Base):
+    __tablename__ = "recipe_reviews"
+    __table_args__ = (
+        UniqueConstraint("UserId", "RecipeName", "LogDate", name="uq_health_recipe_reviews_user_recipe_date"),
+        {"schema": "health"},
+    )
+
+    RecipeReviewId = Column(String(36), primary_key=True, index=True)
+    UserId = Column(Integer, nullable=False, index=True)
+    RecipeName = Column(String(200), nullable=False, index=True)
+    LogDate = Column(Date, nullable=False, index=True)
+    MealEntryId = Column(String(36), index=True)
+    Rating = Column(Numeric(4, 1))
+    WouldMakeAgain = Column(String(20))
+    HallOfFameOverride = Column(String(20))
+    Notes = Column(Text)
+    CreatedAt = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    UpdatedAt = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+
+
+class ProductReview(Base):
+    __tablename__ = "product_reviews"
+    __table_args__ = (
+        UniqueConstraint("UserId", "ProductName", "Brand", name="uq_health_product_reviews_user_product_brand"),
+        {"schema": "health"},
+    )
+
+    ProductReviewId = Column(String(36), primary_key=True, index=True)
+    UserId = Column(Integer, nullable=False, index=True)
+    FoodId = Column(String(36), index=True)
+    ProductName = Column(String(200), nullable=False, index=True)
+    Brand = Column(String(120))
+    Category = Column(String(120))
+    BuyAgain = Column(String(20))
+    Rating = Column(Numeric(4, 1))
+    CaloriesPerServing = Column(Integer)
+    ProteinPerServing = Column(Numeric(10, 2))
+    Notes = Column(Text)
+    CreatedAt = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    UpdatedAt = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+
+
+class Experiment(Base):
+    __tablename__ = "experiments"
+    __table_args__ = {"schema": "health"}
+
+    ExperimentId = Column(String(36), primary_key=True, index=True)
+    UserId = Column(Integer, nullable=False, index=True)
+    StartDate = Column(Date, nullable=False, index=True)
+    EndDate = Column(Date)
+    VariableChanged = Column(String(200), nullable=False)
+    Reason = Column(Text)
+    ExpectedOutcome = Column(Text)
+    ActualOutcome = Column(Text)
+    Decision = Column(String(40))
+    Status = Column(String(40), nullable=False, default="In progress")
+    CreatedAt = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    UpdatedAt = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+
+
+class BodyMeasurement(Base):
+    __tablename__ = "body_measurements"
+    __table_args__ = (
+        UniqueConstraint("UserId", "LogDate", name="uq_health_body_measurements_user_date"),
+        {"schema": "health"},
+    )
+
+    BodyMeasurementId = Column(String(36), primary_key=True, index=True)
+    UserId = Column(Integer, nullable=False, index=True)
+    LogDate = Column(Date, nullable=False, index=True)
+    WaistCm = Column(Numeric(6, 2))
+    HipsCm = Column(Numeric(6, 2))
+    RestingHeartRate = Column(Integer)
+    RestingHeartRateUpdatedAt = Column(DateTime(timezone=True))
+    RestingHeartRateSource = Column(String(20))
+    PeriodCycleNotes = Column(Text)
+    Notes = Column(Text)
+    CreatedAt = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    UpdatedAt = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+
+
+class HeadacheEvent(Base):
+    __tablename__ = "headache_events"
+    __table_args__ = {"schema": "health"}
+    HeadacheEventId = Column(String(36), primary_key=True, index=True)
+    UserId = Column(Integer, nullable=False, index=True)
+    LogDate = Column(Date, nullable=False, index=True)
+    OnsetAt = Column(DateTime(timezone=True))
+    EventType = Column(String(30), nullable=False, default="headache")
+    Severity = Column(Integer)
+    Location = Column(String(200))
+    ContextNotes = Column(Text)
+    CreatedAt = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    UpdatedAt = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+
+
+class MedicationDose(Base):
+    __tablename__ = "medication_doses"
+    __table_args__ = {"schema": "health"}
+    MedicationDoseId = Column(String(36), primary_key=True, index=True)
+    UserId = Column(Integer, nullable=False, index=True)
+    LogDate = Column(Date, nullable=False, index=True)
+    HeadacheEventId = Column(String(36), nullable=True, index=True)
+    TakenAt = Column(DateTime(timezone=True))
+    MedicationName = Column(String(200), nullable=False)
+    Dose = Column(String(120))
+    Notes = Column(Text)
+    CreatedAt = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    UpdatedAt = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+
+
+class WeeklyReviewNote(Base):
+    __tablename__ = "weekly_review_notes"
+    __table_args__ = (
+        UniqueConstraint("UserId", "WeekStart", name="uq_health_weekly_review_notes_user_week"),
+        {"schema": "health"},
+    )
+
+    WeeklyReviewNoteId = Column(String(36), primary_key=True, index=True)
+    UserId = Column(Integer, nullable=False, index=True)
+    WeekStart = Column(Date, nullable=False, index=True)
+    BiggestNutritionWin = Column(Text)
+    ImprovementForNextWeek = Column(Text)
+    CreatedAt = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    UpdatedAt = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+
+
+class Insight(Base):
+    __tablename__ = "insights"
+    __table_args__ = {"schema": "health"}
+
+    InsightId = Column(String(36), primary_key=True, index=True)
+    UserId = Column(Integer, nullable=False, index=True)
+    InsightType = Column(String(80), nullable=False, index=True)
+    PeriodType = Column(String(20), nullable=False, index=True)
+    PeriodStart = Column(Date, nullable=False, index=True)
+    PeriodEnd = Column(Date)
+    Title = Column(String(200), nullable=False)
+    Summary = Column(Text)
+    Confidence = Column(String(20))
+    Status = Column(String(20), nullable=False, default="active")
+    Source = Column(String(40), nullable=False, default="manual")
+    SchemaVersion = Column(Integer, nullable=False, default=1)
+    PayloadJson = Column(Text)
+    TagsJson = Column(Text)
+    CreatedAt = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    UpdatedAt = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+
+
 class ImportLog(Base):
     __tablename__ = "import_logs"
     __table_args__ = {"schema": "health"}
@@ -250,6 +425,28 @@ class MetricEntry(Base):
     OccurredAt = Column(DateTime(timezone=True), nullable=False)
     Source = Column(String(20), nullable=False)
     CreatedAt = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+
+
+class Workout(Base):
+    __tablename__ = "workouts"
+    __table_args__ = {"schema": "health"}
+
+    WorkoutId = Column(String(36), primary_key=True, index=True)
+    UserId = Column(Integer, nullable=False, index=True)
+    LogDate = Column(Date, nullable=False, index=True)
+    WorkoutType = Column(String(80), nullable=False)
+    WorkoutName = Column(String(200), nullable=False)
+    DurationMinutes = Column(Numeric(10, 2))
+    CaloriesBurned = Column(Integer, nullable=False, default=0)
+    DistanceKm = Column(Numeric(10, 2))
+    Source = Column(String(20), nullable=False, default="user")
+    ExternalId = Column(String(200), index=True)
+    StartedAt = Column(DateTime(timezone=True))
+    EndedAt = Column(DateTime(timezone=True))
+    Notes = Column(Text)
+    MetadataJson = Column(Text)
+    CreatedAt = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    UpdatedAt = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
 
 
 class AiSuggestionRun(Base):

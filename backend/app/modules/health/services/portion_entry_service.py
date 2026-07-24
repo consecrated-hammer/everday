@@ -47,7 +47,10 @@ def CalculateServingsFromBase(
             raise ValueError("Serving size must be greater than zero.")
         return BaseTotal / serving_base
 
-    if normalized_base_unit == "each" and serving_kind == "count":
+    # A saved food may use a named count unit such as "pie" or "dessert".
+    # Those units are not in the canonical conversion list, but are still
+    # compatible with the entry's per-serving quantity.
+    if normalized_base_unit == "each" and serving_kind in ("count", "unknown"):
         if serving_quantity <= 0:
             raise ValueError("Serving size must be greater than zero.")
         return BaseTotal / serving_quantity

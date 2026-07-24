@@ -14,7 +14,7 @@ set -a
 source "${ROOT_DIR}/.env.${ENV_NAME}"
 set +a
 
-GLOBAL_ENV="/mnt/docker/config/dockerconfigs/.env"
+GLOBAL_ENV="/mnt/docker/infra/config/dockerconfigs/.env"
 if [[ -f "${GLOBAL_ENV}" ]]; then
   set -a
   # shellcheck disable=SC1091

@@ -10,6 +10,15 @@ final class KeychainTokenStore: TokenStore {
     private let service = "au.batserver.everday"
     private let account = "authTokens"
 
+    /// When set, the keychain item is shared via this access group so the widget
+    /// extension can read/refresh the same token. Defaults to the shared group;
+    /// pass `nil` to fall back to the app-private keychain (e.g. unit tests).
+    private let accessGroup: String?
+
+    init(accessGroup: String? = AppGroup.keychainAccessGroup) {
+        self.accessGroup = accessGroup
+    }
+
     func loadTokens() -> AuthTokens? {
         guard let data = read() else { return nil }
         return try? JSONDecoder().decode(AuthTokens.self, from: data)
@@ -24,13 +33,20 @@ final class KeychainTokenStore: TokenStore {
         delete()
     }
 
-    private func save(_ data: Data) {
-        let query: [String: Any] = [
+    private func baseQuery() -> [String: Any] {
+        var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account
         ]
+        if let accessGroup {
+            query[kSecAttrAccessGroup as String] = accessGroup
+        }
+        return query
+    }
 
+    private func save(_ data: Data) {
+        let query = baseQuery()
         let attributes: [String: Any] = [
             kSecValueData as String: data
         ]
@@ -45,13 +61,9 @@ final class KeychainTokenStore: TokenStore {
     }
 
     private func read() -> Data? {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: account,
-            kSecReturnData as String: kCFBooleanTrue as Any,
-            kSecMatchLimit as String: kSecMatchLimitOne
-        ]
+        var query = baseQuery()
+        query[kSecReturnData as String] = kCFBooleanTrue as Any
+        query[kSecMatchLimit as String] = kSecMatchLimitOne
 
         var item: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &item)
@@ -60,11 +72,6 @@ final class KeychainTokenStore: TokenStore {
     }
 
     private func delete() {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: account
-        ]
-        SecItemDelete(query as CFDictionary)
+        SecItemDelete(baseQuery() as CFDictionary)
     }
 }

@@ -6,6 +6,7 @@ import uuid
 import warnings
 from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -31,9 +32,11 @@ from app.modules.notifications.router import router as notifications_router
 from app.modules.tasks.router import router as tasks_router
 from app.modules.integrations.google.router import router as google_router
 from app.modules.integrations.gmail.router import router as gmail_router
+from app.modules.integrations.health_mcp.router import router as health_mcp_router
 from app.modules.integrations.gmail.models import GmailIntegration
 from app.modules.notes.routes.notes import router as notes_router
 from app.modules.health.services.reminders_service import RunDailyHealthReminders
+from app.modules.health.services.daily_tip_service import RunDailyTips
 from app.modules.kids.services.reminders_service import RunDailyKidsReminders
 from app.modules.life_admin import gmail_intake_service
 from app.modules.life_admin import documents_service
@@ -50,11 +53,14 @@ logger = logging.getLogger("app.request")
 startup_logger = logging.getLogger("app.startup")
 reminders_logger = logging.getLogger("app.reminders")
 kids_reminders_logger = logging.getLogger("app.kids_reminders")
+daily_tips_logger = logging.getLogger("app.daily_tips")
 gmail_intake_logger = logging.getLogger("app.gmail_intake")
 _reminders_task: asyncio.Task | None = None
 _reminders_stop_event = asyncio.Event()
 _kids_reminders_task: asyncio.Task | None = None
 _kids_reminders_stop_event = asyncio.Event()
+_daily_tips_task: asyncio.Task | None = None
+_daily_tips_stop_event = asyncio.Event()
 _gmail_intake_task: asyncio.Task | None = None
 _gmail_intake_stop_event = asyncio.Event()
 
@@ -196,6 +202,7 @@ app.include_router(notifications_router)
 app.include_router(tasks_router)
 app.include_router(google_router)
 app.include_router(gmail_router)
+app.include_router(health_mcp_router)
 app.include_router(notes_router)
 
 class SpaStaticFiles(StaticFiles):
@@ -233,6 +240,11 @@ async def startup_tasks() -> None:
         _kids_reminders_stop_event.clear()
         _kids_reminders_task = asyncio.create_task(_kids_reminders_loop())
         startup_logger.info("kids reminders scheduler task created")
+    global _daily_tips_task
+    if _daily_tips_task is None or _daily_tips_task.done():
+        _daily_tips_stop_event.clear()
+        _daily_tips_task = asyncio.create_task(_daily_tips_loop())
+        startup_logger.info("daily tips scheduler task created")
     global _gmail_intake_task
     if _gmail_intake_task is None or _gmail_intake_task.done():
         _gmail_intake_stop_event.clear()
@@ -250,6 +262,10 @@ async def shutdown_tasks() -> None:
     _kids_reminders_stop_event.set()
     if _kids_reminders_task and not _kids_reminders_task.done():
         _kids_reminders_task.cancel()
+    global _daily_tips_task
+    _daily_tips_stop_event.set()
+    if _daily_tips_task and not _daily_tips_task.done():
+        _daily_tips_task.cancel()
     global _gmail_intake_task
     _gmail_intake_stop_event.set()
     if _gmail_intake_task and not _gmail_intake_task.done():
@@ -279,6 +295,30 @@ def _env_bool(name: str, default: bool) -> bool:
     if raw in {"0", "false", "no", "off"}:
         return False
     return default
+
+
+def _env_str(name: str, default: str) -> str:
+    raw = os.getenv(name, "").strip()
+    return raw or default
+
+
+def _parse_daily_tip_schedule(value: str) -> dict[str, str]:
+    schedule: dict[str, str] = {}
+    for chunk in value.split(","):
+        piece = chunk.strip()
+        if not piece or "=" not in piece:
+            continue
+        time_value, slot_value = piece.split("=", 1)
+        time_text = time_value.strip()
+        slot_text = slot_value.strip().lower()
+        if slot_text not in {"morning", "midday", "dinner"}:
+            continue
+        try:
+            normalized = datetime.strptime(time_text, "%H:%M").strftime("%H:%M")
+        except ValueError:
+            continue
+        schedule[normalized] = slot_text
+    return schedule
 
 
 async def _health_reminders_loop() -> None:
@@ -367,6 +407,75 @@ async def _kids_reminders_loop() -> None:
         sleep_for = max(1, interval_seconds - elapsed_seconds)
         try:
             await asyncio.wait_for(_kids_reminders_stop_event.wait(), timeout=sleep_for)
+        except asyncio.TimeoutError:
+            continue
+
+
+async def _daily_tips_loop() -> None:
+    enabled = _env_bool("DAILY_TIPS_SCHEDULER_ENABLED", False)
+    if not enabled:
+        daily_tips_logger.info("daily tips scheduler disabled via env")
+        return
+
+    interval_seconds = max(30, _env_int("DAILY_TIPS_INTERVAL_SECONDS", 60))
+    admin_user_id = _env_int("DAILY_TIPS_ADMIN_USER_ID", 1)
+    tz_name = _env_str("DAILY_TIPS_TIMEZONE", "Australia/Adelaide")
+    schedule = _parse_daily_tip_schedule(
+        _env_str("DAILY_TIPS_RUN_TIMES", "08:00=morning,13:00=midday,16:30=dinner")
+    )
+    try:
+        run_zone = ZoneInfo(tz_name)
+    except Exception:  # noqa: BLE001
+        run_zone = ZoneInfo("Australia/Adelaide")
+        tz_name = "Australia/Adelaide"
+
+    if not schedule:
+        daily_tips_logger.warning("daily tips scheduler disabled: no valid run times configured")
+        return
+
+    daily_tips_logger.info(
+        "daily tips scheduler started (interval=%ss, admin_user_id=%s, timezone=%s, schedule=%s)",
+        interval_seconds,
+        admin_user_id,
+        tz_name,
+        schedule,
+    )
+
+    while not _daily_tips_stop_event.is_set():
+        started = time.perf_counter()
+        try:
+            now_local = datetime.now(run_zone)
+            run_time = now_local.strftime("%H:%M")
+            slot = schedule.get(run_time)
+            if slot:
+                db_module._ensure_engine()
+                db = db_module.SessionLocal()
+                try:
+                    result = RunDailyTips(
+                        db,
+                        admin_user_id=admin_user_id,
+                        run_date=now_local.date(),
+                        run_time=run_time,
+                        slot=slot,
+                    )
+                    if result.get("Generated", 0) or result.get("Errors", 0):
+                        daily_tips_logger.info(
+                            "daily tips run complete slot=%s processed=%s generated=%s skipped=%s errors=%s",
+                            result.get("Slot"),
+                            result.get("ProcessedUsers", 0),
+                            result.get("Generated", 0),
+                            result.get("Skipped", 0),
+                            result.get("Errors", 0),
+                        )
+                finally:
+                    db.close()
+        except Exception:  # noqa: BLE001
+            daily_tips_logger.exception("daily tips scheduler run failed")
+
+        elapsed_seconds = int(time.perf_counter() - started)
+        sleep_for = max(1, interval_seconds - elapsed_seconds)
+        try:
+            await asyncio.wait_for(_daily_tips_stop_event.wait(), timeout=sleep_for)
         except asyncio.TimeoutError:
             continue
 

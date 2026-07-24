@@ -1,0 +1,1 @@
+"""Health MCP integration endpoints."""

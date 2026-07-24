@@ -7,6 +7,22 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		FEEDFACE000000000000B002 /* ChoresWidgetBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEEDFACE000000000000F002 /* ChoresWidgetBundle.swift */; };
+		FEEDFACE000000000000B003 /* ChoresWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEEDFACE000000000000F003 /* ChoresWidget.swift */; };
+		FEEDFACE000000000000B004 /* ChoresProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEEDFACE000000000000F004 /* ChoresProvider.swift */; };
+		FEEDFACE000000000000B005 /* CompleteChoreIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEEDFACE000000000000F005 /* CompleteChoreIntent.swift */; };
+		FEEDFACE000000000000B006 /* WidgetSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEEDFACE000000000000F006 /* WidgetSession.swift */; };
+		FEEDFACE000000000000B101 /* AppGroup.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEEDFACE000000000000F001 /* AppGroup.swift */; };
+		FEEDFACE000000000000B102 /* AuthTokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304066 /* AuthTokens.swift */; };
+		FEEDFACE000000000000B103 /* ApiError.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304068 /* ApiError.swift */; };
+		FEEDFACE000000000000B104 /* EnvironmentStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304105 /* EnvironmentStore.swift */; };
+		FEEDFACE000000000000B105 /* ApiClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304060 /* ApiClient.swift */; };
+		FEEDFACE000000000000B106 /* KidsApi.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304311 /* KidsApi.swift */; };
+		FEEDFACE000000000000B107 /* KidsModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304313 /* KidsModels.swift */; };
+		FEEDFACE000000000000B108 /* TokenStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304064 /* TokenStore.swift */; };
+		FEEDFACE000000000000B109 /* KidsEmoji.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304319 /* KidsEmoji.swift */; };
+		FEEDFACE000000000000B201 /* AppGroup.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEEDFACE000000000000F001 /* AppGroup.swift */; };
+		FEEDFACE000000000000B301 /* ChoresWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = FEEDFACE000000000000F009 /* ChoresWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		0444EBDFEB2E4253BD01C123 /* ResetPasswordView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CE5AD4D6E0D4E0F903830E8 /* ResetPasswordView.swift */; };
 		084228AC801D405BB0776551 /* ShoppingFormatters.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22C4922A42B64052906E0078 /* ShoppingFormatters.swift */; };
 		09AD406B2A0C473FAC729C49 /* SettingsAppearanceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C63A64CFC70B435887494EB5 /* SettingsAppearanceView.swift */; };
@@ -94,7 +110,48 @@
 		FFC30A0DD3C444E0AB9E57B6 /* ShoppingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E5D10EC57FD4029A896F625 /* ShoppingView.swift */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		FEEDFACE000000000000A009 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A1B2C3D4E5F6071829304130 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = FEEDFACE000000000000A001;
+			remoteInfo = ChoresWidget;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		FEEDFACE000000000000A004 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				FEEDFACE000000000000B301 /* ChoresWidget.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		FEEDFACE000000000000A008 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = FEEDFACE000000000000A001 /* ChoresWidget */;
+			targetProxy = FEEDFACE000000000000A009 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin PBXFileReference section */
+		FEEDFACE000000000000F001 /* AppGroup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppGroup.swift; path = Shared/AppGroup.swift; sourceTree = "<group>"; };
+		FEEDFACE000000000000F002 /* ChoresWidgetBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChoresWidgetBundle.swift; sourceTree = "<group>"; };
+		FEEDFACE000000000000F003 /* ChoresWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChoresWidget.swift; sourceTree = "<group>"; };
+		FEEDFACE000000000000F004 /* ChoresProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChoresProvider.swift; sourceTree = "<group>"; };
+		FEEDFACE000000000000F005 /* CompleteChoreIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompleteChoreIntent.swift; sourceTree = "<group>"; };
+		FEEDFACE000000000000F006 /* WidgetSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetSession.swift; sourceTree = "<group>"; };
+		FEEDFACE000000000000F007 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		FEEDFACE000000000000F008 /* ChoresWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ChoresWidget.entitlements; sourceTree = "<group>"; };
+		FEEDFACE000000000000F009 /* ChoresWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ChoresWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		001B876F897B4098800F2DE4 /* LifeAdminRecordsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LifeAdminRecordsView.swift; sourceTree = "<group>"; };
 		048982A30E6A4243A6B49055 /* HealthHistoryDayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthHistoryDayView.swift; sourceTree = "<group>"; };
 		0DD27596F9894B8492ACCFA3 /* SettingsTasksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsTasksView.swift; sourceTree = "<group>"; };
@@ -194,6 +251,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		FEEDFACE000000000000A003 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -208,6 +272,7 @@
 				A1B2C3D4E5F6071829304094 /* Store */,
 				A1B2C3D4E5F6071829304095 /* Views */,
 				A1B2C3D4E5F6071829304050 /* EverdayIOSApp.swift */,
+				FEEDFACE000000000000F001 /* AppGroup.swift */,
 			);
 			path = EverdayIOS;
 			sourceTree = "<group>";
@@ -216,6 +281,7 @@
 			isa = PBXGroup;
 			children = (
 				A1B2C3D4E5F6071829304074 /* EverdayIOS.app */,
+				FEEDFACE000000000000F009 /* ChoresWidget.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -343,8 +409,23 @@
 			isa = PBXGroup;
 			children = (
 				A1B2C3D4E5F6071829304090 /* EverdayIOS */,
+				FEEDFACE000000000000C001 /* ChoresWidget */,
 				A1B2C3D4E5F6071829304091 /* Products */,
 			);
+			sourceTree = "<group>";
+		};
+		FEEDFACE000000000000C001 /* ChoresWidget */ = {
+			isa = PBXGroup;
+			children = (
+				FEEDFACE000000000000F002 /* ChoresWidgetBundle.swift */,
+				FEEDFACE000000000000F003 /* ChoresWidget.swift */,
+				FEEDFACE000000000000F004 /* ChoresProvider.swift */,
+				FEEDFACE000000000000F005 /* CompleteChoreIntent.swift */,
+				FEEDFACE000000000000F006 /* WidgetSession.swift */,
+				FEEDFACE000000000000F007 /* Info.plist */,
+				FEEDFACE000000000000F008 /* ChoresWidget.entitlements */,
+			);
+			path = ChoresWidget;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -357,10 +438,12 @@
 				A1B2C3D4E5F6071829304120 /* Sources */,
 				A1B2C3D4E5F6071829304121 /* Frameworks */,
 				A1B2C3D4E5F6071829304122 /* Resources */,
+				FEEDFACE000000000000A004 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				FEEDFACE000000000000A008 /* PBXTargetDependency */,
 			);
 			name = EverdayIOS;
 			packageProductDependencies = (
@@ -369,6 +452,22 @@
 			productName = EverdayIOS;
 			productReference = A1B2C3D4E5F6071829304074 /* EverdayIOS.app */;
 			productType = "com.apple.product-type.application";
+		};
+		FEEDFACE000000000000A001 /* ChoresWidget */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = FEEDFACE000000000000A007 /* Build configuration list for PBXNativeTarget "ChoresWidget" */;
+			buildPhases = (
+				FEEDFACE000000000000A002 /* Sources */,
+				FEEDFACE000000000000A003 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = ChoresWidget;
+			productName = ChoresWidget;
+			productReference = FEEDFACE000000000000F009 /* ChoresWidget.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -381,6 +480,10 @@
 				TargetAttributes = {
 					A1B2C3D4E5F6071829304110 = {
 						CreatedOnToolsVersion = 15.0;
+					};
+					FEEDFACE000000000000A001 = {
+						CreatedOnToolsVersion = 15.0;
+						ProvisioningStyle = Automatic;
 					};
 				};
 			};
@@ -401,6 +504,7 @@
 			projectRoot = "";
 			targets = (
 				A1B2C3D4E5F6071829304110 /* EverdayIOS */,
+				FEEDFACE000000000000A001 /* ChoresWidget */,
 			);
 		};
 /* End PBXProject section */
@@ -422,6 +526,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				A1B2C3D4E5F6071829304051 /* EverdayIOSApp.swift in Sources */,
+				FEEDFACE000000000000B201 /* AppGroup.swift in Sources */,
 				A1B2C3D4E5F6071829304053 /* RootView.swift in Sources */,
 				A1B2C3D4E5F6071829304055 /* LoginView.swift in Sources */,
 				F2C3147D9A3B4E17B8C5D601 /* CreateAccountView.swift in Sources */,
@@ -504,6 +609,27 @@
 				34A6C5AC95B7E892E904BF19 /* KidsAdminView.swift in Sources */,
 				B92E9FB0AC3C18C83B88B785 /* KidsAdminModels.swift in Sources */,
 				C6EB036294E71BB8385953CF /* KidsAdminApi.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		FEEDFACE000000000000A002 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				FEEDFACE000000000000B002 /* ChoresWidgetBundle.swift in Sources */,
+				FEEDFACE000000000000B003 /* ChoresWidget.swift in Sources */,
+				FEEDFACE000000000000B004 /* ChoresProvider.swift in Sources */,
+				FEEDFACE000000000000B005 /* CompleteChoreIntent.swift in Sources */,
+				FEEDFACE000000000000B006 /* WidgetSession.swift in Sources */,
+				FEEDFACE000000000000B101 /* AppGroup.swift in Sources */,
+				FEEDFACE000000000000B102 /* AuthTokens.swift in Sources */,
+				FEEDFACE000000000000B103 /* ApiError.swift in Sources */,
+				FEEDFACE000000000000B104 /* EnvironmentStore.swift in Sources */,
+				FEEDFACE000000000000B105 /* ApiClient.swift in Sources */,
+				FEEDFACE000000000000B106 /* KidsApi.swift in Sources */,
+				FEEDFACE000000000000B107 /* KidsModels.swift in Sources */,
+				FEEDFACE000000000000B108 /* TokenStore.swift in Sources */,
+				FEEDFACE000000000000B109 /* KidsEmoji.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -663,6 +789,60 @@
 			};
 			name = Release;
 		};
+		FEEDFACE000000000000A005 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = ChoresWidget/ChoresWidget.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 2;
+				DEVELOPMENT_TEAM = 8G8SGDTGM9;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = ChoresWidget/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.6;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.1.2;
+				PRODUCT_BUNDLE_IDENTIFIER = au.batserver.everday.ios.choreswidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		FEEDFACE000000000000A006 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = ChoresWidget/ChoresWidget.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 2;
+				DEVELOPMENT_TEAM = 8G8SGDTGM9;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = ChoresWidget/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.6;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.1.2;
+				PRODUCT_BUNDLE_IDENTIFIER = au.batserver.everday.ios.choreswidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-Owholemodule";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -683,6 +863,15 @@
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
+		};
+		FEEDFACE000000000000A007 /* Build configuration list for PBXNativeTarget "ChoresWidget" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				FEEDFACE000000000000A005 /* Debug */,
+				FEEDFACE000000000000A006 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
 

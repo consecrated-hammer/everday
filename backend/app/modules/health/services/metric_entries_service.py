@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.modules.health.models import DailyLog as DailyLogModel
 from app.modules.health.models import MetricEntry as MetricEntryModel
 
-MetricType = Literal["steps", "weight"]
+MetricType = Literal["steps", "weight", "sleep", "resting_heart_rate"]
 MetricSource = Literal["user", "automation"]
 
 
@@ -42,6 +42,21 @@ def ApplyMetricToDailyLog(
         record.WeightKg = Value
         record.WeightUpdatedAt = OccurredAt
         record.WeightSource = Source
+        return True
+    if MetricTypeValue == "sleep":
+        normalized = round(Value, 2)
+        existing = record.SleepUpdatedAt
+        existing_source = record.SleepSource
+        if Source == "automation":
+            if existing_source == "user":
+                return False
+            if existing_source == "automation" and existing is not None and OccurredAt <= existing:
+                return False
+        elif existing_source == "user" and existing is not None and OccurredAt <= existing:
+            return False
+        record.SleepHours = normalized
+        record.SleepUpdatedAt = OccurredAt
+        record.SleepSource = Source
         return True
     return False
 
