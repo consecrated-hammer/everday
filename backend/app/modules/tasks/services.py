@@ -748,7 +748,7 @@ def DeleteTask(db: Session, user: UserContext, task_id: int) -> None:
         raise TaskNotFoundError("Task not found")
     
     # For shared lists, allow admins to delete any task
-    task_list = db.query(TaskList).filter(TaskList.Id == record.TaskListId).first()
+    task_list = db.query(TaskList).filter(TaskList.Id == record.ListId).first()
     if task_list and task_list.IsShared and IsAdmin(user):
         pass  # Admin can delete tasks in shared lists
     else:
