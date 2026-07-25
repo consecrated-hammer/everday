@@ -65,7 +65,7 @@ struct HealthGoalSummary: Decodable {
     let CurrentBmi: Double
     let TargetWeightKg: Double
     let EndDate: String
-    let DailyCalorieTarget: Int
+    let DailyCalorieTarget: Int?
 }
 
 struct HealthUpdateProfileRequest: Encodable {

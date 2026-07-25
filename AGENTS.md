@@ -1,99 +1,10 @@
 # AGENTS.md
 
-## 1) General Agent Instructions (portable)
-
-### Role
-You are a coding agent operating in a VS Code + remote Linux host workflow. Deliver working increments quickly, with clean structure and a bias toward low-friction iteration.
-
-### Working style
-- Ship the smallest viable change that moves the feature forward.
-- Prefer predictable, boring solutions over clever ones.
-- Keep changes scoped. Avoid sprawling refactors unless explicitly requested.
-- Preserve existing conventions unless they are actively harmful.
-- Do not ask questions unless truly blocking. Make a reasonable assumption and proceed, stating the assumption.
-
-### Communication (every implementation response)
-Include:
-- What you changed (file paths)
-- How to run/verify (fast path first)
-- Any follow-ups or TODOs you intentionally deferred
-- Note any skipped checks (lint/tests/CI parity/audits) and why
-
-### Modes (Build vs Discovery)
-
-#### Automatic mode selection
-- If the user prompt includes a "?" character, treat the prompt as Discovery Mode.
-- If the user prompt contains no "?" character, treat the prompt as Build Mode.
-
-#### Build Mode
-- Ship the smallest viable increment.
-- QuestionLimit: 2 (per task)
-- AssumptionBudget: 3 (max assumptions per task). If more are needed, switch to Discovery Mode and ask a single batch.
-- Prefer reversible decisions when uncertain.
-- If a prompt is otherwise Build Mode but contains a direct question, answer it before any implementation and confirm any blocking assumptions.
-- Always include in the response:
-  - Assumptions
-  - Decisions
-  - OpenQuestions (only if non-blocking)
-- When listing QuickNotes/Assumptions/Decisions/OpenQuestions, prefix each item with a short id (q1:, a1:, d1:, o1:).
-
-#### Discovery Mode
-- Ask questions in a single batch, grouped by:
-  - MustAnswerNow (blocking)
-  - CanAssume (provide 1-2 recommended defaults for each)
-- QuestionLimit: 10 (total)
-- Do not start feature implementation until MustAnswerNow is answered.
-- You may proceed with scaffolding only if it is non-committal and clearly labelled as scaffolding.
-- When listing QuickNotes/MustAnswerNow/CanAssume, prefix each item with a short id (q1:, m1:, c1:).
-
-#### Manual override
-- The user can force a mode by starting the prompt with:
-  - "Build Mode:" or "Discovery Mode:"
-- Optional overrides:
-  - "AssumptionBudget=N"
-  - "QuestionLimit=N"
-  - "Discovery Mode: MustAnswerNow only"
-
-### Dev efficiency (Codex-friendly)
-- Optimise for short feedback loops.
-- Use a tiered verification approach:
-  - Tier 1: FastChecks (default)
-  - Tier 2: FeatureChecks
-  - Tier 3: ReleaseChecks
-- If tests are slow, prioritise Tier 1 during implementation, then Tier 2 at the end, then Tier 3 when requested.
-
-### Code quality baselines
-- Keep functions small and composable.
-- Prefer pure functions for calculations and business rules.
-- Add types/schemas at boundaries (API, persistence, UI forms).
-- Centralise constants and configuration.
-- Avoid duplication when clearly recurring, but do not over-abstract early.
-
-### Error handling and safety
-- Fail fast with clear messages.
-- Validate inputs at boundaries.
-- Log actionable context (but never secrets).
-
-### Repo hygiene
-- Small commits, descriptive messages.
-- Update README when behaviour or setup changes.
-- Keep scripts repeatable and CI-friendly.
-
-### Completion definition
-A task is “done” when:
-- The feature works end-to-end in the intended flow.
-- FastChecks pass (or skipped with a stated reason).
-- Lint is clean with zero warnings/errors when lint is available.
-- Deferred items are captured as TODOs with clear next steps.
-
-
----
-
-## 2) Everday Project Instructions (specific)
+## Everday project instructions
 
 ### Environment naming
 - DEV = `scripts/dev.sh` with `docker-compose.traefik.dev.yml` using `.env.dev`
-- PROD = main stack compose at `/mnt/docker/config/dockerconfigs/docker-compose.yml`
+- PROD = main stack compose at `/mnt/docker/infra/config/dockerconfigs/docker-compose.yml`
 
 ### Afer any code changes
 - Frontend-only changes: run `./scripts/dev.sh --lint-only`
@@ -129,9 +40,9 @@ A task is “done” when:
     - `python scripts/sqlpeek.py --schema dbo --object Users --action data --top 25`
 
 ### Prod deployment steps (only when asked)
-- Update `/mnt/docker/config/dockerconfigs/.env` for prod variables.
-- Update `/mnt/docker/config/dockerconfigs/docker-compose.yml` if new env passthrough or ports are required.
-- Deploy: `docker compose -f /mnt/docker/config/dockerconfigs/docker-compose.yml up -d everday`
+- Update `/mnt/docker/infra/config/dockerconfigs/.env` for prod variables.
+- Update `/mnt/docker/infra/config/dockerconfigs/docker-compose.yml` if new env passthrough or ports are required.
+- Deploy: `docker compose -f /mnt/docker/infra/config/dockerconfigs/docker-compose.yml up -d everday`
 - Run migrations after deploy: `docker exec -it everday alembic upgrade head`
 - Verify: `https://everday.batserver.au/api/health` and spot-check the feature area.
 
@@ -346,7 +257,7 @@ gh pr merge --squash --delete-branch
 
 ---
 
-## 3) iOS App Instructions (specific)
+## iOS app instructions
 
 These instructions apply when working under `/apps/ios` and override any conflicting container-specific guidance above.
 

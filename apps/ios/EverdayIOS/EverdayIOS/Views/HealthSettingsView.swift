@@ -1019,10 +1019,6 @@ private struct GoalWizardView: View {
                 Text(formattedDate(goal.EndDate))
                     .foregroundStyle(.secondary)
             }
-            LabeledContent("Daily calories") {
-                Text("\(goal.DailyCalorieTarget)")
-                    .foregroundStyle(.secondary)
-            }
         }
     }
 

@@ -13,7 +13,7 @@ Usage examples:
 
 Flags:
   --env-file PATH
-    Load environment variables from PATH (default: /mnt/docker/web/everday/.env.dev).
+    Load environment variables from PATH (default: /mnt/docker/apps/everday/.env.dev).
   --list-schemas
     List non-system schemas and exit.
   --list-objects
@@ -49,7 +49,7 @@ except Exception:
 
 
 # Defaults that can be customized per environment.
-DEFAULT_ENV_PATH = "/mnt/docker/web/everday/.env.dev"
+DEFAULT_ENV_PATH = "/mnt/docker/apps/everday/.env.dev"
 DEFAULT_TOP_ROWS = 10
 MAX_TOP_ROWS = 5000
 SQL_TYPE_DATETIMEOFFSET = -155

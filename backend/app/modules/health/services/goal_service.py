@@ -162,7 +162,6 @@ def BuildGoalSummary(
         WeightDeltaKg=Plan.WeightDeltaKg,
         DurationDays=Plan.DurationDays,
         RemainingDays=RemainingDays,
-        DailyCalorieTarget=Plan.DailyCalorieTarget,
         DailyCalorieDelta=Plan.DailyCalorieDelta,
         Status=Status,
         CompletedAt=CompletedAt,

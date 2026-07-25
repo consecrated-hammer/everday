@@ -28,6 +28,11 @@ export const GetAiRecommendations = (payload) =>
     method: "POST",
     body: payload ? JSON.stringify(payload) : undefined
   });
+export const SetHealthGoal = (payload) =>
+  RequestJson(`${Health}/settings/goal`, {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
 export const FetchRecommendationHistory = () =>
   RequestJson(`${Health}/settings/ai-recommendations/history`);
 
