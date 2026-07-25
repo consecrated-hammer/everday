@@ -223,14 +223,7 @@ def ImportHealthAutoExportPayload(
     if weight_updated:
         UpdateUserWeightFromLatestLog(db, UserId)
 
-    logger.debug(
-        "health import applied user_id=%s steps_updated=%s weight_updated=%s sleep_updated=%s resting_heart_rate_updated=%s",
-        UserId,
-        steps_updated,
-        weight_updated,
-        sleep_updated,
-        resting_heart_rate_updated,
-    )
+    logger.debug("health import applied")
     return HaeImportSummary(
         ImportId=import_id,
         MetricsCount=len(metrics),

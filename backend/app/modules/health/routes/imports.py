@@ -56,15 +56,7 @@ async def ImportHaeRoute(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid payload")
 
     result = ImportHealthAutoExportPayload(db, user_id, payload)
-    logger.info(
-        "health import processed user_id=%s metrics=%s workouts=%s steps_updated=%s weight_updated=%s resting_heart_rate_updated=%s",
-        user_id,
-        result.MetricsCount,
-        result.WorkoutsCount,
-        result.StepsUpdated,
-        result.WeightUpdated,
-        result.RestingHeartRateUpdated,
-    )
+    logger.info("health import processed")
     return HaeImportResponse(
         ImportId=result.ImportId,
         MetricsCount=result.MetricsCount,
