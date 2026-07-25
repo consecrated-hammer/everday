@@ -284,7 +284,6 @@ class GoalSummary(BaseModel):
     WeightDeltaKg: float
     DurationDays: int
     RemainingDays: int
-    DailyCalorieTarget: int
     DailyCalorieDelta: float
     Status: str
     CompletedAt: datetime | None = None

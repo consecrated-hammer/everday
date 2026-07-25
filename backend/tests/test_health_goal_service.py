@@ -3,7 +3,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock
 
 from app.modules.health.schemas import GoalRecommendationInput, GoalType
-from app.modules.health.services.goal_service import AddMonths, BuildGoalPlan, IsGoalMet
+from app.modules.health.services.goal_service import AddMonths, BuildGoalPlan, BuildGoalSummary, IsGoalMet
 from app.modules.health.services.settings_service import _PersistGoalPlan
 
 
@@ -28,6 +28,8 @@ def test_build_goal_plan_lose_weight_targets_upper_bmi():
     assert round(plan.TargetBmi, 1) == 24.9
     assert plan.TargetWeightKg < plan.CurrentWeightKg
     assert plan.DailyCalorieDelta < 0
+    summary = BuildGoalSummary(plan, CompletedAt=None, Today=date(2024, 1, 1))
+    assert "DailyCalorieTarget" not in summary.model_dump()
 
 
 def test_build_goal_plan_maintain_keeps_current_bmi():
