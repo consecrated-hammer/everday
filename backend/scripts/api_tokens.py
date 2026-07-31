@@ -7,6 +7,7 @@ output to a committed file or paste it into logs.
 from __future__ import annotations
 
 import argparse
+import os
 from datetime import datetime, timezone
 
 import app.db as db_module
@@ -51,7 +52,9 @@ def main() -> None:
                 db, user_id, args.name, {HEALTH_DASHBOARD_READ_SCOPE}, expires_at=expires_at
             )
             print(f"Token ID: {record.Id}")
-            print(f"Token: {plaintext}")
+            # This is an intentional one-time operator hand-off, not application logging.
+            # Write directly to the invoking terminal so the token never reaches a logger.
+            os.write(1, f"Token: {plaintext}\n".encode("utf-8"))
             return
         if args.command == "list":
             for record in ListApiTokens(db, user_id):
