@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, Column, Date, DateTime, ForeignKey, Integer, Numeric, String
+from sqlalchemy import Boolean, Column, Date, DateTime, ForeignKey, Integer, Numeric, String, Text
 from sqlalchemy.orm import relationship
 
 from app.db import Base
@@ -76,3 +76,21 @@ class PasswordResetToken(Base):
     CreatedAt = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
 
     User = relationship("User", back_populates="PasswordResetTokens")
+
+
+class ApiToken(Base):
+    __tablename__ = "api_tokens"
+    __table_args__ = {"schema": "auth"}
+
+    Id = Column(String(36), primary_key=True)
+    UserId = Column(Integer, ForeignKey("auth.users.Id"), nullable=False, index=True)
+    Name = Column(String(100), nullable=False)
+    TokenHash = Column(String(255), nullable=False)
+    LookupHash = Column(String(64), nullable=False, unique=True, index=True)
+    Scopes = Column(Text, nullable=False)
+    CreatedAt = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    ExpiresAt = Column(DateTime(timezone=True))
+    LastUsedAt = Column(DateTime(timezone=True))
+    RevokedAt = Column(DateTime(timezone=True))
+
+    User = relationship("User")

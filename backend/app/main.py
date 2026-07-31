@@ -9,6 +9,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -33,6 +34,8 @@ from app.modules.tasks.router import router as tasks_router
 from app.modules.integrations.google.router import router as google_router
 from app.modules.integrations.gmail.router import router as gmail_router
 from app.modules.integrations.health_mcp.router import router as health_mcp_router
+from app.modules.health.routes.dashboard_api import router as health_dashboard_api_router
+from app.modules.auth.api_tokens import ApiTokenRequestError
 from app.modules.integrations.gmail.models import GmailIntegration
 from app.modules.notes.routes.notes import router as notes_router
 from app.modules.health.services.reminders_service import RunDailyHealthReminders
@@ -63,6 +66,11 @@ _daily_tips_task: asyncio.Task | None = None
 _daily_tips_stop_event = asyncio.Event()
 _gmail_intake_task: asyncio.Task | None = None
 _gmail_intake_stop_event = asyncio.Event()
+
+
+@app.exception_handler(ApiTokenRequestError)
+async def api_token_request_error(_request: Request, exc: ApiTokenRequestError) -> JSONResponse:
+    return JSONResponse(status_code=exc.status_code, content={"error": {"code": exc.code, "message": exc.message}})
 
 allowed_origins = os.getenv("ALLOWED_ORIGINS", "").strip()
 if not allowed_origins:
@@ -203,6 +211,7 @@ app.include_router(tasks_router)
 app.include_router(google_router)
 app.include_router(gmail_router)
 app.include_router(health_mcp_router)
+app.include_router(health_dashboard_api_router)
 app.include_router(notes_router)
 
 class SpaStaticFiles(StaticFiles):
