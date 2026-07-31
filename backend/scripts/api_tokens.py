@@ -8,7 +8,12 @@ from __future__ import annotations
 
 import argparse
 import os
+from pathlib import Path
+import sys
 from datetime import datetime, timezone
+
+# Make the copied /app/scripts entrypoint runnable without external PYTHONPATH setup.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import app.db as db_module
 from app.modules.auth.api_tokens import CreateApiToken, HEALTH_DASHBOARD_READ_SCOPE, ListApiTokens, RevokeApiToken
