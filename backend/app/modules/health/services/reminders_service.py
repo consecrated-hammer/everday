@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from sqlalchemy.orm import Session
@@ -20,6 +21,7 @@ from app.modules.health.utils.defaults import (
     DefaultWeightReminderTime,
 )
 from app.modules.notifications.services import CreateNotification
+from app.modules.health.services.discord_service import ResolveWebhookUrl, SendDiscordMessage
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +34,12 @@ MealTypeLabels = {
     "Snack3": "Snack 3",
 }
 DefaultReminderZone = ZoneInfo(DefaultReminderTimeZone)
+
+MainMealTypes = ("Breakfast", "Lunch", "Dinner")
+YesterdayReminderType = "YesterdayIncomplete"
+DefaultYesterdayWeekdayTime = "07:00"
+DefaultYesterdayWeekendTime = "09:00"
+DefaultHealthDashboardBaseUrl = "https://health.bunella.au"
 
 
 def _IsValidTime(value: str | None) -> bool:
@@ -449,6 +457,201 @@ def RunDailyHealthReminders(
             eligible_users += 1
         if user_processed:
             processed_users += 1
+
+    return {
+        "EligibleUsers": eligible_users,
+        "ProcessedUsers": processed_users,
+        "NotificationsSent": notifications_sent,
+        "Skipped": skipped,
+        "Errors": errors,
+    }
+
+
+def _EnvBool(name: str, default: bool) -> bool:
+    raw = os.getenv(name, "").strip().lower()
+    if raw in {"1", "true", "yes", "on"}:
+        return True
+    if raw in {"0", "false", "no", "off"}:
+        return False
+    return default
+
+
+def _EnvTime(name: str, default: str) -> str:
+    normalized = _NormalizeTime(os.getenv(name, "").strip() or None)
+    return normalized or default
+
+
+def YesterdayReminderTimeForDate(run_date: date) -> str:
+    """Return the local send time for the day the reminder fires."""
+    if run_date.weekday() >= 5:
+        return _EnvTime("HEALTH_YESTERDAY_REMINDER_WEEKEND_TIME", DefaultYesterdayWeekendTime)
+    return _EnvTime("HEALTH_YESTERDAY_REMINDER_WEEKDAY_TIME", DefaultYesterdayWeekdayTime)
+
+
+def _MissingMainMeals(db: Session, user_id: int, log_date: date) -> list[str]:
+    log = _GetDailyLog(db, user_id, log_date)
+    if not log:
+        return list(MainMealTypes)
+    logged = {
+        row[0]
+        for row in db.query(MealEntry.MealType)
+        .filter(MealEntry.DailyLogId == log.DailyLogId)
+        .distinct()
+        .all()
+    }
+    return [meal_type for meal_type in MainMealTypes if meal_type not in logged]
+
+
+def _FormatMissingMealList(missing: list[str]) -> str:
+    labels = [_FormatMealLabel(meal_type) for meal_type in missing]
+    if len(labels) == 1:
+        return labels[0]
+    return f"{', '.join(labels[:-1])} and {labels[-1]}"
+
+
+def FormatYesterdayReminderMessage(log_date: date, missing: list[str]) -> str:
+    """Build the Discord message body for an incomplete previous day."""
+    day_text = f"{log_date.strftime('%A')} {log_date.day} {log_date.strftime('%B')}"
+    base_url = (
+        os.getenv("HEALTH_DASHBOARD_BASE_URL", "").strip() or DefaultHealthDashboardBaseUrl
+    ).rstrip("/")
+    return (
+        f"**Yesterday's log is incomplete** ({day_text})\n"
+        f"Not logged: {_FormatMissingMealList(missing)}\n"
+        f"{base_url}/log?date={log_date.isoformat()}"
+    )
+
+
+def RunYesterdayLogReminders(
+    db: Session,
+    run_date: date | None = None,
+    run_time: str | None = None,
+) -> dict:
+    """Send each parent a Discord reminder when their previous day is missing main meals.
+
+    Fires once per user per day, at 07:00 local on weekdays and 09:00 local at weekends.
+    Only Breakfast, Lunch, and Dinner are considered; snacks are ignored.
+    """
+    if not _EnvBool("HEALTH_YESTERDAY_REMINDER_ENABLED", True):
+        return {
+            "EligibleUsers": 0,
+            "ProcessedUsers": 0,
+            "NotificationsSent": 0,
+            "Skipped": 0,
+            "Errors": 0,
+        }
+
+    now = NowUtc()
+    parent_users = db.query(User).filter(User.Role == "Parent").all()
+    parent_ids = [user.Id for user in parent_users]
+    settings_rows = (
+        db.query(TaskSettings).filter(TaskSettings.UserId.in_(parent_ids)).all()
+        if parent_ids
+        else []
+    )
+    timezone_by_user_id = {
+        row.UserId: row.OverdueReminderTimeZone
+        for row in settings_rows
+        if row.OverdueReminderTimeZone
+    }
+
+    eligible_users = 0
+    processed_users = 0
+    notifications_sent = 0
+    skipped = 0
+    errors = 0
+
+    for user in parent_users:
+        settings = EnsureSettingsForUser(db, user.Id)
+        effective_zone = _ResolveRunZone(
+            timezone_by_user_id.get(user.Id) or settings.ReminderTimeZone
+        )
+        effective_date, effective_time = _ResolveEffectiveRunDateTime(
+            now_utc=now,
+            run_date=run_date,
+            run_time=run_time,
+            run_zone=effective_zone,
+        )
+        if not _TimeMatches(effective_time, YesterdayReminderTimeForDate(effective_date)):
+            continue
+
+        eligible_users += 1
+        processed_users += 1
+        log_date = effective_date - timedelta(days=1)
+
+        if _AlreadyRan(db, user.Id, effective_date, effective_time, YesterdayReminderType, ""):
+            skipped += 1
+            continue
+
+        try:
+            webhook_url = ResolveWebhookUrl(user.Id, user.Username)
+            if not webhook_url:
+                logger.warning(
+                    "No Discord webhook configured for user %s, skipping yesterday reminder",
+                    user.Id,
+                )
+                _RecordRun(
+                    db,
+                    user.Id,
+                    effective_date,
+                    effective_time,
+                    YesterdayReminderType,
+                    "",
+                    result="unconfigured",
+                    notification_sent=False,
+                    error_message="No Discord webhook configured for this user.",
+                )
+                skipped += 1
+                continue
+
+            missing = _MissingMainMeals(db, user.Id, log_date)
+            if not missing:
+                _RecordRun(
+                    db,
+                    user.Id,
+                    effective_date,
+                    effective_time,
+                    YesterdayReminderType,
+                    "",
+                    result="skipped",
+                    notification_sent=False,
+                )
+                skipped += 1
+                continue
+
+            SendDiscordMessage(webhook_url, FormatYesterdayReminderMessage(log_date, missing))
+            _RecordRun(
+                db,
+                user.Id,
+                effective_date,
+                effective_time,
+                YesterdayReminderType,
+                "",
+                result="sent",
+                notification_sent=True,
+            )
+            notifications_sent += 1
+
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Yesterday log reminder failed for user %s", user.Id)
+            errors += 1
+            # Record under "Error" rather than the reminder type, so a transient
+            # Discord failure does not consume this user's slot for the day and
+            # a later scheduler tick can still deliver the reminder. Retrying
+            # within the same minute would collide on the run's unique key, so
+            # only the first failure of that minute is recorded.
+            if not _AlreadyRan(db, user.Id, effective_date, effective_time, "Error", ""):
+                _RecordRun(
+                    db,
+                    user.Id,
+                    effective_date,
+                    effective_time,
+                    reminder_type="Error",
+                    meal_type="",
+                    result="error",
+                    notification_sent=False,
+                    error_message=str(exc),
+                )
 
     return {
         "EligibleUsers": eligible_users,

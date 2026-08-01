@@ -27,7 +27,10 @@ from app.modules.health.services.settings_service import (
     UpdateSettings,
     UpdateUserProfile,
 )
-from app.modules.health.services.reminders_service import RunDailyHealthReminders
+from app.modules.health.services.reminders_service import (
+    RunDailyHealthReminders,
+    RunYesterdayLogReminders,
+)
 from app.modules.health.utils.rbac import IsParent
 
 router = APIRouter()
@@ -140,6 +143,25 @@ def RunHealthRemindersRoute(
         result = RunDailyHealthReminders(
             db,
             admin_user_id=user.Id,
+            run_date=payload.RunDate if payload else None,
+            run_time=payload.RunTime if payload else None,
+        )
+        return HealthReminderRunResponse(**result)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.post("/reminders/run-yesterday-check", response_model=HealthReminderRunResponse)
+def RunYesterdayLogRemindersRoute(
+    payload: HealthReminderRunRequest | None = None,
+    db: Session = Depends(GetDb),
+    user: UserContext = Depends(RequireModuleRole("health", write=True)),
+) -> HealthReminderRunResponse:
+    if not _IsAdmin(user):
+        raise HTTPException(status_code=403, detail="Access denied")
+    try:
+        result = RunYesterdayLogReminders(
+            db,
             run_date=payload.RunDate if payload else None,
             run_time=payload.RunTime if payload else None,
         )

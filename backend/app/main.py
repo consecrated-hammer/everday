@@ -38,7 +38,10 @@ from app.modules.health.routes.dashboard_api import router as health_dashboard_a
 from app.modules.auth.api_tokens import ApiTokenRequestError
 from app.modules.integrations.gmail.models import GmailIntegration
 from app.modules.notes.routes.notes import router as notes_router
-from app.modules.health.services.reminders_service import RunDailyHealthReminders
+from app.modules.health.services.reminders_service import (
+    RunDailyHealthReminders,
+    RunYesterdayLogReminders,
+)
 from app.modules.health.services.daily_tip_service import RunDailyTips
 from app.modules.kids.services.reminders_service import RunDailyKidsReminders
 from app.modules.life_admin import gmail_intake_service
@@ -367,12 +370,38 @@ async def _health_reminders_loop() -> None:
         except Exception:  # noqa: BLE001
             reminders_logger.exception("health reminders scheduler run failed")
 
+        # Runs off the event loop because it makes outbound Discord webhook calls.
+        try:
+            yesterday_result = await asyncio.to_thread(_run_yesterday_log_reminders)
+            sent = yesterday_result.get("NotificationsSent", 0)
+            errors = yesterday_result.get("Errors", 0)
+            if sent or errors:
+                reminders_logger.info(
+                    "yesterday log reminders run complete eligible=%s processed=%s sent=%s skipped=%s errors=%s",
+                    yesterday_result.get("EligibleUsers", 0),
+                    yesterday_result.get("ProcessedUsers", 0),
+                    sent,
+                    yesterday_result.get("Skipped", 0),
+                    errors,
+                )
+        except Exception:  # noqa: BLE001
+            reminders_logger.exception("yesterday log reminders scheduler run failed")
+
         elapsed_seconds = int(time.perf_counter() - started)
         sleep_for = max(1, interval_seconds - elapsed_seconds)
         try:
             await asyncio.wait_for(_reminders_stop_event.wait(), timeout=sleep_for)
         except asyncio.TimeoutError:
             continue
+
+
+def _run_yesterday_log_reminders() -> dict:
+    db_module._ensure_engine()
+    db = db_module.SessionLocal()
+    try:
+        return RunYesterdayLogReminders(db)
+    finally:
+        db.close()
 
 
 async def _kids_reminders_loop() -> None:
