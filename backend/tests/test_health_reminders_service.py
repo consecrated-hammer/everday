@@ -1,7 +1,13 @@
 import json
 from datetime import date, datetime, timezone
 
+import pytest
+
+from app.modules.health.services.discord_service import ResolveWebhookUrl
 from app.modules.health.services.reminders_service import (
+    FormatYesterdayReminderMessage,
+    YesterdayReminderTimeForDate,
+    _FormatMissingMealList,
     _IsValidTime,
     _ParseFoodReminderSlots,
     _ParseFoodReminderTimes,
@@ -65,3 +71,64 @@ def test_resolve_effective_run_date_time_uses_adelaide_for_scheduler_defaults():
 
     assert effective_date == date(2026, 3, 9)
     assert effective_time == "02:30"
+
+
+@pytest.mark.parametrize(
+    ("run_date", "expected"),
+    [
+        (date(2026, 7, 27), "07:00"),  # Monday
+        (date(2026, 7, 31), "07:00"),  # Friday
+        (date(2026, 8, 1), "09:00"),  # Saturday
+        (date(2026, 8, 2), "09:00"),  # Sunday
+    ],
+)
+def test_yesterday_reminder_time_splits_weekdays_and_weekends(run_date, expected):
+    assert YesterdayReminderTimeForDate(run_date) == expected
+
+
+def test_yesterday_reminder_time_honors_env_overrides(monkeypatch):
+    monkeypatch.setenv("HEALTH_YESTERDAY_REMINDER_WEEKDAY_TIME", "06:30")
+    monkeypatch.setenv("HEALTH_YESTERDAY_REMINDER_WEEKEND_TIME", "bad-time")
+
+    assert YesterdayReminderTimeForDate(date(2026, 7, 31)) == "06:30"
+    assert YesterdayReminderTimeForDate(date(2026, 8, 1)) == "09:00"
+
+
+def test_format_missing_meal_list_uses_readable_labels():
+    assert _FormatMissingMealList(["Dinner"]) == "Dinner"
+    assert _FormatMissingMealList(["Breakfast", "Dinner"]) == "Breakfast and Dinner"
+    assert (
+        _FormatMissingMealList(["Breakfast", "Lunch", "Dinner"])
+        == "Breakfast, Lunch and Dinner"
+    )
+
+
+def test_format_yesterday_reminder_message_includes_day_meals_and_link(monkeypatch):
+    monkeypatch.setenv("HEALTH_DASHBOARD_BASE_URL", "https://health.example.test/")
+
+    message = FormatYesterdayReminderMessage(date(2026, 7, 31), ["Breakfast", "Dinner"])
+
+    assert "Friday 31 July" in message
+    assert "Not logged: Breakfast and Dinner" in message
+    assert "https://health.example.test/log?date=2026-07-31" in message
+
+
+def test_resolve_webhook_url_prefers_username_key(monkeypatch):
+    monkeypatch.setenv("DISCORD_KEVIN", " https://discord.test/kevin ")
+    monkeypatch.setenv("HEALTH_DISCORD_WEBHOOK_USER_1", "https://discord.test/by-id")
+
+    assert ResolveWebhookUrl(1, "kevin") == "https://discord.test/kevin"
+
+
+def test_resolve_webhook_url_falls_back_to_user_id_key(monkeypatch):
+    monkeypatch.delenv("DISCORD_BIANCA", raising=False)
+    monkeypatch.setenv("HEALTH_DISCORD_WEBHOOK_USER_2", "https://discord.test/by-id")
+
+    assert ResolveWebhookUrl(2, "bianca") == "https://discord.test/by-id"
+
+
+def test_resolve_webhook_url_is_optional(monkeypatch):
+    monkeypatch.delenv("DISCORD_NOBODY", raising=False)
+    monkeypatch.delenv("HEALTH_DISCORD_WEBHOOK_USER_9", raising=False)
+
+    assert ResolveWebhookUrl(9, "nobody") is None
