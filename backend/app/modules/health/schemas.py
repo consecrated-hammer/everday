@@ -16,6 +16,7 @@ class MealType(str, Enum):
 
 
 MealTypeValue = MealType
+UUID_PATTERN = r"^[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$"
 
 
 class ImageScanMode(str, Enum):
@@ -961,7 +962,7 @@ class HeadacheEvent(BaseModel):
 
 
 class UpsertHeadacheEventInput(BaseModel):
-    HeadacheEventId: str | None = None
+    HeadacheEventId: str | None = Field(default=None, pattern=UUID_PATTERN)
     LogDate: str
     OnsetAt: datetime | None = None
     EventType: str = Field(default="headache", max_length=30)
@@ -981,9 +982,9 @@ class MedicationDose(BaseModel):
 
 
 class UpsertMedicationDoseInput(BaseModel):
-    MedicationDoseId: str | None = None
+    MedicationDoseId: str | None = Field(default=None, pattern=UUID_PATTERN)
     LogDate: str
-    HeadacheEventId: str | None = None
+    HeadacheEventId: str | None = Field(default=None, pattern=UUID_PATTERN)
     TakenAt: datetime | None = None
     MedicationName: str = Field(min_length=1, max_length=200)
     Dose: str | None = Field(default=None, max_length=120)
