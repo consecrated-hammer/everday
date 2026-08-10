@@ -809,7 +809,10 @@ def GetMeasurementsRoute(
 
 @router.post("/headaches", response_model=HeadacheEvent)
 def UpsertHeadacheRoute(payload: UpsertHeadacheEventInput, db: Session = Depends(GetDb), user: UserContext = Depends(RequireModuleRole("health", write=True))) -> HeadacheEvent:
-    return UpsertHeadache(db, user.Id, payload)
+    try:
+        return UpsertHeadache(db, user.Id, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
 @router.get("/headaches", response_model=list[HeadacheEvent])
@@ -819,7 +822,10 @@ def GetHeadachesRoute(log_date: str | None = None, db: Session = Depends(GetDb),
 
 @router.post("/medication-doses", response_model=MedicationDose)
 def UpsertMedicationDoseRoute(payload: UpsertMedicationDoseInput, db: Session = Depends(GetDb), user: UserContext = Depends(RequireModuleRole("health", write=True))) -> MedicationDose:
-    return UpsertDose(db, user.Id, payload)
+    try:
+        return UpsertDose(db, user.Id, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
 @router.get("/medication-doses", response_model=list[MedicationDose])
