@@ -462,19 +462,37 @@ def _ParseSleepMetricEntries(metric: dict[str, Any]) -> list[tuple[date, datetim
         except (TypeError, ValueError):
             continue
 
-        date_value = _ExtractDateValue(entry)
-        if not date_value:
-            continue
-        parsed = _ParseHaeDate(date_value)
-        if not parsed:
-            continue
-        log_date, timestamp = parsed
-
+        # Health Auto Export's own "date" field tags a sleep session by the day the
+        # sleeper woke up. Users expect the opposite: sleep starting Friday night is
+        # "Friday's sleep", even though the sleeper wakes up Saturday morning. Prefer
+        # sleepStart's local calendar day for LogDate; fall back to the source "date"
+        # field only when sleepStart is missing or unparseable.
         sleep_end = entry.get("sleepEnd")
+        timestamp: datetime | None = None
         if isinstance(sleep_end, str) and sleep_end.strip():
             parsed_sleep_end = _ParseHaeDate(sleep_end)
             if parsed_sleep_end:
                 timestamp = parsed_sleep_end[1]
+
+        log_date: date | None = None
+        sleep_start = entry.get("sleepStart")
+        if isinstance(sleep_start, str) and sleep_start.strip():
+            parsed_sleep_start = _ParseHaeDate(sleep_start)
+            if parsed_sleep_start:
+                log_date = parsed_sleep_start[0]
+                if timestamp is None:
+                    timestamp = parsed_sleep_start[1]
+
+        if log_date is None:
+            date_value = _ExtractDateValue(entry)
+            if not date_value:
+                continue
+            parsed = _ParseHaeDate(date_value)
+            if not parsed:
+                continue
+            log_date, fallback_timestamp = parsed
+            if timestamp is None:
+                timestamp = fallback_timestamp
 
         results.append((log_date, timestamp, value))
 

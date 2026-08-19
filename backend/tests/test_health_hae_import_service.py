@@ -75,10 +75,35 @@ def test_parse_metrics_extracts_sleep_analysis_total_sleep():
     assert latest_weight == {}
     assert latest_resting_heart_rate == {}
     assert len(entries) == 1
-    sleep_entry = latest_sleep[date(2026, 7, 19)]
+    # LogDate follows sleepStart (bedtime day: Jul 18), not HAE's own "date" field
+    # (wake day: Jul 19) or sleepEnd. OccurredAt still reflects when sleep concluded.
+    sleep_entry = latest_sleep[date(2026, 7, 18)]
     assert sleep_entry.MetricType == "sleep"
-    assert sleep_entry.LogDate.isoformat() == "2026-07-19"
+    assert sleep_entry.LogDate.isoformat() == "2026-07-18"
     assert sleep_entry.Value == 6.63
+    assert sleep_entry.OccurredAt.isoformat() == "2026-07-18T20:28:29+00:00"
+
+
+def test_parse_metrics_sleep_falls_back_to_date_field_without_sleep_start():
+    entries, _latest_steps, _latest_weight, latest_sleep, _latest_resting_heart_rate = service._ParseMetrics(  # noqa: SLF001
+        [
+            {
+                "name": "sleep_analysis",
+                "units": "hr",
+                "data": [
+                    {
+                        "date": "2026-07-19 00:00:00 +0930",
+                        "totalSleep": 6.5,
+                        "sleepEnd": "2026-07-19 05:58:29 +0930",
+                    }
+                ],
+            }
+        ]
+    )
+
+    assert len(entries) == 1
+    sleep_entry = latest_sleep[date(2026, 7, 19)]
+    assert sleep_entry.LogDate.isoformat() == "2026-07-19"
     assert sleep_entry.OccurredAt.isoformat() == "2026-07-18T20:28:29+00:00"
 
 
